@@ -1,6 +1,6 @@
 # DESIGN.md — JumpOnBoard (J.O.B.) Technical Architecture
 
-Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [VISION.md](./VISION.md) (goals/metrics). This document describes how the product is actually built. Status: pre-code — this is the architecture to build against, not a description of existing code.
+Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [VISION.md](./VISION.md) (goals/metrics). This document describes how the product is actually built. Status: walking-skeleton MVP implemented (see §12 for what's built vs. deferred and where the MVP diverges from the target architecture below).
 
 ## 1. System Overview
 
@@ -116,3 +116,43 @@ Architecture:
 - Exact data-retention window (pending legal review — see BUSINESS.md §11).
 - Exact enterprise commission percentages (pending further business-side brainstorming).
 - Exact $-cap sizing for free vs. Pro AI-Credit Marketplace allowances — needs real cost modeling from early usage before the fast-follow ships.
+
+## 12. MVP Implementation Notes (2026-07-17 — what's actually built)
+
+The walking skeleton is live in this repo (see README.md for commands). Where
+the MVP diverges from the sections above, the MVP choice is recorded here; the
+sections above remain the target architecture.
+
+- **Hosting**: Cloudflare Workers via `@opennextjs/cloudflare`, not Vercel —
+  Vercel's free (Hobby) tier prohibits commercial use. Migrate to Vercel Pro
+  post-prototype if DX justifies the spend. Consequence: the app uses the
+  legacy `middleware.ts` convention (Next 16's `proxy.ts` is Node-only;
+  OpenNext requires edge middleware).
+- **AI serving**: Modal Starter plan ($30/mo recurring credit), not
+  pay-as-you-go Modal/Baseten. Models updated after a build-time landscape
+  re-check: **Qwen3 8B** (generation) + **Qwen3-Embedding-0.6B** (1024-dim
+  embeddings) replace the design-time Llama 3.1/BGE-M3 picks. A deterministic
+  **stub provider** is the dev/CI default (`AI_PROVIDER=stub`) — zero network,
+  zero cost, fully testable slice.
+- **DB keepalive**: GitHub Actions cron (`.github/workflows/keepalive.yml`)
+  pings `/api/health` every 3 days — Supabase free tier pauses projects after
+  7 days of DB inactivity.
+- **Skeleton scope shipped**: full schema + RLS up front; ingest (PDF via
+  unpdf + paste-text) → redact → embed → `match_candidates` RPC (cosine +
+  dealbreaker filter) → double-opt-in → standard reveal (points debit +
+  candidate compensation) → in-app messaging. Profile management
+  (draft/publish, visibility + override toggles) and job management
+  (draft/active/closed, re-embed on republish) with suggest-and-approve AI
+  refinement on both sides, free during MVP.
+- **Deferred, tables in place**: override path + partial refunds, point
+  purchases, verified-action earning, interview-scheduling UI, enterprise
+  entitlements, AI-Credit Marketplace (hard legal blocker — LEGAL_REVIEW.md).
+- **Placeholder economics** (constants in `src/lib/points.ts`): recruiter
+  seed 100 / reveal 10 / compensation 3 / seeker seed 10. Matching constants:
+  top-20, cosine ≥ 0.55, both env-tunable.
+- **Email**: Supabase built-in sender (Inbucket locally). Swap to Resend SMTP
+  (free 100/day) in the Supabase dashboard before real beta invites.
+- **Privacy rule enforcement**: the frontier-API boundary is implemented as
+  the `JDTextOnly` branded type (`src/lib/ai/types.ts`) plus
+  `tests/frontier-guardrail.test.ts`, which fails typecheck if the boundary
+  is weakened.

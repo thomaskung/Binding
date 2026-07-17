@@ -1,0 +1,25 @@
+name: Supabase keepalive
+
+# Supabase free-tier projects pause after 7 days without database activity.
+# This pings /api/health (which runs a count query) every 3 days.
+# Set the KEEPALIVE_URL repo variable to the deployed app's health endpoint,
+# e.g. https://jumponboard.<subdomain>.workers.dev/api/health
+
+on:
+  schedule:
+    - cron: "0 3 */3 * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    if: vars.KEEPALIVE_URL != ''
+    steps:
+      - name: Ping health endpoint
+        run: |
+          status=$(curl -s -o /tmp/body -w "%{http_code}" "${{ vars.KEEPALIVE_URL }}")
+          cat /tmp/body
+          if [ "$status" != "200" ]; then
+            echo "health check returned $status" >&2
+            exit 1
+          fi

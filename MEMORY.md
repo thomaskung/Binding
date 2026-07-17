@@ -73,3 +73,27 @@ Format per entry: **Date** / **Decision** / **Context** / **Outcome-or-Lesson** 
 **Context**: A flag buried in a risk-management section is easy to silently slip past once the feature is otherwise ready to ship; a named, separate briefing document with the exact mechanism and exact questions makes the review actionable and makes the blocker hard to miss.
 **Outcome/Lesson**: When a compliance question is specific enough to have concrete sub-questions, write them down for counsel rather than leaving "get this reviewed" as a vague to-do — it's the difference between a blocker someone can actually act on and one that gets rationalized away under launch pressure.
 **Links**: LEGAL_REVIEW.md, BUSINESS.md §11, DESIGN.md §7
+
+---
+
+## 2026-07-17 (MVP scaffold session)
+
+**Decision**: Host the MVP on Cloudflare Workers (via `@opennextjs/cloudflare`) instead of Vercel; migrate to Vercel Pro only after the prototype proves out.
+**Context**: Research during scaffold planning found Vercel's Hobby (free) tier explicitly prohibits commercial use — disqualifying for a revenue-intending startup — while Cloudflare Workers' free tier allows commercial use with unlimited bandwidth.
+**Outcome/Lesson**: "Free tier" is not one thing — commercial-use clauses are the first thing to check, before limits. Cost of the workaround: Next 16 `proxy.ts` runs Node-only and OpenNext requires edge middleware, so the app deliberately uses the legacy `middleware.ts` convention (documented in CLAUDE.md).
+**Links**: README.md (stack), CLAUDE.md (gotchas), DESIGN.md §12
+
+**Decision**: AI serving = Modal Starter plan ($30/mo recurring credit) running open-weight models, with a deterministic stub provider as the dev/CI default behind a provider-agnostic adapter.
+**Context**: Free-tier-only directive collided with the private-LLM requirement; user chose Modal's monthly credit as the pragmatic middle. Stub-first means zero AI cost/network in local dev and CI, and the walking skeleton is fully testable without any deployed model.
+**Outcome/Lesson**: Adapter + stub was the right seam: the entire e2e slice passes with stub AI, and swapping to real inference is an env flag, not a refactor. One AI pass per explicit publish (never per keystroke) is the credit guardrail.
+**Links**: src/lib/ai/, modal_app/README.md, DESIGN.md §12
+
+**Decision**: Model choices updated from Llama 3.1 8B / BGE-M3 (design-time picks) to **Qwen3 8B / Qwen3-Embedding-0.6B** after a landscape re-check during scaffold planning.
+**Context**: User challenged the original picks as dated. Mid-2026 checks: Qwen3 8B leads the 8B open-weight class (Apache 2.0, strong Chinese — HK market fit); Qwen3-Embedding tops the MTEB v2 open leaderboard, and the 0.6B variant is the cheapest to serve at 1024 dims.
+**Outcome/Lesson**: Re-verify model choices against current leaderboards at build time, not design time — the open-model landscape turns over in months. Frontier-API line held: candidate-derived data stays on the self-hosted path, enforced by a branded type (`JDTextOnly`) plus a guardrail test, not just a comment.
+**Links**: modal_app/, src/lib/ai/types.ts, tests/frontier-guardrail.test.ts
+
+**Decision**: Walking-skeleton scope shipped: full schema+RLS up front, matching pipeline, double-opt-in reveal with real points ledger (seeded economics: recruiter 100 / reveal 10 / compensation 3 / seeker 10), profile+job management with publish-triggered re-embedding, suggest-and-approve AI refinement, in-app messaging. Deferred with tables in place: override+refunds, purchases, verified-action earning, scheduling UI, enterprise tier.
+**Context**: Confirmed across five grilling rounds; "hurdles not blockers" retention design made messaging MVP-critical rather than optional.
+**Outcome/Lesson**: Debugging the slice surfaced three recurring local-Supabase traps worth remembering: hand-seeded `auth.users` rows need empty-string (not NULL) token columns or GoTrue 500s; RLS policies without `GRANT` statements return 42501; and mutually-referencing RLS policies recurse — use security-definer helper functions. All three are now baked into migrations + CLAUDE.md gotchas.
+**Links**: supabase/migrations/, supabase/seed.sql, e2e/smoke.spec.ts, CLAUDE.md
