@@ -63,6 +63,24 @@ const JOBS = [
     salary_max: 140000,
     work_setups: ["remote", "hybrid"],
   },
+  // Two more backend-adjacent roles so backend-profile seekers (including the
+  // demo seeker) see several matches at once, not just one.
+  {
+    title: "Platform Engineer, Distributed Systems",
+    description:
+      "Platform engineer: distributed systems, Kubernetes, Postgres, event-driven microservices, infrastructure for engineering teams. Own reliability and scale of the core platform.",
+    salary_min: 95000,
+    salary_max: 155000,
+    work_setups: ["remote", "hybrid"],
+  },
+  {
+    title: "Senior Software Engineer, Ledger & Settlement",
+    description:
+      "Senior software engineer for ledger and settlement systems: payments, distributed systems, Postgres, event-driven pipelines, correctness at scale, backend services in Go on Kubernetes.",
+    salary_min: 110000,
+    salary_max: 170000,
+    work_setups: ["remote"],
+  },
 ];
 
 const SEEKERS: { name: string; text: string; minSalary: number; setups: string[] }[] = [
@@ -143,7 +161,7 @@ async function main() {
 
   // 2. demo seeker gets a real stub vector (seed.sql leaves a placeholder)
   const demoText =
-    "Senior backend engineer, 8 years: distributed systems, Postgres, event-driven pipelines, Kubernetes, microservices. Led payments platform serving 2M users.";
+    "Senior backend engineer, 8 years: distributed systems, payments platform, Postgres, event-driven pipelines, microservices in Go, Kubernetes. Built payment rails, ledger and settlement systems at scale. Led platform infrastructure and reliability for core services serving 2M users.";
   await publishSeeker(DEMO_SEEKER_ID, {
     name: "Demo Seeker",
     text: demoText,
