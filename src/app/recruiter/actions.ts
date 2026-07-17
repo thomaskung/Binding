@@ -5,7 +5,17 @@ import { redirect } from "next/navigation";
 import { assertJDTextOnly, getAiProvider } from "@/lib/ai";
 import { requireRole } from "@/lib/auth";
 import { refreshMatchesForJob } from "@/lib/matching";
-import { appendLedger, getBalance, REVEAL_COMPENSATION, REVEAL_COST } from "@/lib/points";
+import {
+  appendLedger,
+  countOverridesToday,
+  getBalance,
+  isOverrideBlocked,
+  OVERRIDE_COMPENSATION,
+  OVERRIDE_COST,
+  OVERRIDE_DAILY_CAP,
+  REVEAL_COMPENSATION,
+  REVEAL_COST,
+} from "@/lib/points";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function saveJob(formData: FormData) {
@@ -151,6 +161,105 @@ export async function revealCandidate(matchId: string) {
     amount: REVEAL_COMPENSATION,
     revealRequestId: reveal.id,
     note: "profile revealed",
+  });
+
+  await admin.from("matches").update({ status: "revealed" }).eq("id", match.id);
+  await admin.from("message_threads").insert({ reveal_request_id: reveal.id });
+
+  revalidatePath(`/recruiter/jobs/${match.job_posting_id}`);
+  revalidatePath(`/recruiter/jobs/${match.job_posting_id}/matches`);
+}
+
+/** Override reveal: paid pre-opt-in disclosure (DESIGN.md §4). Name + fit
+ * summary disclose immediately; the candidate's accept/decline gates
+ * messaging only. Guards: surfaced match, candidate's override toggle on,
+ * candidate not paused, balance ≥ 25, daily cap, 30-day re-override block. */
+export async function overrideRevealCandidate(matchId: string) {
+  const session = await requireRole("recruiter");
+  const admin = createSupabaseAdminClient();
+
+  const { data: match, error } = await admin
+    .from("matches")
+    .select("id, status, profile_id, job_posting_id, job_postings(recruiter_id, title, description)")
+    .eq("id", matchId)
+    .single();
+  if (error) throw new Error("match not found");
+
+  const job = Array.isArray(match.job_postings) ? match.job_postings[0] : match.job_postings;
+  if (!job || job.recruiter_id !== session.userId) throw new Error("not your job posting");
+  if (match.status !== "surfaced") {
+    throw new Error("override only applies to candidates who haven't responded yet");
+  }
+
+  const [{ data: candidate }, { data: consent }] = await Promise.all([
+    admin.from("profiles").select("visibility").eq("id", match.profile_id).single(),
+    admin
+      .from("consent_flags")
+      .select("reveal_override_enabled")
+      .eq("profile_id", match.profile_id)
+      .maybeSingle(),
+  ]);
+  if (!consent?.reveal_override_enabled) {
+    throw new Error("this candidate has disabled reveal-override");
+  }
+  if (candidate?.visibility === "paused") {
+    throw new Error("candidate currently unavailable (profile paused)");
+  }
+
+  if (await isOverrideBlocked(admin, session.userId, match.profile_id)) {
+    throw new Error("this candidate declined a recent override — try again later");
+  }
+  const usedToday = await countOverridesToday(admin, session.userId);
+  if (usedToday >= OVERRIDE_DAILY_CAP) {
+    throw new Error(`daily override limit reached (${OVERRIDE_DAILY_CAP}/day)`);
+  }
+
+  const balance = await getBalance(admin, session.userId);
+  if (balance < OVERRIDE_COST) {
+    throw new Error(
+      `insufficient points (${balance}/${OVERRIDE_COST}) — point top-ups are coming soon`,
+    );
+  }
+
+  const { data: vector } = await admin
+    .from("skill_vectors")
+    .select("redacted_text")
+    .eq("profile_id", match.profile_id)
+    .single();
+  const ai = getAiProvider();
+  const fitSummary = await ai.fitSummary(
+    vector?.redacted_text ?? "",
+    `${job.title}\n\n${job.description}`,
+  );
+
+  const { data: reveal, error: revealError } = await admin
+    .from("reveal_requests")
+    .insert({
+      match_id: match.id,
+      job_posting_id: match.job_posting_id,
+      profile_id: match.profile_id,
+      recruiter_id: session.userId,
+      path: "override",
+      status: "pending", // candidate decides; messaging locked until accepted
+      fit_summary: fitSummary,
+    })
+    .select("id")
+    .single();
+  if (revealError) throw new Error(`override reveal failed: ${revealError.message}`);
+
+  await appendLedger(admin, {
+    profileId: session.userId,
+    event: "override_spend",
+    amount: -OVERRIDE_COST,
+    revealRequestId: reveal.id,
+    note: "override reveal (10 base + 15 premium)",
+  });
+  await appendLedger(admin, {
+    profileId: match.profile_id,
+    event: "reveal_compensation",
+    amount: OVERRIDE_COMPENSATION,
+    revealRequestId: reveal.id,
+    note: "profile override-revealed",
   });
 
   await admin.from("matches").update({ status: "revealed" }).eq("id", match.id);

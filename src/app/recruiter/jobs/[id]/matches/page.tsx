@@ -4,8 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/lib/auth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { RevealButton } from "./reveal-button";
+import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
+import { expireStaleOverride, OVERRIDE_COST } from "@/lib/points";
+import { OverrideButton, RevealButton } from "./reveal-button";
 
 export default async function JobMatchesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,13 +29,54 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
       .order("score", { ascending: false }),
     supabase
       .from("reveal_requests")
-      .select("id, profile_id, fit_summary, profiles!reveal_requests_profile_id_fkey(display_name), message_threads(id)")
+      .select(
+        "id, profile_id, path, status, refunded, created_at, recruiter_id, fit_summary, profiles!reveal_requests_profile_id_fkey(display_name), message_threads(id)",
+      )
       .eq("job_posting_id", id),
   ]);
 
-  // Pseudonymized candidate text comes via the RPC-backed matches; for
-  // display we re-fetch each matched vector's redacted text through the
-  // security-definer RPC results already persisted in `matches` + reveals.
+  // Lazy expiry pass (7-day pending overrides become declines + refunds).
+  const admin = createSupabaseAdminClient();
+  const liveReveals = [];
+  for (const r of reveals ?? []) {
+    const expired = await expireStaleOverride(admin, {
+      id: r.id,
+      path: r.path,
+      status: r.status,
+      recruiter_id: r.recruiter_id,
+      created_at: r.created_at,
+      refunded: r.refunded,
+    });
+    liveReveals.push(expired ? { ...r, status: "declined" as const, refunded: true } : r);
+  }
+
+  // Override availability hints for surfaced candidates (server-side only;
+  // the action re-validates everything at spend time).
+  const surfacedIds = (matches ?? [])
+    .filter((m) => m.status === "surfaced")
+    .map((m) => m.profile_id);
+  const overrideInfo = new Map<string, { allowed: boolean; reason: string | null }>();
+  if (surfacedIds.length > 0) {
+    const [{ data: consents }, { data: candidateProfiles }] = await Promise.all([
+      admin
+        .from("consent_flags")
+        .select("profile_id, reveal_override_enabled")
+        .in("profile_id", surfacedIds),
+      admin.from("profiles").select("id, visibility").in("id", surfacedIds),
+    ]);
+    const consentByProfile = new Map((consents ?? []).map((c) => [c.profile_id, c]));
+    const visByProfile = new Map((candidateProfiles ?? []).map((p) => [p.id, p.visibility]));
+    for (const pid of surfacedIds) {
+      if (!consentByProfile.get(pid)?.reveal_override_enabled) {
+        overrideInfo.set(pid, { allowed: false, reason: "candidate has disabled reveal-override" });
+      } else if (visByProfile.get(pid) === "paused") {
+        overrideInfo.set(pid, { allowed: false, reason: "candidate currently unavailable" });
+      } else {
+        overrideInfo.set(pid, { allowed: true, reason: null });
+      }
+    }
+  }
+
   const { data: candidateTexts } = await supabase.rpc("match_candidates", {
     p_job_id: id,
     p_threshold: 0,
@@ -46,9 +88,7 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
       c.redacted_text,
     ]),
   );
-  const revealByProfile = new Map(
-    (reveals ?? []).map((r) => [r.profile_id, r]),
-  );
+  const revealByProfile = new Map(liveReveals.map((r) => [r.profile_id, r]));
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-8">
@@ -56,8 +96,9 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
         <div>
           <h1 className="text-2xl font-bold">Matches — {job.title}</h1>
           <p className="text-sm text-muted-foreground">
-            Candidates are pseudonymized until you reveal. Reveal requires the
-            candidate to have expressed interest (10 pts, per role).
+            Candidates are pseudonymized until you reveal. Standard reveal (10
+            pts) needs candidate interest; override ({OVERRIDE_COST} pts)
+            reveals immediately — messaging unlocks only if they accept.
           </p>
         </div>
         <Button variant="ghost" render={<Link href={`/recruiter/jobs/${id}`} />}>
@@ -83,6 +124,9 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
                 ? reveal.message_threads[0]
                 : reveal.message_threads)
             : null;
+          const override = overrideInfo.get(match.profile_id);
+          const overridePending = reveal?.path === "override" && reveal.status === "pending";
+          const overrideDeclined = reveal?.path === "override" && reveal.status === "declined";
           return (
             <Card key={match.id} data-testid="recruiter-match-card">
               <CardHeader>
@@ -102,7 +146,11 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
                           : "outline"
                     }
                   >
-                    {match.status}
+                    {overridePending
+                      ? "revealed — awaiting response"
+                      : overrideDeclined
+                        ? "revealed — declined"
+                        : match.status}
                   </Badge>
                 </CardTitle>
                 {match.status === "revealed" && reveal?.fit_summary && (
@@ -114,7 +162,28 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
                   {textByProfile.get(match.profile_id) ?? "(profile text unavailable)"}
                 </p>
                 {match.status === "interested" && <RevealButton matchId={match.id} />}
-                {match.status === "revealed" && thread && (
+                {match.status === "surfaced" &&
+                  (override?.allowed ? (
+                    <OverrideButton matchId={match.id} />
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Waiting for the candidate to express interest.
+                      {override?.reason ? ` Override unavailable: ${override.reason}.` : ""}
+                    </p>
+                  ))}
+                {overridePending && (
+                  <p className="text-xs text-muted-foreground" data-testid="override-pending-note">
+                    Identity disclosed. Messaging stays locked until the candidate accepts —
+                    they have 7 days; if they decline or it expires, 15 pts refund automatically.
+                  </p>
+                )}
+                {overrideDeclined && (
+                  <p className="text-xs text-muted-foreground" data-testid="override-declined-note">
+                    Candidate declined the conversation. Your 15-pt premium was refunded; this
+                    candidate can&apos;t be override-revealed again for 30 days.
+                  </p>
+                )}
+                {match.status === "revealed" && reveal?.status === "accepted" && thread && (
                   <Button
                     size="sm"
                     variant="secondary"
@@ -123,12 +192,6 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
                   >
                     Open conversation
                   </Button>
-                )}
-                {match.status === "surfaced" && (
-                  <p className="text-xs text-muted-foreground">
-                    Waiting for the candidate to express interest. (Paid
-                    override for non-opted-in candidates ships post-MVP.)
-                  </p>
                 )}
               </CardContent>
             </Card>

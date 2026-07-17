@@ -97,3 +97,32 @@ Format per entry: **Date** / **Decision** / **Context** / **Outcome-or-Lesson** 
 **Context**: Confirmed across five grilling rounds; "hurdles not blockers" retention design made messaging MVP-critical rather than optional.
 **Outcome/Lesson**: Debugging the slice surfaced three recurring local-Supabase traps worth remembering: hand-seeded `auth.users` rows need empty-string (not NULL) token columns or GoTrue 500s; RLS policies without `GRANT` statements return 42501; and mutually-referencing RLS policies recurse — use security-definer helper functions. All three are now baked into migrations + CLAUDE.md gotchas.
 **Links**: supabase/migrations/, supabase/seed.sql, e2e/smoke.spec.ts, CLAUDE.md
+
+---
+
+## 2026-07-17 (override + registration session)
+
+**Decision**: Override reveal economics: 25 pts total (10 base + 15 premium), premium refunded on decline/expiry, candidate compensated 5 pts at reveal creation regardless of outcome. Disclosure = immediate (name + fit summary at payment); accept/decline gates messaging only.
+**Context**: DESIGN.md §4 had the mechanics but no numbers; "nothing disclosed until accept" was rejected because then a declined override delivers nothing and a partial refund makes no sense — the base fee pays for the look, the premium pays for engagement.
+**Outcome/Lesson**: Pricing a two-part fee around what was actually delivered (look vs. engagement) made the refund rule self-explanatory instead of arbitrary.
+**Links**: DESIGN.md §4, src/lib/points.ts, src/app/recruiter/actions.ts
+
+**Decision**: Override guardrails: 5/day per recruiter, 30-day re-override block after a decline, 7-day pending auto-expiry (lazy, no cron), paused profiles fully shielded, only `surfaced` matches overridable.
+**Context**: A recruiter with a topped-up balance could override-spam the pool; DESIGN.md §5 promised "rate-limited reveals" without numbers; an unanswered override locked the premium forever; per-role scoping technically allowed re-overriding a candidate who just declined via a different job (harassment vector).
+**Outcome/Lesson**: Every paid-access mechanic needs an abuse review pass before shipping — all four guardrails came out of one grilling round asking "how would a hostile recruiter use this?"
+**Links**: DESIGN.md §4, src/lib/points.ts (guards), MEMORY.md this entry
+
+**Decision**: Dual-role accounts — seeker and recruiter are independent, both opt-in; header switcher; `/` remembers last-used role via cookie; single shared points balance (+10 seeker / +100 recruiter activation seeds); self-match exclusion in matching RPCs.
+**Context**: User first proposed seeker-first (everyone starts as seeker, recruiter as upgrade), then self-corrected when asked about pure agency recruiters: "I was wrong. Better to have two roles separated and both require opt-in."
+**Outcome/Lesson**: Grilling caught a requirements error the requester themselves flagged once the edge case (pure recruiters forced through seeker signup) was named. The self-match exclusion also only surfaced because dual-role made "recruiter reveals their own profile" possible.
+**Links**: DESIGN.md §2a, migration 0004, src/lib/auth.ts
+
+**Decision**: Consent capture shipped with registration: seekers must accept ToS + explicit AI-processing consent before any upload; recruiters accept ToS; timestamps + consent_version stored (placeholder text pending legal review).
+**Context**: DESIGN.md §5 required consent covering the redaction process itself (PDPA/PDPO) but nothing captured it — the walking skeleton was collecting resumes with zero documented consent.
+**Outcome/Lesson**: Compliance requirements written in design docs don't exist until a schema column and a required checkbox exist. Versioning consent from day one is nearly free; retrofitting it isn't.
+**Links**: DESIGN.md §2a/§5, src/lib/consent.ts, migration 0004
+
+**Decision**: Recruiter identity (display name + company) is readable by all signed-in users, required at recruiter activation, shown on job cards and thread headers. Unverified for MVP (verification on roadmap). Company set once at opt-in — no edit UI yet (known limitation).
+**Context**: Candidates previously had no way to know who was contacting them — a basic trust failure discovered while building the override card ("[who?] revealed your profile").
+**Outcome/Lesson**: The pseudonymity in this product is deliberately asymmetric: candidates are pseudonymous, recruiters are identified. That asymmetry is the trust model — worth stating explicitly in the design rather than leaving implicit.
+**Links**: DESIGN.md §2a, migration 0004 (profiles_recruiter_identity_select policy)

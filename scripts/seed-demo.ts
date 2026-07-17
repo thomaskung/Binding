@@ -123,14 +123,20 @@ async function publishSeeker(userId: string, s: (typeof SEEKERS)[number]) {
 
   await admin.from("profiles").upsert({
     id: userId,
-    role: "seeker",
+    is_seeker: true,
     display_name: s.name,
     visibility: "active",
     dealbreaker_matrix: { min_salary: s.minSalary, currency: "USD", work_setups: s.setups },
     draft_text: s.text,
     published_text: s.text,
   });
-  await admin.from("consent_flags").upsert({ profile_id: userId, reveal_override_enabled: true });
+  await admin.from("consent_flags").upsert({
+    profile_id: userId,
+    reveal_override_enabled: true,
+    tos_accepted_at: new Date().toISOString(),
+    processing_consent_at: new Date().toISOString(),
+    consent_version: "2026-07-17-draft",
+  });
   await admin.from("skill_vectors").upsert(
     { profile_id: userId, redacted_text: redactedText, embedding: JSON.stringify(embedding) },
     { onConflict: "profile_id" },
@@ -231,6 +237,13 @@ async function main() {
     }
   }
   console.log(`  ${totalMatches} matches created`);
+
+  // 4b. demo recruiter gets dual-role (seeker too) so the role switcher is
+  // demoable, and keeps their company identity.
+  await admin
+    .from("profiles")
+    .update({ is_seeker: true, company_name: "Apex Talent Partners" })
+    .eq("id", RECRUITER_ID);
 
   // 5. recruiter points top-up for a reveal spree
   const { data: topup } = await admin

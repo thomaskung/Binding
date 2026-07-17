@@ -10,7 +10,7 @@ const MAX_PDF_BYTES = 5 * 1024 * 1024; // 5 MB
  * the client never needs a PDF parser. Paste-text ingest skips this route. */
 export async function POST(request: Request) {
   const session = await getSessionProfile();
-  if (!session || session.role !== "seeker") {
+  if (!session?.isSeeker) {
     return NextResponse.json({ error: "seeker session required" }, { status: 401 });
   }
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getAiProvider } from "@/lib/ai";
 import { requireRole } from "@/lib/auth";
 import { refreshMatchesForProfile } from "@/lib/matching";
+import { appendLedger, expireStaleOverride, OVERRIDE_PREMIUM_REFUND } from "@/lib/points";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 
 /** Save draft profile text + dealbreakers without republishing. */
@@ -102,6 +103,53 @@ export async function updateSettings(formData: FormData) {
   if (cErr) throw new Error(cErr.message);
 
   revalidatePath("/seeker/profile");
+}
+
+/** Candidate responds to a pending override reveal. Identity was already
+ * disclosed at purchase; this gates messaging only. Decline refunds the
+ * recruiter's 15-pt premium (they keep paying the 10-pt base for the look). */
+export async function respondToOverride(revealId: string, response: "accepted" | "declined") {
+  const session = await requireRole("seeker");
+  const admin = createSupabaseAdminClient();
+
+  const { data: reveal, error } = await admin
+    .from("reveal_requests")
+    .select("id, path, status, profile_id, recruiter_id, created_at, refunded")
+    .eq("id", revealId)
+    .single();
+  if (error || reveal.profile_id !== session.userId) throw new Error("reveal not found");
+  if (reveal.path !== "override" || reveal.status !== "pending") {
+    throw new Error("nothing to respond to");
+  }
+
+  // Lazy expiry: too late to respond if the 7-day window passed.
+  if (await expireStaleOverride(admin, reveal)) {
+    revalidatePath("/seeker");
+    throw new Error("this reveal already expired");
+  }
+
+  const { error: updateError } = await admin
+    .from("reveal_requests")
+    .update({
+      status: response,
+      responded_at: new Date().toISOString(),
+      ...(response === "declined" ? { refunded: true } : {}),
+    })
+    .eq("id", revealId)
+    .eq("status", "pending");
+  if (updateError) throw new Error(`response failed: ${updateError.message}`);
+
+  if (response === "declined") {
+    await appendLedger(admin, {
+      profileId: reveal.recruiter_id,
+      event: "partial_refund",
+      amount: OVERRIDE_PREMIUM_REFUND,
+      revealRequestId: reveal.id,
+      note: "override declined by candidate",
+    });
+  }
+
+  revalidatePath("/seeker");
 }
 
 /** Candidate expresses interest in (or declines) a surfaced match. */

@@ -1,13 +1,20 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { getSessionProfile } from "@/lib/auth";
 
 export default async function LandingPage() {
   const session = await getSessionProfile();
-  if (session?.role === "seeker") redirect("/seeker");
-  if (session?.role === "recruiter") redirect("/recruiter");
-  if (session && !session.role) redirect("/onboarding");
+  if (session) {
+    if (!session.onboarded) redirect("/onboarding");
+    // Dual-role home: last-used role wins (cookie set by the role switcher);
+    // fall back to seeker when both, else whichever role exists.
+    const lastRole = (await cookies()).get("job_active_role")?.value;
+    if (lastRole === "recruiter" && session.isRecruiter) redirect("/recruiter");
+    if (lastRole === "seeker" && session.isSeeker) redirect("/seeker");
+    redirect(session.isSeeker ? "/seeker" : "/recruiter");
+  }
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center gap-6 p-8 text-center">
@@ -16,9 +23,14 @@ export default async function LandingPage() {
         Privacy-first hiring for APAC. Match on skills and compensation fit —
         before anyone sees your name.
       </p>
-      <Button size="lg" render={<Link href="/login" />}>
-        Get started
-      </Button>
+      <div className="flex gap-4">
+        <Button size="lg" render={<Link href="/login?intent=seeker" />}>
+          Find a job
+        </Button>
+        <Button size="lg" variant="outline" render={<Link href="/login?intent=recruiter" />}>
+          Hire talent
+        </Button>
+      </div>
     </main>
   );
 }

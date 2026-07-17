@@ -14,6 +14,14 @@ Components:
 - **Messaging & scheduling service**: in-app only — this is a retention mechanic, not a convenience feature (see §4).
 - **AI-Credit Marketplace gateway** (fast-follow, post-MVP): API proxy issuing OpenAI-compatible keys, metered against points balance.
 
+## 2a. Registration & Roles (added 2026-07-17)
+
+- **Dual-role accounts, both opt-in**: one account can hold seeker and/or recruiter roles (`profiles.is_seeker` / `is_recruiter`), activated independently. Header switcher when both are held; opt-in CTA for the missing role. `/` routes to the last-used role (cookie), defaulting to seeker.
+- **Seeker activation** — guided wizard: (1) name + ToS + explicit AI-processing consent (mandatory — PDPA/PDPO §5 requires consent covering the redaction process itself; timestamps + `consent_version` stored for future re-consent), (2) resume + redaction preview, (3) dealbreakers → publish. Steps 2-3 skippable; dashboard shows a finish-profile banner until published.
+- **Recruiter activation**: name + **company/agency name (required)** + ToS. Company shows on job cards and thread headers — candidates always see who's contacting them. Recruiter identity is deliberately readable by signed-in users (RLS policy), unverified for now (verification on roadmap).
+- **Self-match exclusion**: matching RPCs exclude `profile_id = job.recruiter_id` — dual-role users never see themselves as candidates for their own jobs.
+- **Points**: single shared balance; +10 seed on seeker activation, +100 on recruiter activation (idempotent per role).
+
 ## 2. Data Model (sketch)
 
 - `users` — role: seeker / recruiter / enterprise_admin
@@ -47,11 +55,13 @@ This is a distinct subsystem, not a one-line feature — it's the core answer to
 - Recruiter sends a Reveal Request → candidate's name + job-fit summary disclosed. Contact info (email/phone) stays withheld unless the candidate separately consents.
 - All recruiter↔candidate contact happens through in-platform messaging (`message_threads`), never direct email/phone by default.
 
-**Override path — paid, pre-opt-in reveal:**
-- A recruiter/enterprise can pay *additional* points to reveal a candidate who hasn't opted in to that specific match.
-- If the candidate declines post-reveal: recruiter gets a **partial refund**.
-- Candidate is **compensated in points regardless of outcome** (accept or decline) — this is the incentive for candidates to leave override enabled; they earn even from declined interest.
-- **Per-candidate toggle** (`consent_flags.reveal_override_enabled`): if disabled, no override is possible for that candidate at any price. Privacy-first by default.
+**Override path — paid, pre-opt-in reveal (implemented 2026-07-17; placeholder economics):**
+- **25 pts total** (10 base + 15 engagement premium) vs. 10 for a standard reveal. Name + fit summary disclose **immediately at payment**; the candidate's accept/decline gates **messaging only**.
+- Candidate declines → recruiter refunded the **15-pt premium** (the 10-pt base pays for the look they got).
+- Candidate compensated **5 pts** at reveal creation (vs. 3 standard — bigger privacy cost), **regardless of outcome** — the incentive to leave override enabled.
+- **Per-candidate toggle** (`consent_flags.reveal_override_enabled`): if disabled, no override at any price. Paused profiles are also fully shielded from overrides. Privacy-first by default.
+- **Guardrails**: 5 overrides/day per recruiter (standard reveals uncapped); a decline blocks that recruiter from re-overriding that candidate (any job) for 30 days; pending overrides auto-expire after 7 days (treated as decline — premium refunded, block applies), evaluated lazily on read (no cron). Override only applies to `surfaced` matches — never candidate-declined ones. All constants env-tunable.
+- Notifications are in-app only for MVP (pending-override card on the seeker dashboard); email notifications wait for the Resend SMTP swap.
 
 **Per-role scoping & pricing:**
 - A reveal only unlocks a candidate for the specific job posting it's tied to. Revealing the same candidate against a different posting requires a new reveal.
@@ -144,9 +154,13 @@ sections above remain the target architecture.
   (draft/publish, visibility + override toggles) and job management
   (draft/active/closed, re-embed on republish) with suggest-and-approve AI
   refinement on both sides, free during MVP.
-- **Deferred, tables in place**: override path + partial refunds, point
-  purchases, verified-action earning, interview-scheduling UI, enterprise
-  entitlements, AI-Credit Marketplace (hard legal blocker — LEGAL_REVIEW.md).
+- **Shipped 2026-07-17 (second pass)**: override reveal flow with guardrails
+  (§4), dual-role registration + guided onboarding with consent capture (§2a),
+  sign-out, match-refresh-on-publish, company identity on jobs/threads.
+- **Deferred, tables in place**: point purchases ("top-ups coming soon" error
+  path exists), verified-action earning, interview-scheduling UI, enterprise
+  entitlements, company verification, email notifications, AI-Credit
+  Marketplace (hard legal blocker — LEGAL_REVIEW.md).
 - **Placeholder economics** (constants in `src/lib/points.ts`): recruiter
   seed 100 / reveal 10 / compensation 3 / seeker seed 10. Matching constants:
   top-20, cosine ≥ 0.55, both env-tunable.

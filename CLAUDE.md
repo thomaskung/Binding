@@ -21,7 +21,8 @@ Demo logins (seeded): `seeker@demo.local` / `recruiter@demo.local`, password `J0
 - AI adapter (`src/lib/ai/`): `AI_PROVIDER=stub` (deterministic, dev/CI default) or `modal` (Qwen3 8B + Qwen3-Embedding-0.6B, `modal_app/`, deploy per its README). Embeddings are 1024-dim (`vector(1024)` columns).
 - **Privacy invariant** (DESIGN.md rule, enforced by the `JDTextOnly` branded type + `tests/frontier-guardrail.test.ts`): candidate-derived data only ever goes to the self-hosted Modal path — never a frontier API. Only recruiter-authored JD text may cross that line.
 - Points: `src/lib/points.ts` — append-only ledger, placeholder economics constants. AI-Credit Marketplace redemption is a hard legal blocker (LEGAL_REVIEW.md).
-- Reveal flow (`revealCandidate` in `src/app/recruiter/actions.ts`): opt-in-gated, per-role, debits recruiter/compensates candidate via admin client (service role bypasses RLS; the action enforces invariants itself).
+- Reveal flow (`revealCandidate` / `overrideRevealCandidate` in `src/app/recruiter/actions.ts`): standard = opt-in-gated 10 pts; override = 25 pts pre-opt-in (name disclosed immediately, messaging gated on candidate accept, 15-pt premium refunds on decline/7-day expiry, 5/day cap, 30-day re-override block — guards in `src/lib/points.ts`). Per-role, admin client (service role bypasses RLS; actions enforce invariants).
+- Dual-role accounts: `profiles.is_seeker`/`is_recruiter`, both opt-in via `/onboarding/{seeker,recruiter}` (consent capture required — `src/lib/consent.ts` CONSENT_VERSION). `requireRole` redirects to the missing role's opt-in. Role switcher sets `job_active_role` cookie; `/` honors it.
 
 ## Gotchas
 

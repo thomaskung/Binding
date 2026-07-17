@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +10,20 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function LoginPage() {
+  // useSearchParams requires a Suspense boundary at build time.
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Landing CTAs carry the intended role so onboarding can pre-route.
+  const intent = searchParams.get("intent");
+  const destination = intent ? `/onboarding?intent=${intent}` : "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -22,7 +35,9 @@ export default function LoginPage() {
     const supabase = createSupabaseBrowserClient();
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${location.origin}/auth/callback` },
+      options: {
+        emailRedirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(destination)}`,
+      },
     });
     setBusy(false);
     setStatus(error ? error.message : "Check your email for the sign-in link.");
@@ -39,7 +54,7 @@ export default function LoginPage() {
     if (error) {
       setStatus(error.message);
     } else {
-      router.push("/");
+      router.push(destination);
       router.refresh();
     }
   }

@@ -45,25 +45,25 @@ insert into auth.identities (
     'email', now(), now(), now()
   );
 
-insert into profiles (id, role, display_name, dealbreaker_matrix, draft_text, published_text) values
+insert into profiles (id, is_seeker, is_recruiter, company_name, display_name, dealbreaker_matrix, draft_text, published_text) values
   (
-    '00000000-0000-0000-0000-000000000001', 'seeker', 'Demo Seeker',
+    '00000000-0000-0000-0000-000000000001', true, false, null, 'Demo Seeker',
     '{"min_salary": 90000, "currency": "USD", "work_setups": ["remote", "hybrid"]}',
     'Senior backend engineer, 8 years: distributed systems, Postgres, event-driven pipelines, Kubernetes. Led payments platform serving 2M users.',
     'Senior backend engineer, 8 years: distributed systems, Postgres, event-driven pipelines, Kubernetes. Led payments platform serving 2M users.'
   ),
   (
-    '00000000-0000-0000-0000-000000000002', 'recruiter', 'Demo Recruiter', null, null, null
+    '00000000-0000-0000-0000-000000000002', false, true, 'Apex Talent Partners', 'Demo Recruiter', null, null, null
   );
 
-insert into consent_flags (profile_id, reveal_override_enabled) values
-  ('00000000-0000-0000-0000-000000000001', true),
-  ('00000000-0000-0000-0000-000000000002', false);
+insert into consent_flags (profile_id, reveal_override_enabled, tos_accepted_at, processing_consent_at, consent_version) values
+  ('00000000-0000-0000-0000-000000000001', true, now(), now(), '2026-07-17-draft'),
+  ('00000000-0000-0000-0000-000000000002', false, now(), null, '2026-07-17-draft');
 
 -- Placeholder economics (see src/lib/points.ts): seeker seeded 10, recruiter 100.
 insert into points_ledger (profile_id, event, amount, note) values
-  ('00000000-0000-0000-0000-000000000001', 'seed', 10, 'signup seed'),
-  ('00000000-0000-0000-0000-000000000002', 'seed', 100, 'signup seed');
+  ('00000000-0000-0000-0000-000000000001', 'seed', 10, 'seeker activation seed'),
+  ('00000000-0000-0000-0000-000000000002', 'seed', 100, 'recruiter activation seed');
 
 -- Pre-embedded skill vector for the demo seeker, matching the stub embedding
 -- implementation (deterministic hash of published_text) is NOT reproduced here;

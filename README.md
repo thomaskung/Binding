@@ -61,9 +61,19 @@ land in Inbucket: http://127.0.0.1:54324
 | [LEGAL_REVIEW.md](./LEGAL_REVIEW.md) | Briefing memo for SG/HK counsel on the points-economy/AI-Credit Marketplace licensing exemption question — a hard blocker on that feature until reviewed |
 | [CLAUDE.md](./CLAUDE.md) | Guidance for Claude Code instances working in this repo |
 
+## Shipped beyond the skeleton
+
+- **Override reveals** (DESIGN.md §4): 25 pts reveals a non-opted-in candidate
+  immediately; messaging unlocks only if they accept; 15-pt premium refunds on
+  decline or 7-day expiry; 5/day cap + 30-day re-override block.
+- **Dual-role registration**: seeker and recruiter are independent opt-in
+  roles with a header switcher; seeker onboarding is a guided consent-first
+  wizard; recruiters register a company/agency name candidates always see.
+
 ## Deferred (tables exist, logic doesn't)
 
-Reveal-override + partial refunds, point purchases, verified-action earning,
-interview-scheduling UI, enterprise tier, AI-Credit Marketplace (hard legal
-blocker — LEGAL_REVIEW.md). Production email needs the Resend SMTP swap noted
-in `.env.example` before real beta invites.
+Point purchases ("top-ups coming soon"), verified-action earning,
+interview-scheduling UI, enterprise tier, company verification, email
+notifications, AI-Credit Marketplace (hard legal blocker — LEGAL_REVIEW.md).
+Production email needs the Resend SMTP swap noted in `.env.example` before
+real beta invites.
