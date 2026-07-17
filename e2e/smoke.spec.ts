@@ -8,8 +8,8 @@ import { expect, test, type Page } from "@playwright/test";
  * match, opts in -> recruiter reveals (points move) -> both sides message.
  */
 
-const SEEKER = { email: "seeker@demo.local", password: "password123" };
-const RECRUITER = { email: "recruiter@demo.local", password: "password123" };
+const SEEKER = { email: "seeker@demo.local", password: "J0B!Demo#2026$secure" };
+const RECRUITER = { email: "recruiter@demo.local", password: "J0B!Demo#2026$secure" };
 
 async function signIn(page: Page, user: { email: string; password: string }) {
   await page.goto("/login");

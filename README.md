@@ -22,7 +22,7 @@ pnpm dev               # http://localhost:3000
 ```
 
 Demo accounts (local seed): `seeker@demo.local` / `recruiter@demo.local`,
-password `password123` (password tab on the login page). Magic-link emails
+password `J0B!Demo#2026$secure` (password tab on the login page). Magic-link emails
 land in Inbucket: http://127.0.0.1:54324
 
 ## Commands

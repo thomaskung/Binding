@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getAiProvider } from "@/lib/ai";
 import { requireRole } from "@/lib/auth";
+import { refreshMatchesForProfile } from "@/lib/matching";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 
 /** Save draft profile text + dealbreakers without republishing. */
@@ -63,6 +64,10 @@ export async function publishProfile() {
     .from("profiles")
     .update({ published_text: profile.draft_text })
     .eq("id", session.userId);
+
+  // Surface matches against already-active jobs immediately — a candidate
+  // joining after a job was published must not stay invisible.
+  await refreshMatchesForProfile(admin, session.userId);
 
   revalidatePath("/seeker/profile");
   revalidatePath("/seeker");

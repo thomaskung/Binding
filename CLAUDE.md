@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `pnpm db:reset` — reapply migrations + seed from zero (local Docker Supabase)
 - `pnpm cf:build` — OpenNext Cloudflare Workers build (deploy target)
 
-Demo logins (seeded): `seeker@demo.local` / `recruiter@demo.local`, password `password123`.
+Demo logins (seeded): `seeker@demo.local` / `recruiter@demo.local`, password `J0B!Demo#2026$secure`.
 
 ## Architecture (see DESIGN.md for the full design; §12 for MVP substitutions)
 

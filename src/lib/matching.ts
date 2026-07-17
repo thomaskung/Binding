@@ -53,6 +53,36 @@ export async function refreshMatchesForJob(
   return rows.length;
 }
 
+/** Reverse direction: after a candidate publishes, surface every active job
+ * they clear (match_jobs_for_candidate RPC) and persist the matches. Fixes
+ * the gap where late-joining candidates stayed invisible until a recruiter
+ * re-published. */
+export async function refreshMatchesForProfile(
+  admin: SupabaseClient,
+  profileId: string,
+): Promise<number> {
+  const { data, error } = await admin.rpc("match_jobs_for_candidate", {
+    p_profile_id: profileId,
+    p_threshold: MATCH_COSINE_THRESHOLD,
+    p_top_n: MATCH_TOP_N,
+  });
+  if (error) throw new Error(`match_jobs_for_candidate failed: ${error.message}`);
+
+  const jobs = (data ?? []) as { job_posting_id: string; score: number }[];
+  if (jobs.length === 0) return 0;
+
+  const rows = jobs.map((j) => ({
+    job_posting_id: j.job_posting_id,
+    profile_id: profileId,
+    score: j.score,
+  }));
+  const { error: upsertError } = await admin
+    .from("matches")
+    .upsert(rows, { onConflict: "job_posting_id,profile_id", ignoreDuplicates: true });
+  if (upsertError) throw new Error(`match upsert failed: ${upsertError.message}`);
+  return rows.length;
+}
+
 /** Dealbreaker filter, extracted for unit testing (mirrors the SQL in
  * match_candidates — keep the two in sync). */
 export function passesDealbreakers(

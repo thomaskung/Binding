@@ -1,4 +1,4 @@
--- Dev-only seed: two demo accounts (password: password123) with seeded points.
+-- Dev-only seed: two demo accounts (password: J0B!Demo#2026$secure) with seeded points.
 -- Demo seeker has a published, embedded profile so the matching flow can be
 -- exercised immediately after `supabase db reset`.
 -- NOTE: inserting into auth.users directly is a local-dev shortcut only.
@@ -15,7 +15,7 @@ insert into auth.users (
   (
     '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000',
     'authenticated', 'authenticated', 'seeker@demo.local',
-    crypt('password123', gen_salt('bf')), now(),
+    crypt('J0B!Demo#2026$secure', gen_salt('bf')), now(),
     '{"provider":"email","providers":["email"]}', '{}',
     '', '', '', '', '',
     now(), now()
@@ -23,7 +23,7 @@ insert into auth.users (
   (
     '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000',
     'authenticated', 'authenticated', 'recruiter@demo.local',
-    crypt('password123', gen_salt('bf')), now(),
+    crypt('J0B!Demo#2026$secure', gen_salt('bf')), now(),
     '{"provider":"email","providers":["email"]}', '{}',
     '', '', '', '', '',
     now(), now()

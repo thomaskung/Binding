@@ -28,9 +28,8 @@ export default function LoginPage() {
     setStatus(error ? error.message : "Check your email for the sign-in link.");
   }
 
-  // Password login exists for local demo/seed accounts (seeker@demo.local /
-  // recruiter@demo.local, password123) and e2e tests. Production flow is
-  // magic-link-first.
+  // Password login exists for local demo/seed accounts (see README for demo
+  // credentials) and e2e tests. Production flow is magic-link-first.
   async function signInWithPassword() {
     setBusy(true);
     setStatus(null);

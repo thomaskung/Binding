@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { requireRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getBalance } from "@/lib/points";
+import { SignOutButton } from "@/components/sign-out-button";
 import { MatchResponseButtons } from "./match-response";
 
 export default async function SeekerDashboard() {
@@ -54,6 +55,7 @@ export default async function SeekerDashboard() {
           <Button variant="outline" render={<Link href="/seeker/profile" />}>
             Manage profile
           </Button>
+          <SignOutButton />
         </div>
       </header>
 

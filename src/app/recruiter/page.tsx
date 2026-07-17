@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/lib/auth";
 import { getBalance } from "@/lib/points";
+import { SignOutButton } from "@/components/sign-out-button";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export default async function RecruiterDashboard() {
@@ -33,6 +34,7 @@ export default async function RecruiterDashboard() {
             {balance} pts
           </Badge>
           <Button render={<Link href="/recruiter/jobs/new" />}>Post a job</Button>
+          <SignOutButton />
         </div>
       </header>
 
