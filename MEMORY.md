@@ -126,3 +126,12 @@ Format per entry: **Date** / **Decision** / **Context** / **Outcome-or-Lesson** 
 **Context**: Candidates previously had no way to know who was contacting them — a basic trust failure discovered while building the override card ("[who?] revealed your profile").
 **Outcome/Lesson**: The pseudonymity in this product is deliberately asymmetric: candidates are pseudonymous, recruiters are identified. That asymmetry is the trust model — worth stating explicitly in the design rather than leaving implicit.
 **Links**: DESIGN.md §2a, migration 0004 (profiles_recruiter_identity_select policy)
+
+---
+
+## 2026-07-18 (dev-server CORS bug)
+
+**Decision**: Added `allowedDevOrigins: ["127.0.0.1", "localhost"]` to next.config.ts.
+**Context**: User accessed the dev server via `http://127.0.0.1:3000` (matching Supabase's local URLs) and reported "Create account does not work" on the new /signup page — typing an email and clicking the button silently did nothing, no error shown. Root cause was not a signup bug at all: Next.js blocks cross-origin dev-resource requests by default, so the `/_next/webpack-hmr` websocket failed from `127.0.0.1`; the dev client's reconnect/recovery path was forcing full page reloads, silently wiping the signup form's React state mid-interaction. Confirmed via console logs showing two "Download React DevTools" messages (one per full page load) instead of one, and zero network requests to Supabase's `/auth/v1/otp` endpoint.
+**Outcome/Lesson**: When a form "does nothing" with no console error and no network request, suspect a full page reload wiping client state before suspecting the form's own logic — check for duplicate page-load markers in console history. `localhost` and `127.0.0.1` are different origins to a browser even though they resolve to the same machine; local dev URLs should be consistent, or `allowedDevOrigins` set defensively. Verified fix by checking Mailpit's REST API (`http://127.0.0.1:54324/api/v1/messages`) directly rather than only trusting the UI's "Check your email" status message.
+**Links**: next.config.ts, DESIGN.md §12
