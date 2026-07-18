@@ -1,5 +1,7 @@
 # VISION.md — JumpOnBoard (J.O.B.) Goals & Evaluation
 
+**Version 1.0** · Last updated 2026-07-17 · Revision history at the end of this document.
+
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [DESIGN.md](./DESIGN.md) (architecture). This document defines what success looks like and how we'll measure it, so decisions have a shared reference point instead of being re-litigated each time.
 
 ## Mission
@@ -57,3 +59,11 @@ Monthly review of:
 - If candidate-side liquidity (active, matchable profiles) is not on track toward the Phase 1 threshold by Month 4, reassess the supply-side acquisition strategy before investing further in headhunter-side GTM — research consistently shows two-sided marketplaces fail on the supply side, not demand, so this is the metric to protect first.
 - If reveal-to-engagement conversion does not meaningfully beat cold-outbound baselines by end of Phase 2, the core value proposition (privacy-first matching beats cold messaging) needs re-examination before scaling spend.
 - If AI-Credit Marketplace actual cost-per-user consistently exceeds the modeled $-cap by a wide margin after the first full billing cycle, pause new allowance grants and re-tune caps before continuing rollout — don't let a subsidized perk quietly become an uncapped liability.
+
+---
+
+## Revision History
+
+| Version | Date | Changes |
+|---|---|---|
+| 1.0 | 2026-07-17 | Initial: mission, north star, dual shipping/breakeven timelines, phased OKRs, cadence, kill-criteria. |

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AuthNav } from "@/components/auth-nav";
 import { getSessionProfile } from "@/lib/auth";
 import { activateRecruiter } from "../actions";
 
@@ -14,8 +15,10 @@ export default async function RecruiterOnboardingPage() {
   if (session.isRecruiter) redirect("/recruiter");
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
-      <Card className="w-full max-w-lg">
+    <div className="flex min-h-screen flex-col">
+      <AuthNav context="authenticated" />
+      <main className="flex flex-1 items-center justify-center p-8">
+        <Card className="w-full max-w-lg">
         <CardHeader>
           <CardTitle>Start hiring</CardTitle>
           <CardDescription>
@@ -64,7 +67,8 @@ export default async function RecruiterOnboardingPage() {
             </Button>
           </form>
         </CardContent>
-      </Card>
-    </main>
+        </Card>
+      </main>
+    </div>
   );
 }

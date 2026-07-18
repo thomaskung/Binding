@@ -2,11 +2,13 @@ import { redirect } from "next/navigation";
 import { AuthNav } from "@/components/auth-nav";
 import { getSessionProfile } from "@/lib/auth";
 import { resolveIntent, resolveOnboardingRedirect } from "@/lib/signup-intent";
-import { LoginForm } from "./login-form";
+import { SignupForm } from "./signup-form";
 
-/** Returning-user sign-in. Signed-in visitors are routed away by the same
- * intent-wins rule /signup and /onboarding use. */
-export default async function LoginPage({
+/** Sign-up entry. Signed-in visitors never see the form — they're routed by
+ * the same intent-wins rule /onboarding uses (an existing seeker following
+ * "Sign up to hire talent" lands on recruiter activation, not their
+ * dashboard). */
+export default async function SignupPage({
   searchParams,
 }: {
   searchParams: Promise<{ intent?: string }>;
@@ -21,9 +23,9 @@ export default async function LoginPage({
 
   return (
     <div className="flex min-h-screen flex-col">
-      <AuthNav context="login" />
+      <AuthNav context="signup" />
       <main className="flex flex-1 items-center justify-center p-8">
-        <LoginForm intent={intent} />
+        <SignupForm intent={intent} />
       </main>
     </div>
   );

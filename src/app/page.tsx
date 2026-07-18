@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { AuthNav } from "@/components/auth-nav";
 import { Button } from "@/components/ui/button";
 import { getSessionProfile } from "@/lib/auth";
 
@@ -17,20 +18,28 @@ export default async function LandingPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center gap-6 p-8 text-center">
-      <h1 className="text-4xl font-bold tracking-tight">JumpOnBoard</h1>
-      <p className="text-lg text-muted-foreground">
-        Privacy-first hiring for APAC. Match on skills and compensation fit —
-        before anyone sees your name.
-      </p>
-      <div className="flex gap-4">
-        <Button size="lg" render={<Link href="/login?intent=seeker" />}>
-          Find a job
-        </Button>
-        <Button size="lg" variant="outline" render={<Link href="/login?intent=recruiter" />}>
-          Hire talent
-        </Button>
-      </div>
-    </main>
+    <div className="flex min-h-screen flex-col">
+      <AuthNav context="landing" />
+      <main className="mx-auto flex max-w-2xl flex-1 flex-col items-center justify-center gap-6 p-8 text-center">
+        <h1 className="text-4xl font-bold tracking-tight">JumpOnBoard</h1>
+        <p className="text-lg text-muted-foreground">
+          Privacy-first hiring for APAC. Match on skills and compensation fit —
+          before anyone sees your name.
+        </p>
+        <div className="flex gap-4">
+          <Button size="lg" data-testid="cta-seeker" render={<Link href="/signup?intent=seeker" />}>
+            Sign up to find a job
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            data-testid="cta-recruiter"
+            render={<Link href="/signup?intent=recruiter" />}
+          >
+            Sign up to hire talent
+          </Button>
+        </div>
+      </main>
+    </div>
   );
 }

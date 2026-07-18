@@ -1,5 +1,7 @@
 # LEGAL_REVIEW.md — Briefing for SG/HK Counsel: Points Economy & AI-Credit Marketplace
 
+**Version 1.0** · Last updated 2026-07-17 · Revision history at the end of this document.
+
 Not legal advice — this is a fact summary and question list to hand to actual Singapore/Hong Kong counsel. Nothing in BUSINESS.md, DESIGN.md, or MEMORY.md should be treated as a final compliance position until this review is complete. See those docs for full product context.
 
 ## Status
@@ -34,3 +36,11 @@ The intended design rationale (see BUSINESS.md §3/§11) is that a closed-loop, 
 ## What's NOT in scope for this review
 
 General PDPA/PDPO data-privacy review (candidate data, retention, cross-border transfer) is a separate, already-flagged item (BUSINESS.md §11, DESIGN.md §5) and can proceed on the lighter "private beta + parallel review" timeline. This document is scoped specifically to the points/tokenomics licensing question.
+
+---
+
+## Revision History
+
+| Version | Date | Changes |
+|---|---|---|
+| 1.0 | 2026-07-17 | Initial briefing: points-economy exemption facts + five questions for counsel; AI-Credit Marketplace launch blocker. |

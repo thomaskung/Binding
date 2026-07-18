@@ -1,5 +1,7 @@
 # DESIGN.md — JumpOnBoard (J.O.B.) Technical Architecture
 
+**Version 1.3** · Last updated 2026-07-18 · Revision history at the end of this document.
+
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [VISION.md](./VISION.md) (goals/metrics). This document describes how the product is actually built. Status: walking-skeleton MVP implemented (see §12 for what's built vs. deferred and where the MVP diverges from the target architecture below).
 
 ## 1. System Overview
@@ -170,3 +172,14 @@ sections above remain the target architecture.
   the `JDTextOnly` branded type (`src/lib/ai/types.ts`) plus
   `tests/frontier-guardrail.test.ts`, which fails typecheck if the boundary
   is weakened.
+
+---
+
+## Revision History
+
+| Version | Date | Changes |
+|---|---|---|
+| 1.0 | 2026-07-17 | Initial architecture (data model, matching pipeline, reveal mechanics, privacy, points, AI-Credit Marketplace, LLM strategy). |
+| 1.1 | 2026-07-17 | §12 MVP implementation notes added (Cloudflare hosting, Modal Starter, Qwen3 models, stub provider, keepalive). |
+| 1.2 | 2026-07-17 | §2a Registration & Roles (dual-role opt-in, consent capture, company identity, self-match exclusion); §4 override economics + guardrails confirmed and implemented. |
+| 1.3 | 2026-07-18 | Signup/sign-in split on landing (dedicated /signup, env-gated password login, intent-wins redirect rule); points_ledger PK to uuid. |

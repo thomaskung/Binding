@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AuthNav } from "@/components/auth-nav";
 import { Button } from "@/components/ui/button";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -36,6 +37,7 @@ export default async function SeekerOnboardingProfilePage() {
 
   return (
     <div>
+      <AuthNav context="authenticated" />
       <div className="mx-auto flex max-w-3xl items-center justify-between px-8 pt-6">
         <p className="text-sm text-muted-foreground">
           Step 2 of 3 — your profile and dealbreakers. Publish to enter the pool.

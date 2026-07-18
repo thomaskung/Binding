@@ -1,6 +1,6 @@
 Executable Strategy Plan: "JumpOnBoard" (J.O.B.)
 
-*Reviewed/Revised: 2026-07-17 — see DESIGN.md, VISION.md, MEMORY.md for the technical, goal-tracking, and decision-log companions to this document.*
+**Version 1.2** · Last updated 2026-07-17 · Revision history at the end of this document. Companions: DESIGN.md (technical), VISION.md (goals), MEMORY.md (decision log).
 
 The Privacy-First, AI-Driven Continuous Hiring Ecosystem
 Launch Market Focus: APAC (Hong Kong & Singapore Base)
@@ -208,3 +208,13 @@ Legal Entity: Singapore holding company with Singapore and Hong Kong operating c
 Domain & Brand: We keep the "JumpOnBoard" name. The `.com` is currently an inactive, for-sale listing (via HugeDomains) from an unrelated, now-defunct company that used the same name — not an active competitor. We launch under `jumponboard.hk` and `jumponboard.sg` for MVP and plan to acquire the `.com` after seed/Series A funding closes.
 
 Team: Solo founder, building with AI coding agents ("vibe coding") — consistent with the technical approach in §8.
+
+---
+
+## Revision History
+
+| Version | Date | Changes |
+|---|---|---|
+| 1.0 | 2026-07-17 | Original strategy draft (pre-research). |
+| 1.1 | 2026-07-17 | Research-driven revision: TAM corrected to ~$16-20B; "zero re-identification" reframed as pseudonymization + defense-in-depth; tokenomics redesigned as closed-loop non-monetary points; base-case (18-24mo) breakeven added alongside 9mo upside; reveal "engagement moat" mechanics; company setup section. |
+| 1.2 | 2026-07-17 | AI-Credit Marketplace named as pillar 5 with hard legal blocker (LEGAL_REVIEW.md); dual-role registration; enterprise tiered-commission working model. |

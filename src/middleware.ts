@@ -33,6 +33,7 @@ export default async function middleware(request: NextRequest) {
   const isPublic =
     path === "/" ||
     path.startsWith("/login") ||
+    path.startsWith("/signup") ||
     path.startsWith("/auth") ||
     path.startsWith("/api/health");
 

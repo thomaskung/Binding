@@ -2,12 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Conventions
+
+- **Every feature ships with unit tests AND acceptance (Playwright e2e) tests** — standing instruction from the founder. Unit tests live in `tests/` (extract pure helpers to `src/lib/` to create a testable surface when pages are mostly RSC/redirect logic); e2e specs live in `e2e/`. Run the full e2e suite after UI-affecting changes and fine-tune until green.
+- **Strategy docs are versioned**: BUSINESS/DESIGN/VISION/LEGAL_REVIEW carry a `**Version X.Y** · Last updated …` header and a Revision History table at the bottom. When materially editing one, bump the version, update the date, and add a history row. MEMORY.md is exempt (inherently chronological).
+
 ## Commands
 
 - `pnpm dev` — dev server (needs local Supabase: `pnpm db:start`, then `pnpm db:reset` for migrations+seed; keys go in `.env.local`, see `.env.example`)
 - `pnpm lint` / `pnpm typecheck` / `pnpm test` — ESLint, tsc, Vitest units
-- `pnpm test -- tests/matching.test.ts` — single test file
-- `pnpm e2e` — Playwright smoke (starts its own dev server; run `pnpm db:reset` first for clean seed)
+- `pnpm test -- tests/matching.test.ts` — single test file (units: `matching`, `stub-provider`, `frontier-guardrail`, `signup-intent`)
+- `pnpm e2e` — Playwright acceptance suite (`smoke`, `override`, `signup` specs; starts its own dev server; run `pnpm db:reset` first for clean seed; needs `NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN=true` in `.env.local` for the password tab the specs sign in with)
 - `pnpm db:reset` — reapply migrations + seed from zero (local Docker Supabase)
 - `pnpm cf:build` — OpenNext Cloudflare Workers build (deploy target)
 
