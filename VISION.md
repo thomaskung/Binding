@@ -1,6 +1,6 @@
 # VISION.md — JumpOnBoard (J.O.B.) Goals & Evaluation
 
-**Version 1.0** · Last updated 2026-07-17 · Revision history at the end of this document.
+**Version 1.1** · Last updated 2026-07-18 · Revision history at the end of this document.
 
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [DESIGN.md](./DESIGN.md) (architecture). This document defines what success looks like and how we'll measure it, so decisions have a shared reference point instead of being re-litigated each time.
 
@@ -31,6 +31,8 @@ Build a privacy-first, AI-driven hiring ecosystem for APAC (HK/SG) that lets pro
 - Objective: prove candidates will maintain a pseudonymized profile without the AI-Credit Marketplace live yet.
 - KR: reach 200 active, matchable candidate profiles by Month 3 (provisional hypothesis, not a validated benchmark — revisit and reset once the first cohort's real signup/activation data exists).
 - KR: ≥50% of active profiles complete at least one AI-verified action (skill assessment or work-history verification) per month (provisional target — same caveat).
+- KR: ATS-feed discovery→consent conversion rate (DESIGN.md §2b — Greenhouse/Lever + schema.org discovery, consent-gated promotion). Honest caveat: this tooling makes concierge outreach dramatically more efficient (auto-discovered leads with real current openings, one-click consent), but does **not** remove the need for a pre-launch outreach sprint — someone still has to ask and someone still has to say yes.
+- **Launch-readiness gate** (precondition, distinct from the Oct 2026 build/ship date): public signups do not open until both ~50 real candidate profiles AND ~15 consented/claimed ATS-sourced job postings exist in the target vertical (starting targets, adjustable). This makes "a solid match from Day 1" literally true for the first real public users instead of aspirational.
 
 **Phase 2 — Headhunter Empowerment (Months 4-9)**
 - Objective: convert free headhunters to Pro via genuine reveal-to-reply experience.
@@ -67,3 +69,4 @@ Monthly review of:
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 2026-07-17 | Initial: mission, north star, dual shipping/breakeven timelines, phased OKRs, cadence, kill-criteria. |
+| 1.1 | 2026-07-18 | Phase 1 gains the ATS-feed discovery→consent KR and an explicit launch-readiness gate (DESIGN.md §2b), distinct from the shipping-timeline date. |

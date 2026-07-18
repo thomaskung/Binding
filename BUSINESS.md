@@ -1,6 +1,6 @@
 Executable Strategy Plan: "JumpOnBoard" (J.O.B.)
 
-**Version 1.2** · Last updated 2026-07-17 · Revision history at the end of this document. Companions: DESIGN.md (technical), VISION.md (goals), MEMORY.md (decision log).
+**Version 1.3** · Last updated 2026-07-18 · Revision history at the end of this document. Companions: DESIGN.md (technical), VISION.md (goals), MEMORY.md (decision log).
 
 The Privacy-First, AI-Driven Continuous Hiring Ecosystem
 Launch Market Focus: APAC (Hong Kong & Singapore Base)
@@ -145,6 +145,8 @@ Phase 1: Supply-Side "Dark Pool" (Months 1-3 post-MVP)
 
 Market as a "Secure Career Vault." Users upload resumes for a free AI optimization, setting their "Dealbreaker Matrix" and entering the dark pool. Launch as a private beta (limited/invited users) — see §11 on why this beta runs alongside, not blocked by, formal legal review.
 
+Job supply for Day 1 (cold-start): scraping Indeed was considered and rejected — its Terms of Service prohibit automated access, and breach-of-contract exposure survives the CFAA's public-data carve-out regardless of the ads being publicly searchable (see DESIGN.md §2b for the full legal reasoning, including why "Google for Jobs does this" doesn't transfer either). Instead: automated discovery from employer-operated ATS public APIs (Greenhouse/Lever) and `schema.org/JobPosting`-marked career pages feeds a private staging pipeline; nothing goes live for candidates until the employer explicitly consents via a one-time claim link. Claiming is always free — the paid ask (Pro/Enterprise) is deferred until the employer has experienced a real match, the same sequencing already used for headhunters below, now applied to this path too. On the candidate side, two no-primary acquisition hooks run in parallel: a "check a job you found" reverse-match tool (candidate pastes a job description they're personally interested in — text only, never a URL we fetch) and the free AI resume rewrite; either builds a candidate's profile as a side effect without requiring marketplace liquidity to exist first. Public signups don't open until a launch-readiness gate is met (target: ~50 candidate profiles + ~15 consented employer postings — see VISION.md), so early real users see solid matches from day one instead of an empty pool.
+
 Phase 2: Headhunter Empowerment (Months 4-9)
 
 Target independent recruiters in HK/SG via LinkedIn outreach. Offer free points. Once they experience a candidate instantly replying (because the Matrix aligns), they convert to the $99/mo Pro tier. Ship the AI-Credit Marketplace as the first fast-follow feature in this window.
@@ -218,3 +220,4 @@ Team: Solo founder, building with AI coding agents ("vibe coding") — consisten
 | 1.0 | 2026-07-17 | Original strategy draft (pre-research). |
 | 1.1 | 2026-07-17 | Research-driven revision: TAM corrected to ~$16-20B; "zero re-identification" reframed as pseudonymization + defense-in-depth; tokenomics redesigned as closed-loop non-monetary points; base-case (18-24mo) breakeven added alongside 9mo upside; reveal "engagement moat" mechanics; company setup section. |
 | 1.2 | 2026-07-17 | AI-Credit Marketplace named as pillar 5 with hard legal blocker (LEGAL_REVIEW.md); dual-role registration; enterprise tiered-commission working model. |
+| 1.3 | 2026-07-18 | §9 GTM gains the job-supply cold-start mechanism (ATS-feed/schema.org consent-gated sourcing, candidate-paste reverse-match, launch-readiness gate) — see DESIGN.md §2b for the full design and legal reasoning. |
