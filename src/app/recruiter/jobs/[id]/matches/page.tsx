@@ -13,42 +13,51 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
   const session = await requireRole("recruiter");
   const supabase = await createSupabaseServerClient();
 
-  const { data: job } = await supabase
-    .from("job_postings")
-    .select("id, title, status")
-    .eq("id", id)
-    .eq("recruiter_id", session.userId)
-    .maybeSingle();
+  // job/matches/reveals/candidateTexts are independent of each other (none
+  // needs another's result to run its query) — fetch all four concurrently
+  // instead of the previous job -> matches+reveals -> candidateTexts chain.
+  const [{ data: job }, { data: matches }, { data: reveals }, { data: candidateTexts }] =
+    await Promise.all([
+      supabase
+        .from("job_postings")
+        .select("id, title, status")
+        .eq("id", id)
+        .eq("recruiter_id", session.userId)
+        .maybeSingle(),
+      supabase
+        .from("matches")
+        .select("id, profile_id, score, status")
+        .eq("job_posting_id", id)
+        .order("score", { ascending: false }),
+      supabase
+        .from("reveal_requests")
+        .select(
+          "id, profile_id, path, status, refunded, created_at, recruiter_id, fit_summary, profiles!reveal_requests_profile_id_fkey(display_name), message_threads(id)",
+        )
+        .eq("job_posting_id", id),
+      supabase.rpc("match_candidates", { p_job_id: id, p_threshold: 0, p_top_n: 100 }),
+    ]);
   if (!job) notFound();
 
-  const [{ data: matches }, { data: reveals }] = await Promise.all([
-    supabase
-      .from("matches")
-      .select("id, profile_id, score, status")
-      .eq("job_posting_id", id)
-      .order("score", { ascending: false }),
-    supabase
-      .from("reveal_requests")
-      .select(
-        "id, profile_id, path, status, refunded, created_at, recruiter_id, fit_summary, profiles!reveal_requests_profile_id_fkey(display_name), message_threads(id)",
-      )
-      .eq("job_posting_id", id),
-  ]);
-
   // Lazy expiry pass (7-day pending overrides become declines + refunds).
+  // Each check is independent and short-circuits with zero DB calls unless
+  // actually a pending override past the window — run in parallel.
   const admin = createSupabaseAdminClient();
-  const liveReveals = [];
-  for (const r of reveals ?? []) {
-    const expired = await expireStaleOverride(admin, {
-      id: r.id,
-      path: r.path,
-      status: r.status,
-      recruiter_id: r.recruiter_id,
-      created_at: r.created_at,
-      refunded: r.refunded,
-    });
-    liveReveals.push(expired ? { ...r, status: "declined" as const, refunded: true } : r);
-  }
+  const expiryResults = await Promise.all(
+    (reveals ?? []).map((r) =>
+      expireStaleOverride(admin, {
+        id: r.id,
+        path: r.path,
+        status: r.status,
+        recruiter_id: r.recruiter_id,
+        created_at: r.created_at,
+        refunded: r.refunded,
+      }),
+    ),
+  );
+  const liveReveals = (reveals ?? []).map((r, i) =>
+    expiryResults[i] ? { ...r, status: "declined" as const, refunded: true } : r,
+  );
 
   // Override availability hints for surfaced candidates (server-side only;
   // the action re-validates everything at spend time).
@@ -77,11 +86,6 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
     }
   }
 
-  const { data: candidateTexts } = await supabase.rpc("match_candidates", {
-    p_job_id: id,
-    p_threshold: 0,
-    p_top_n: 100,
-  });
   const textByProfile = new Map<string, string>(
     ((candidateTexts ?? []) as { profile_id: string; redacted_text: string }[]).map((c) => [
       c.profile_id,

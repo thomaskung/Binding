@@ -37,19 +37,25 @@ export default async function SeekerDashboard() {
   ]);
 
   // Lazy expiry pass on any stale pending overrides (7-day window, no cron).
+  // Each check is independent (short-circuits with zero DB calls unless the
+  // reveal is actually a pending override past the window) — run in
+  // parallel rather than serializing one round-trip per reveal.
   const admin = createSupabaseAdminClient();
-  const activeReveals = [];
-  for (const r of reveals ?? []) {
-    const expired = await expireStaleOverride(admin, {
-      id: r.id,
-      path: r.path,
-      status: r.status,
-      recruiter_id: r.recruiter_id,
-      created_at: r.created_at,
-      refunded: r.refunded,
-    });
-    activeReveals.push(expired ? { ...r, status: "declined" as const } : r);
-  }
+  const expiryResults = await Promise.all(
+    (reveals ?? []).map((r) =>
+      expireStaleOverride(admin, {
+        id: r.id,
+        path: r.path,
+        status: r.status,
+        recruiter_id: r.recruiter_id,
+        created_at: r.created_at,
+        refunded: r.refunded,
+      }),
+    ),
+  );
+  const activeReveals = (reveals ?? []).map((r, i) =>
+    expiryResults[i] ? { ...r, status: "declined" as const } : r,
+  );
 
   const threadByMatch = new Map(
     activeReveals.map((r) => {
