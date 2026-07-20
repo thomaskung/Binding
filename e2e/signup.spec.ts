@@ -10,9 +10,9 @@ const SEEKER = { email: "seeker@demo.local", password: "J0B!Demo#2026$secure" };
 
 async function signIn(page: Page, user: { email: string; password: string }) {
   await page.goto("/login");
-  await page.getByRole("tab", { name: "Password" }).click();
-  await page.getByRole("textbox", { name: "Email" }).fill(user.email);
-  await page.getByRole("textbox", { name: "Password" }).fill(user.password);
+  await page.getByLabel("Work email").fill(user.email);
+  await page.getByRole("button", { name: "Continue with email" }).click();
+  await page.getByLabel("Password").fill(user.password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL(/\/(seeker|recruiter|onboarding)/);
 }
@@ -25,7 +25,7 @@ test("landing splits sign-up CTAs from the sign-in nav link", async ({ page }) =
   // Nav sign-in link → /login
   await page.getByTestId("nav-signin").click();
   await page.waitForURL(/\/login$/);
-  await expect(page.getByText("Sign in to JumpOnBoard")).toBeVisible();
+  await expect(page.getByText("Welcome back")).toBeVisible();
 
   // Login's nav cross-link goes back to signup
   await page.getByTestId("nav-signup").click();
@@ -61,10 +61,14 @@ test("signup with intent shows the email form directly; without intent shows the
   await expect(page.getByTestId("signup-submit")).toBeEnabled();
 });
 
-test("login shows both tabs when password login is enabled (e2e env)", async ({ page }) => {
+test("login offers both password and magic-link after entering email (e2e env)", async ({
+  page,
+}) => {
   await page.goto("/login");
-  await expect(page.getByRole("tab", { name: "Magic link" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Password" })).toBeVisible();
+  await page.getByLabel("Work email").fill("someone@example.com");
+  await page.getByRole("button", { name: "Continue with email" }).click();
+  await expect(page.getByLabel("Password")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Email me a magic link" })).toBeVisible();
 });
 
 test("signed-in users are routed away from /signup and /login; intent for a missing role wins", async ({

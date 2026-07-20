@@ -2,21 +2,20 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
-import { expireStaleOverride, OVERRIDE_COST } from "@/lib/points";
-import { OverrideButton, RevealButton } from "./reveal-button";
+import { expireStaleOverride, getBalance, OVERRIDE_COST } from "@/lib/points";
+import { MatchList, type RecruiterMatchCard } from "./match-list";
 
 export default async function JobMatchesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await requireRole("recruiter");
   const supabase = await createSupabaseServerClient();
 
-  // job/matches/reveals/candidateTexts are independent of each other (none
-  // needs another's result to run its query) — fetch all four concurrently
-  // instead of the previous job -> matches+reveals -> candidateTexts chain.
-  const [{ data: job }, { data: matches }, { data: reveals }, { data: candidateTexts }] =
+  // job/matches/reveals/candidateTexts/balance are independent of each other
+  // (none needs another's result to run its query) — fetch all five
+  // concurrently instead of chaining.
+  const [{ data: job }, { data: matches }, { data: reveals }, { data: candidateTexts }, balance] =
     await Promise.all([
       supabase
         .from("job_postings")
@@ -36,6 +35,7 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
         )
         .eq("job_posting_id", id),
       supabase.rpc("match_candidates", { p_job_id: id, p_threshold: 0, p_top_n: 100 }),
+      getBalance(supabase, session.userId),
     ]);
   if (!job) notFound();
 
@@ -94,9 +94,39 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
   );
   const revealByProfile = new Map(liveReveals.map((r) => [r.profile_id, r]));
 
+  const cards: RecruiterMatchCard[] = (matches ?? []).map((match) => {
+    const reveal = revealByProfile.get(match.profile_id);
+    const revealedProfile = reveal
+      ? Array.isArray(reveal.profiles)
+        ? reveal.profiles[0]
+        : reveal.profiles
+      : null;
+    const thread = reveal
+      ? Array.isArray(reveal.message_threads)
+        ? reveal.message_threads[0]
+        : reveal.message_threads
+      : null;
+    const override = overrideInfo.get(match.profile_id);
+    return {
+      id: match.id,
+      profileId: match.profile_id,
+      score: match.score,
+      status: match.status,
+      revealedName: revealedProfile?.display_name ?? null,
+      fitSummary: reveal?.fit_summary ?? null,
+      text: textByProfile.get(match.profile_id) ?? "",
+      overridePending: reveal?.path === "override" && reveal.status === "pending",
+      overrideDeclined: reveal?.path === "override" && reveal.status === "declined",
+      overrideAllowed: override?.allowed ?? false,
+      overrideReason: override?.reason ?? null,
+      threadOpen: reveal?.status === "accepted",
+      threadId: thread?.id ?? null,
+    };
+  });
+
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-8">
-      <header className="flex items-center justify-between">
+      <header className="flex items-start justify-between gap-6">
         <div>
           <h1 className="text-2xl font-bold">Matches — {job.title}</h1>
           <p className="text-sm text-muted-foreground">
@@ -105,103 +135,15 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
             reveals immediately — messaging unlocks only if they accept.
           </p>
         </div>
-        <Button variant="ghost" render={<Link href={`/recruiter/jobs/${id}`} />}>
-          ← Job
-        </Button>
+        <div className="flex flex-col items-end gap-3">
+          <Badge variant="secondary">{balance} pts</Badge>
+          <Button variant="ghost" render={<Link href={`/recruiter/jobs/${id}`} />}>
+            ← Job
+          </Button>
+        </div>
       </header>
 
-      {(matches ?? []).length === 0 ? (
-        <Card>
-          <CardContent className="py-10 text-center text-muted-foreground">
-            No matches yet. Publish the job (with an embedded JD) and check back
-            as candidates join the pool.
-          </CardContent>
-        </Card>
-      ) : (
-        (matches ?? []).map((match) => {
-          const reveal = revealByProfile.get(match.profile_id);
-          const revealedProfile = reveal
-            ? (Array.isArray(reveal.profiles) ? reveal.profiles[0] : reveal.profiles)
-            : null;
-          const thread = reveal
-            ? (Array.isArray(reveal.message_threads)
-                ? reveal.message_threads[0]
-                : reveal.message_threads)
-            : null;
-          const override = overrideInfo.get(match.profile_id);
-          const overridePending = reveal?.path === "override" && reveal.status === "pending";
-          const overrideDeclined = reveal?.path === "override" && reveal.status === "declined";
-          return (
-            <Card key={match.id} data-testid="recruiter-match-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-3 text-lg">
-                  {match.status === "revealed" && revealedProfile ? (
-                    <span data-testid="revealed-name">{revealedProfile.display_name}</span>
-                  ) : (
-                    <span className="text-muted-foreground">Pseudonymized candidate</span>
-                  )}
-                  <Badge variant="outline">{Math.round(match.score * 100)}% match</Badge>
-                  <Badge
-                    variant={
-                      match.status === "interested"
-                        ? "default"
-                        : match.status === "revealed"
-                          ? "secondary"
-                          : "outline"
-                    }
-                  >
-                    {overridePending
-                      ? "revealed — awaiting response"
-                      : overrideDeclined
-                        ? "revealed — declined"
-                        : match.status}
-                  </Badge>
-                </CardTitle>
-                {match.status === "revealed" && reveal?.fit_summary && (
-                  <CardDescription data-testid="fit-summary">{reveal.fit_summary}</CardDescription>
-                )}
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="line-clamp-4 text-sm whitespace-pre-wrap text-muted-foreground">
-                  {textByProfile.get(match.profile_id) ?? "(profile text unavailable)"}
-                </p>
-                {match.status === "interested" && <RevealButton matchId={match.id} />}
-                {match.status === "surfaced" &&
-                  (override?.allowed ? (
-                    <OverrideButton matchId={match.id} />
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Waiting for the candidate to express interest.
-                      {override?.reason ? ` Override unavailable: ${override.reason}.` : ""}
-                    </p>
-                  ))}
-                {overridePending && (
-                  <p className="text-xs text-muted-foreground" data-testid="override-pending-note">
-                    Identity disclosed. Messaging stays locked until the candidate accepts —
-                    they have 7 days; if they decline or it expires, 15 pts refund automatically.
-                  </p>
-                )}
-                {overrideDeclined && (
-                  <p className="text-xs text-muted-foreground" data-testid="override-declined-note">
-                    Candidate declined the conversation. Your 15-pt premium was refunded; this
-                    candidate can&apos;t be override-revealed again for 30 days.
-                  </p>
-                )}
-                {match.status === "revealed" && reveal?.status === "accepted" && thread && (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    data-testid="open-thread"
-                    render={<Link href={`/thread/${thread.id}`} />}
-                  >
-                    Open conversation
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })
-      )}
+      <MatchList cards={cards} />
     </main>
   );
 }

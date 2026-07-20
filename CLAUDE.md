@@ -31,6 +31,7 @@ Demo logins (seeded): `seeker@demo.local` / `recruiter@demo.local`, password `J0
 - Points: `src/lib/points.ts` — append-only ledger, placeholder economics constants. AI-Credit Marketplace redemption is a hard legal blocker (LEGAL_REVIEW.md).
 - Reveal flow (`revealCandidate` / `overrideRevealCandidate` in `src/app/recruiter/actions.ts`): standard = opt-in-gated 10 pts; override = 25 pts pre-opt-in (name disclosed immediately, messaging gated on candidate accept, 15-pt premium refunds on decline/7-day expiry, 5/day cap, 30-day re-override block — guards in `src/lib/points.ts`). Per-role, admin client (service role bypasses RLS; actions enforce invariants).
 - Dual-role accounts: `profiles.is_seeker`/`is_recruiter`, both opt-in via `/onboarding/{seeker,recruiter}` (consent capture required — `src/lib/consent.ts` CONSENT_VERSION). `requireRole` redirects to the missing role's opt-in. Role switcher sets `job_active_role` cookie; `/` honors it.
+- Seeker match bands (`matchBand()` in `src/lib/matching.ts`): raw cosine score never reaches seeker-facing code (recruiter-only, migration 0001) — seekers only ever see the qualitative `high`/`normal`/`low` band, and `high` caps down to `normal` unless `profiles.seeker_tier = 'pro'` (DESIGN.md/BUSINESS.md "Pro seeker $9.99/mo", first schema-backed by migration 0006). No billing integration exists yet — `seeker_tier` is flipped via the dev-only toggle on `/seeker` (refuses outside `NODE_ENV !== "production"`).
 
 ## Gotchas
 

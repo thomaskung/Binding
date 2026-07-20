@@ -10,6 +10,8 @@ export default defineConfig([
     "playwright-report/**",
     "test-results/**",
     "next-env.d.ts",
+    "ds-bundle/**",
+    ".ds-sync/**",
   ]),
   ...nextCoreWebVitals,
 ]);

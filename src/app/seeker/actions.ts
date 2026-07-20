@@ -152,6 +152,32 @@ export async function respondToOverride(revealId: string, response: "accepted" |
   revalidatePath("/seeker");
 }
 
+/** Dev-only: flip seeker_tier for demoing the Pro match-band gate — no
+ * billing integration exists yet (DESIGN.md/BUSINESS.md "Pro seeker
+ * $9.99/mo" is a named strategy concept, not a built payment flow). Refuses
+ * outside dev so this never ships as a real, unpaid upgrade path. */
+export async function toggleSeekerTier() {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("dev-only action");
+  }
+  const session = await requireRole("seeker");
+  const supabase = await createSupabaseServerClient();
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("seeker_tier")
+    .eq("id", session.userId)
+    .single();
+  if (error) throw new Error(error.message);
+
+  const nextTier = profile.seeker_tier === "pro" ? "free" : "pro";
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({ seeker_tier: nextTier })
+    .eq("id", session.userId);
+  if (updateError) throw new Error(updateError.message);
+  revalidatePath("/seeker");
+}
+
 /** Candidate expresses interest in (or declines) a surfaced match. */
 export async function respondToMatch(matchId: string, response: "interested" | "declined") {
   const session = await requireRole("seeker");

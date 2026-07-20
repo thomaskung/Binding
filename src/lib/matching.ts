@@ -11,6 +11,26 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export const MATCH_TOP_N = Number(process.env.MATCH_TOP_N ?? 20);
 export const MATCH_COSINE_THRESHOLD = Number(process.env.MATCH_COSINE_THRESHOLD ?? 0.55);
 
+/** Match-quality band shown to seekers, gated by seeker_tier (DESIGN.md/
+ * BUSINESS.md "Pro seeker $9.99/mo"). Below this the label caps at "normal"
+ * for free seekers — the match itself still surfaces, only the top-tier
+ * label is paywalled. There's no reachable "low" band today since
+ * MATCH_COSINE_THRESHOLD (0.55) is also the surfacing floor; kept for when
+ * that floor is ever lowered. */
+export const HIGH_MATCH_THRESHOLD = Number(process.env.HIGH_MATCH_THRESHOLD ?? 0.85);
+
+export type SeekerTier = "free" | "pro";
+export type MatchBand = "high" | "normal" | "low";
+
+/** Never pass the raw score to seeker-facing code/components — this band is
+ * the only match-quality signal a seeker should ever see (matches.score is
+ * recruiter-only, see migration 0001). */
+export function matchBand(score: number, tier: SeekerTier): MatchBand {
+  const trueBand: MatchBand =
+    score >= HIGH_MATCH_THRESHOLD ? "high" : score >= MATCH_COSINE_THRESHOLD ? "normal" : "low";
+  return trueBand === "high" && tier !== "pro" ? "normal" : trueBand;
+}
+
 export interface CandidateMatch {
   profile_id: string;
   score: number;

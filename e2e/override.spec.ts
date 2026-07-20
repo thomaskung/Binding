@@ -48,9 +48,9 @@ async function ensureUser(email: string) {
 
 async function signIn(page: Page, user: { email: string; password: string }) {
   await page.goto("/login");
-  await page.getByRole("tab", { name: "Password" }).click();
-  await page.getByRole("textbox", { name: "Email" }).fill(user.email);
-  await page.getByRole("textbox", { name: "Password" }).fill(user.password);
+  await page.getByLabel("Work email").fill(user.email);
+  await page.getByRole("button", { name: "Continue with email" }).click();
+  await page.getByLabel("Password").fill(user.password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL(/\/(seeker|recruiter|onboarding)/);
 }

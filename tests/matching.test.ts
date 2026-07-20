@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { passesDealbreakers } from "@/lib/matching";
+import { matchBand, passesDealbreakers } from "@/lib/matching";
 
 describe("dealbreaker filter (mirrors match_candidates SQL — keep in sync)", () => {
   const job = { salary_max: 120000, work_setups: ["remote", "hybrid"] };
@@ -33,5 +33,25 @@ describe("dealbreaker filter (mirrors match_candidates SQL — keep in sync)", (
 
   it("empty work-setup preference means no constraint", () => {
     expect(passesDealbreakers({ work_setups: [] }, job)).toBe(true);
+  });
+});
+
+describe("matchBand (seeker-facing match-quality gate)", () => {
+  it("pro seekers see the true band at every threshold", () => {
+    expect(matchBand(0.9, "pro")).toBe("high");
+    expect(matchBand(0.85, "pro")).toBe("high");
+    expect(matchBand(0.7, "pro")).toBe("normal");
+    expect(matchBand(0.55, "pro")).toBe("normal");
+    expect(matchBand(0.4, "pro")).toBe("low");
+  });
+
+  it("free seekers have the high band capped to normal", () => {
+    expect(matchBand(0.95, "free")).toBe("normal");
+    expect(matchBand(0.85, "free")).toBe("normal");
+  });
+
+  it("free seekers still see normal and low uncapped", () => {
+    expect(matchBand(0.7, "free")).toBe("normal");
+    expect(matchBand(0.4, "free")).toBe("low");
   });
 });

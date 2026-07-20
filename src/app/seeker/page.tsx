@@ -5,10 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { requireRole } from "@/lib/auth";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { expireStaleOverride, getBalance, OVERRIDE_COMPENSATION } from "@/lib/points";
+import { matchBand, type SeekerTier } from "@/lib/matching";
 import { RoleSwitcher } from "@/components/role-switcher";
 import { SignOutButton } from "@/components/sign-out-button";
-import { MatchResponseButtons } from "./match-response";
 import { OverrideResponseButtons } from "./override-response";
+import { MatchList, type SeekerMatchCard } from "./match-list";
+import { DevTierToggle } from "./dev-tier-toggle";
 
 export default async function SeekerDashboard() {
   const session = await requireRole("seeker");
@@ -17,13 +19,13 @@ export default async function SeekerDashboard() {
   const [{ data: profile }, { data: matches }, { data: reveals }, balance] = await Promise.all([
     supabase
       .from("profiles")
-      .select("published_text, visibility")
+      .select("published_text, visibility, seeker_tier")
       .eq("id", session.userId)
       .single(),
     supabase
       .from("matches")
       .select(
-        "id, status, created_at, job_postings(id, title, salary_min, salary_max, work_setups, profiles!job_postings_recruiter_id_fkey(company_name))",
+        "id, status, score, created_at, job_postings(id, title, salary_min, salary_max, work_setups, profiles!job_postings_recruiter_id_fkey(company_name))",
       )
       .eq("profile_id", session.userId)
       .order("created_at", { ascending: false }),
@@ -68,26 +70,60 @@ export default async function SeekerDashboard() {
   );
   const pendingByMatch = new Set(pendingOverrides.map((r) => r.match_id));
 
+  // Rank (ordinal by true score desc) stands in for the raw score on the
+  // client — "best match" sort works without ever exposing exact cosine
+  // similarity to the seeker (matches.score is recruiter-only, migration 0001).
+  const seekerTier: SeekerTier = profile?.seeker_tier === "pro" ? "pro" : "free";
+  const byScoreDesc = [...(matches ?? [])].sort((a, b) => b.score - a.score);
+  const rankByMatch = new Map(byScoreDesc.map((m, i) => [m.id, i + 1]));
+
+  const cards: SeekerMatchCard[] = (matches ?? []).map((match) => {
+    const job = Array.isArray(match.job_postings) ? match.job_postings[0] : match.job_postings;
+    const company = job
+      ? (Array.isArray(job.profiles) ? job.profiles[0] : job.profiles)?.company_name
+      : null;
+    return {
+      id: match.id,
+      title: job?.title ?? "Role",
+      company: company ?? null,
+      salaryMin: job?.salary_min ?? null,
+      salaryMax: job?.salary_max ?? null,
+      workSetups: job?.work_setups ?? [],
+      status: match.status,
+      band: matchBand(match.score, seekerTier),
+      rank: rankByMatch.get(match.id) ?? Number.MAX_SAFE_INTEGER,
+      pendingOverride: pendingByMatch.has(match.id),
+      threadId: threadByMatch.get(match.id) ?? null,
+    };
+  });
+
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-8">
-      <header className="flex items-center justify-between">
-        <div>
+      <header className="flex items-start justify-between gap-6">
+        <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold">Your matches</h1>
           <p className="text-sm text-muted-foreground">
-            {profile?.published_text
-              ? profile.visibility === "active"
-                ? "Your pseudonymized profile is live in the pool."
-                : "Your profile is paused — no new matches will surface."
-              : "Publish your profile to enter the matching pool."}
+            {cards.length} role{cards.length === 1 ? "" : "s"} matched to your profile
           </p>
+          {!profile?.published_text && (
+            <p className="text-sm text-muted-foreground">
+              Publish your profile to enter the matching pool.
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-3">
-          <Badge variant="secondary">{balance} pts</Badge>
-          <Button variant="outline" render={<Link href="/seeker/profile" />}>
-            Manage profile
-          </Button>
-          <RoleSwitcher current="seeker" isSeeker={session.isSeeker} isRecruiter={session.isRecruiter} />
-          <SignOutButton />
+        <div className="flex flex-col items-end gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col items-end">
+              <Badge variant="secondary">{balance} pts</Badge>
+              <span className="text-xs text-muted-foreground">Balance</span>
+            </div>
+            <Button variant="outline" render={<Link href="/seeker/profile" />}>
+              Manage profile
+            </Button>
+            <RoleSwitcher current="seeker" isSeeker={session.isSeeker} isRecruiter={session.isRecruiter} />
+            <SignOutButton />
+          </div>
+          <DevTierToggle tier={seekerTier} />
         </div>
       </header>
 
@@ -127,68 +163,7 @@ export default async function SeekerDashboard() {
         );
       })}
 
-      {(matches ?? []).length === 0 ? (
-        <Card>
-          <CardContent className="py-10 text-center text-muted-foreground">
-            No matches yet. Matches appear when an active job aligns with your
-            skills and dealbreakers.
-          </CardContent>
-        </Card>
-      ) : (
-        (matches ?? []).map((match) => {
-          const job = Array.isArray(match.job_postings)
-            ? match.job_postings[0]
-            : match.job_postings;
-          const company = job
-            ? (Array.isArray(job.profiles) ? job.profiles[0] : job.profiles)?.company_name
-            : null;
-          return (
-            <Card key={match.id} data-testid="seeker-match-card">
-              <CardHeader>
-                <CardTitle className="text-lg">
-                  {job?.title ?? "Role"}
-                  {company ? (
-                    <span className="text-muted-foreground font-normal"> · {company}</span>
-                  ) : null}
-                </CardTitle>
-                <CardDescription>
-                  {job?.salary_min != null && job?.salary_max != null
-                    ? `$${job.salary_min.toLocaleString()} – $${job.salary_max.toLocaleString()} · `
-                    : ""}
-                  {(job?.work_setups ?? []).join(" / ")}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex items-center justify-between">
-                <Badge
-                  variant={
-                    match.status === "revealed"
-                      ? "default"
-                      : match.status === "interested"
-                        ? "secondary"
-                        : "outline"
-                  }
-                >
-                  {match.status === "revealed" && pendingByMatch.has(match.id)
-                    ? "revealed — respond above"
-                    : match.status}
-                </Badge>
-                {match.status === "surfaced" && <MatchResponseButtons matchId={match.id} />}
-                {match.status === "revealed" &&
-                  !pendingByMatch.has(match.id) &&
-                  threadByMatch.get(match.id) && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      render={<Link href={`/thread/${threadByMatch.get(match.id)}`} />}
-                    >
-                      Open conversation
-                    </Button>
-                  )}
-              </CardContent>
-            </Card>
-          );
-        })
-      )}
+      <MatchList cards={cards} />
     </main>
   );
 }
