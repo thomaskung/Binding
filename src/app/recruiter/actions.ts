@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { assertJDTextOnly, getAiProvider } from "@/lib/ai";
 import { requireRole } from "@/lib/auth";
+import { parseCommaList, parseLineList } from "@/lib/jobs";
 import { refreshMatchesForJob } from "@/lib/matching";
 import {
   appendLedger,
@@ -30,6 +31,13 @@ export async function saveJob(formData: FormData) {
     salary_min: formData.get("salary_min") ? Number(formData.get("salary_min")) : null,
     salary_max: formData.get("salary_max") ? Number(formData.get("salary_max")) : null,
     work_setups: formData.getAll("work_setups").map(String),
+    department: String(formData.get("department") ?? "").trim() || null,
+    location: String(formData.get("location") ?? "").trim() || null,
+    employment_type: String(formData.get("employment_type") ?? "fulltime"),
+    salary_visibility: String(formData.get("salary_visibility") ?? "public"),
+    skills: parseCommaList(String(formData.get("skills") ?? "")),
+    responsibilities: parseLineList(String(formData.get("responsibilities") ?? "")),
+    requirements: parseLineList(String(formData.get("requirements") ?? "")),
   };
   if (!values.title || !values.description) throw new Error("title and description required");
 

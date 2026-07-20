@@ -120,7 +120,9 @@ export function MatchList({ cards }: { cards: SeekerMatchCard[] }) {
           <Card key={card.id} data-testid="seeker-match-card">
             <CardHeader>
               <CardTitle>
-                {card.title}
+                <Link href={`/seeker/matches/${card.id}`} className="hover:underline">
+                  {card.title}
+                </Link>
                 {card.company ? (
                   <span className="text-muted-foreground font-normal"> · {card.company}</span>
                 ) : null}
