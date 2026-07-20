@@ -33,3 +33,11 @@ __pycache__/
 # wrangler
 .wrangler/
 recordings/
+
+# design-sync (claude.ai/design) — staged scripts, build output, machine state.
+# Durable/committed: .design-sync/config.json, NOTES.md, conventions.md, previews/, overrides/
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
