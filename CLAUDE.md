@@ -14,9 +14,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `pnpm test -- tests/matching.test.ts` — single test file (units: `matching`, `stub-provider`, `frontier-guardrail`, `signup-intent`)
 - `pnpm e2e` — Playwright acceptance suite (`smoke`, `override`, `signup` specs; starts its own dev server; run `pnpm db:reset` first for clean seed; needs `NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN=true` in `.env.local` for the password tab the specs sign in with)
 - `pnpm db:reset` — reapply migrations + seed from zero (local Docker Supabase)
+- `pnpm test-data:generate` — regenerate `test-data/smoke-seed.generated.sql` after editing the JSON files in `test-data/`
 - `pnpm cf:build` — OpenNext Cloudflare Workers build (deploy target)
 
 Demo logins (seeded): `seeker@demo.local` / `recruiter@demo.local`, password `J0B!Demo#2026$secure`.
+
+`test-data/` is a dev-only smoke dataset (10 seekers, 11 jobs across 4 companies, real matches) auto-loaded on every `pnpm db:reset` via `supabase/config.toml` `[db.seed] sql_paths` — see `test-data/README.md`.
 
 ## Architecture (see DESIGN.md for the full design; §12 for MVP substitutions)
 

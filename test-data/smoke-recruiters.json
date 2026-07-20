@@ -1,0 +1,26 @@
+[
+  {
+    "id": "20000000-0000-0000-0000-000000000001",
+    "email": "nimbus@smoke.local",
+    "displayName": "Nimbus Recruiter",
+    "companyName": "Nimbus Cloud Systems"
+  },
+  {
+    "id": "20000000-0000-0000-0000-000000000002",
+    "email": "vertex@smoke.local",
+    "displayName": "Vertex Recruiter",
+    "companyName": "Vertex Analytics"
+  },
+  {
+    "id": "20000000-0000-0000-0000-000000000003",
+    "email": "bright@smoke.local",
+    "displayName": "Bright Recruiter",
+    "companyName": "Bright Studio"
+  },
+  {
+    "id": "20000000-0000-0000-0000-000000000004",
+    "email": "fortress@smoke.local",
+    "displayName": "Fortress Recruiter",
+    "companyName": "Fortress Security Group"
+  }
+]
