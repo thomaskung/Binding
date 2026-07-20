@@ -1,6 +1,6 @@
 # DESIGN.md — JumpOnBoard (J.O.B.) Technical Architecture
 
-**Version 1.4** · Last updated 2026-07-18 · Revision history at the end of this document.
+**Version 1.5** · Last updated 2026-07-20 · Revision history at the end of this document.
 
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [VISION.md](./VISION.md) (goals/metrics). This document describes how the product is actually built. Status: walking-skeleton MVP implemented (see §12 for what's built vs. deferred and where the MVP diverges from the target architecture below).
 
@@ -53,6 +53,43 @@ Neither channel is sufficient on its own to publish a listing: even ATS public A
 - **Dual acquisition hooks, no single primary**: "check a job you found" (zero-commitment, standalone value, doesn't require believing the marketplace has liquidity yet) and the existing free AI resume rewrite (points-economy redemption, framed as a no-cost trial) run as parallel entry points. Either one builds a candidate's profile/skill vector as a side effect of a low-commitment action, seeding the candidate pool without requiring marketplace liquidity to exist first.
 
 **Launch sequencing — a readiness gate, not just a calendar date.** Public signups do not open until both a minimum candidate density and a minimum consented/claimed employer density exist in the target vertical (starting targets, adjustable: ~50 real candidate profiles, ~15 consented/claimed ATS-sourced postings — see VISION.md). The existing Oct 2026 date remains the *build* target; public opening is gated on density, so "a solid match from Day 1" is literally true for the first real public users rather than aspirational. This makes the ATS-feed/schema.org tooling primarily a **concierge-outreach accelerant** (auto-discovered leads with real current openings + a one-click consent link, instead of cold manual research) rather than a way to skip relationship-building entirely — a pre-launch outreach sprint is still required, just a much faster one.
+
+## 2c. Resume-First Onboarding & Continuous AI Maintenance (strategy/roadmap — not yet built)
+
+**Status**: recorded architecture decision only, same treatment as §2b and §7. No schema or UI beyond the existing ingest/onboarding wizard exists for this yet.
+
+**The problem it solves**: traditional profile-maintenance UI puts the upkeep burden on the user. Free-tier users won't spend time keeping a profile current, so they update only when actively job-hunting — which is exactly when their data is *least* useful to the passive dark pool. Stale profiles starve the recruiter side (the supply-side liquidity problem in VISION.md) and force recruiters back to "please send me your latest resume," reintroducing the friction the product exists to remove.
+
+**The pivot**: make **resume submission the front door**, and have an AI agent **continuously maintain** the resume so the user never has to hand-edit fields. JumpOnBoard becomes the user's de-facto lifelong resume maintainer — a retention/stickiness moat, and the mechanism that keeps the dark pool's data fresh by construction.
+
+- **Consent-before-processing ordering constraint (non-negotiable)**: PDPA/PDPO §5-style consent covering the AI redaction/processing step must be captured *before* the resume is ingested. "Resume-first" therefore means resume upload is the *first substantive step* after a minimal consent gate — never literally before consent. The existing seeker wizard (§2a: name + ToS + AI-processing consent → resume → dealbreakers) is re-sequenced, not bypassed: the consent gate stays first, resume moves up to be the primary action, dealbreakers follow.
+- **AI extracts, user approves**: on upload, the AI parses the resume and drafts structured fields (skills, desired roles, industries, `seeker_experience` entries) into the existing structured layer via **suggest-and-approve** — the same pattern already used for resume/JD refinement. The resume becomes the source of truth; structured fields are AI-derived-then-user-confirmed.
+- **AI-never-fabricates invariant**: the maintenance agent only restructures, rephrases, or files facts the user explicitly supplied (via the resume or a maintenance answer). It never infers, embellishes, or invents accomplishments, titles, or dates. This is a fairness/integrity guardrail consistent with the tenure-not-employer-prestige stance already encoded in `src/lib/experience.ts` — a fabricated accomplishment could drive a match and be disclosed to a recruiter on reveal, so the guardrail is load-bearing, not cosmetic.
+- **Maintenance-loop triggers** (all of them, phased):
+  - *Lazy-on-login + staleness check (MVP path)*: on login, if the profile is stale (past a freshness window, or a tenure milestone has elapsed since last update), surface a maintenance nudge ("Still at Company X? Anything new since <date>?"). No cron — consistent with the existing lazy-evaluation pattern used for override expiry (§4).
+  - *User-initiated*: an always-available "update my profile" entry point.
+  - *Scheduled / email reminders (deferred)*: proactive time-based nudges independent of login. Needs the Resend SMTP swap (§12) plus a scheduler the design has so far deliberately avoided — documented as a later-stage addition, not MVP.
+- **Manual entry stays as a fallback**, never removed: users without a resume, career-changers, and anyone who prefers direct editing must still be able to build/edit the structured layer by hand. Resume-first is the default path, not the only one.
+
+**Privacy consequence — the invariant this whole pivot hinges on**: raw resumes are already retained owner-only today; continuous maintenance changes the raw resume from a *persisted-but-static input* into a *continuously-updated, longer-retained, PII-bearing asset* (a deepening of an existing asset, not a new retention of something previously discarded). See §5 for the owner-only / unchanged-redaction-boundary / expanded-retention-consent invariant that keeps "we maintain your resume" and "privacy-first" from contradicting each other.
+
+## 2d. Adaptive UI (state-driven, not generative) (strategy/roadmap — not yet built)
+
+The founder asked whether the UI should become generative — changing according to profile, preference, and resume. Decision: **adaptive/state-driven UI, not runtime-generative UI.**
+
+- **What we build**: deterministic components; a **profile-state machine** decides *which modules surface and in what priority*; AI generates *content* (nudge copy, suggested edits, summaries) inside fixed, testable slots — never markup at render time.
+- **State axes**: completeness (draft / published), freshness (fresh / stale by last-update or tenure-milestone), intent (active vs passive looker), role (seeker / recruiter / dual). Example mappings: incomplete → finish-profile flow forward; passive + stale → maintenance nudge forward; active seeker → matches forward; dual-role → role-appropriate surface via the existing switcher.
+- **Why not runtime-generative** (considered and rejected): an LLM emitting UI markup per render is (a) not deterministically testable, which breaks the standing unit+e2e convention (CLAUDE.md); (b) expensive per render; (c) an accessibility and injection-surface risk (untrusted markup rendered into the app). Adaptive-with-AI-content-in-fixed-slots captures ~90% of the intent while staying green under Playwright.
+
+## 2e. Aggregate Signal Pipeline — privacy-preserving monetization (strategy/roadmap — not yet built)
+
+The data JumpOnBoard collects (fresh, structured, continuously-maintained career data) is a monetizable asset **only in aggregate, non-identifiable form**. PII is never sold or shared. This is a data-collection business *within* privacy-first, not a departure from it (see BUSINESS.md §3/§7).
+
+- **Opt-in, separate consent**: a profile feeds the aggregate-signal product only after the user gives a **separate** opt-in consent, distinct from the AI-processing consent (extend the `src/lib/consent.ts` / `CONSENT_VERSION` mechanism). Privacy stays the default.
+- **Hard k-anonymity threshold**: no aggregate signal (e.g. "expected salary raise for Rust engineers in SG," "in-demand skills in HK fintech," hiring velocity) is ever computed, surfaced, or sold unless the underlying cohort is **≥ k distinct opted-in people** (starting target **k≥20**, exact value pending counsel — see LEGAL_REVIEW.md). Below threshold the signal is **suppressed entirely**, not approximated. In small/niche APAC verticals this is what actually makes "non-identifiable" true (§5 flags small pools as the re-identification danger) and is the basis for arguing the aggregates fall outside PDPA/PDPO "personal data" scope.
+- **Optional noise (future)**: differential-privacy-style noise on published figures is a documented future hardening, not required for the first version once k-thresholding is in place.
+- **Outputs are aggregate-only**: the signal product never exposes, ranks, or links an individual profile. It reads from opted-in, k-thresholded cohorts and emits statistics.
+- **Invariants unchanged**: only the redacted/generalized skill vector is ever matched (§3), and only k-anonymized aggregates from opt-in profiles ever leave for the signal product. The frontier-guardrail invariant (`JDTextOnly`, `tests/frontier-guardrail.test.ts`) still holds.
 
 ## 2. Data Model (sketch)
 
@@ -107,6 +144,11 @@ This is a distinct subsystem, not a one-line feature — it's the core answer to
 
 **Access control**: Supabase RLS as the primary enforcement layer — a seeker's raw resume and unredacted PII are never queryable by a recruiter/enterprise role; only skill vectors and (post-reveal) disclosed fields are.
 
+**Resume-persistence invariant (added for the §2c continuous-maintenance pivot)**: raw resumes are *already* retained owner-only today (the `resumes` table, access-restricted). What the continuous-maintenance pivot actually changes is narrower than "we now keep resumes" — it is: (a) the resume goes from *persisted-but-static* (ingested once) to *continuously updated over the life of the account*, (b) active-account retention lengthens accordingly, and (c) consent scope must now cover ongoing AI maintenance, not just one-time ingest. The posture does **not** degrade (nothing that used to be discarded is now kept); it deepens an already-retained asset. "We maintain your resume" and "privacy-first" coexist only under these explicit rules, which the pivot must not weaken:
+- The maintained raw resume stays **owner-only** (RLS, same posture as `resumes` / `skill_vectors` / `seeker_experience`) — recruiters and every other role never see it, before or after any reveal (a reveal discloses name + fit summary and, on separate consent, contact info — never the raw resume).
+- The **redaction boundary is unchanged**: only the redacted/generalized skill vector is ever matched, and only k-anonymized aggregates from opt-in profiles (§2e) ever feed the signal product.
+- The pivot **expands PII retention** (a live resume is now kept and maintained indefinitely rather than processed once), so the bounded-retention policy (below; BUSINESS.md §11) and the AI-processing consent must explicitly cover *continuous maintenance*, not just one-time ingest. Retention stays bounded-not-indefinite; "maintained indefinitely" describes the active-account lifecycle, not an exemption from the deletion/retention window.
+
 **PDPA/PDPO compliance**:
 - SG opco is the primary PDPA-compliant entity; HK opco handles PDPO for HK-based data/users.
 - Consent must cover the anonymization/redaction process itself, not just initial data collection.
@@ -120,6 +162,7 @@ This is a distinct subsystem, not a one-line feature — it's the core answer to
 - **Earning also occurs automatically on reveal events** (accepted or declined) — candidates get compensated for being part of the marketplace even when a match doesn't convert.
 - **Redemption catalog**: AI resume rewriting (available at MVP); AI-Credit Marketplace allowance (fast-follow, see §7).
 - **Spend side (recruiters)**: Reveal Requests (per-role, same-role multi-candidate discount) and the consent-override path.
+- **Benefits/loyalty credits run on a SEPARATE, walled-off rail — NOT this points ledger.** The credit-based benefits/loyalty programme (§7b) redeems for real third-party goods and services (flights, accommodation, IT-equipment upgrades, healthcare products, etc.). That is exactly the broad-redemption surface that breaks the closed-loop, single-purpose exemption this points ledger relies on (SG Payment Services Act / HK SVF Ordinance — see §6 first bullet, BUSINESS.md §11, LEGAL_REVIEW.md). To stop it contaminating the points-system exemption, benefits/loyalty must be a distinct instrument with its own licensing analysis, never fungible with points earned/spent here. Treated as a hard blocker (does not ship until counsel signs off), same status as the AI-Credit Marketplace.
 
 ## 7. AI-Credit Marketplace (fast-follow feature — design now, build immediately after MVP)
 
@@ -136,6 +179,24 @@ Architecture:
 **Explicitly not MVP**: ships as the first feature immediately after MVP, once real usage data exists to size the $-caps safely. Building the gateway's metering/cap enforcement can start during MVP development, but it should not gate MVP launch.
 
 **Hard launch blocker**: the points system's licensing exemption (§6, BUSINESS.md §11) depends on redemption staying narrow/single-purpose. Redeeming points for general-purpose compute usable with arbitrary third-party agents is a broader redemption surface than "AI resume rewriting" and pushes toward fungible value rather than a single-purpose facility. **This feature does not ship until SG/HK counsel has signed off on the exemption question** — see [LEGAL_REVIEW.md](./LEGAL_REVIEW.md) for the briefing memo. Treat this as a launch blocker for the AI-Credit Marketplace specifically, distinct from the rest of MVP, which proceeds under the private-beta-plus-parallel-legal-review approach (BUSINESS.md §11).
+
+## 7a. Roadmap adjacency — Training / Reskilling (design later, not yet built)
+
+AI-driven quiz + guided-learning product (reference point: Gemini Guided Learning). Two tracks delivered simultaneously:
+- **Individual career-path programs**: personalized reskilling toward a target role, informed by the gap between the seeker's skill vector and in-demand roles (the same aggregate signals from §2e).
+- **Corporate training**: compliance-oriented programs (AML, security) sold to enterprises; an employee can receive individual + corporate training at once.
+
+Reuses the existing serverless open-weight LLM infra (§8) for content generation and the `verified_actions` mechanism — completing a program is an AI-verified action that earns points (§6), tightening the earn-loop. Mission stays hiring-core (VISION.md); this is an adjacency the data moat enables, not a headline feature.
+
+## 7b. Roadmap adjacency — Benefits / Loyalty programme (hard blocker; not yet built)
+
+Credit-based benefits: enterprises bargain group deals for employees (corporate deals on flights, accommodation, wellness programs, festive goods/services); individuals get similar (IT-equipment upgrades, healthcare products, career-advisory services). Long-term ambition: a global loyalty programme.
+
+**Runs on a separate, walled-off credit rail — never the points ledger (§6).** Redeeming credits for real third-party goods/services is precisely the broad-redemption surface that breaks the closed-loop single-purpose exemption the points economy depends on; a cross-jurisdiction "global loyalty programme" multiplies the exposure. This is a **hard blocker**: no benefits/loyalty credit mechanism ships until SG/HK counsel has completed a dedicated stored-value/licensing analysis (LEGAL_REVIEW.md), same status as the AI-Credit Marketplace. Near-term scope is career benefits only; regulated financial benefits (insurance, etc.) are explicitly future-roadmap.
+
+## 7c. Roadmap adjacency — Contextual advertising (later-stage; not yet built)
+
+Ads, if introduced, are **contextual only — no behavioral or individual-level tracking**. Targeted by page context (role/skill/surface shown), never by profiling an individual across their data or via cross-site pixels. No PII is exposed to advertisers. Any cohort-level targeting would reuse the §2e k-anonymity threshold and require its own consent posture (LEGAL_REVIEW.md). This keeps advertising consistent with the privacy-first moat rather than in tension with it.
 
 ## 8. AI/LLM Strategy
 
@@ -214,3 +275,4 @@ sections above remain the target architecture.
 | 1.2 | 2026-07-17 | §2a Registration & Roles (dual-role opt-in, consent capture, company identity, self-match exclusion); §4 override economics + guardrails confirmed and implemented. |
 | 1.3 | 2026-07-18 | Signup/sign-in split on landing (dedicated /signup, env-gated password login, intent-wins redirect rule); points_ledger PK to uuid. |
 | 1.4 | 2026-07-18 | §2b External Job Supply & Cold-Start Strategy (roadmap, not yet built): Indeed-scraping rejected, Google-for-Jobs-as-justification rejected, two-stage consent-gated ATS/schema.org pipeline adopted, candidate-paste (text-first) reverse-match, launch-readiness gate. |
+| 1.5 | 2026-07-20 | Resume-first pivot + data-monetization roadmap (all not yet built): §2c resume-first onboarding & continuous AI maintenance (suggest-and-approve, AI-never-fabricates, all-triggers loop, consent-before-processing), §2d adaptive-not-generative UI, §2e k-anonymized opt-in aggregate-signal pipeline; §5 resume-persistence invariant (owner-only, unchanged redaction boundary, expanded-retention consent); §6 benefits/loyalty on a separate walled-off credit rail; §7a Training, §7b Benefits/loyalty (hard blocker), §7c contextual-only ads. Mission stays hiring-core. |

@@ -1,6 +1,6 @@
 Executable Strategy Plan: "JumpOnBoard" (J.O.B.)
 
-**Version 1.3** · Last updated 2026-07-18 · Revision history at the end of this document. Companions: DESIGN.md (technical), VISION.md (goals), MEMORY.md (decision log).
+**Version 1.4** · Last updated 2026-07-20 · Revision history at the end of this document. Companions: DESIGN.md (technical), VISION.md (goals), MEMORY.md (decision log).
 
 The Privacy-First, AI-Driven Continuous Hiring Ecosystem
 Launch Market Focus: APAC (Hong Kong & Singapore Base)
@@ -10,6 +10,8 @@ Launch Market Focus: APAC (Hong Kong & Singapore Base)
 Company Purpose: JumpOnBoard (J.O.B.) is an AI-driven, privacy-first career ecosystem that empowers professionals and companies to match on skills and compensation fit — without revealing Personally Identifiable Information (PII) or current compensation data — until both sides have expressed mutual interest.
 
 The Vision: We are disrupting the traditional, episodic, and highly biased recruitment industry in Asia. By leveraging Serverless Private Large Language Models (LLMs) and a dual-sided, closed-loop Points Economy, J.O.B. eliminates the "Prisoner's Dilemma" of salary negotiation. We act as a trust-minimizing broker, ensuring mutual alignment on compensation and skills before identities are revealed — pseudonymized by default, hardened with defense-in-depth, not marketed as an absolute anonymity guarantee (see §3 and DESIGN.md for why that distinction matters).
+
+The Business Underneath: J.O.B. is, structurally, a **data-collection business — kept strictly inside a privacy-first frame**. By becoming the user's continuous, AI-maintained resume keeper (roadmap — see §3 and DESIGN.md §2c), we accumulate the freshest, most structured career dataset in the region. We monetize that dataset **only in aggregate, non-identifiable form** (market-intelligence signals — see §7); individual PII is never sold or shared. Privacy is simultaneously the #1 product priority *and* the moat: the trust that makes people willing to keep a maintained profile is the same trust that produces the data asset. Any monetization that would require exposing individual data is out of scope by design.
 
 Our Stance on Agencies: We do not compete with headhunters; we empower them. We provide individual recruiters with an unparalleled "dark pool" of passive talent, allowing them to spend micro-fees to unlock resumes that yield massive placement commissions.
 
@@ -47,6 +49,8 @@ Core Product Pillars
 
 5. AI-Credit Marketplace (Fast-Follow, immediately post-MVP): Job seekers can fund an open, OpenAI-compatible API key — usable with any third-party autonomous agent, including popular open-source frameworks like Hermes Agent and OpenClaw — via their points balance. Usage is metered by a dollar-value cap per period against cheap open-weight models (Llama 3 / Mistral), never premium/frontier models, mirroring the model used by OpenCode Go, a real $10/month product that already does exactly this and is itself compatible with Hermes Agent and OpenClaw. Free seekers get a small points-funded allowance; Pro seekers ($9.99/month) get a guaranteed larger allowance — this is the concrete answer to "why upgrade to Pro." This ships as the first feature after MVP launch, not on day one, since it depends on cost data from real usage to size safely. See DESIGN.md for the metering/gateway architecture.
 
+6. Continuous AI Resume Maintenance (Roadmap — not yet built; see DESIGN.md §2c): Onboarding leads with resume upload rather than manual form-filling, and an AI agent keeps the resume current over time — periodically asking "anything new in your career?" and drafting updates on a strict suggest-and-approve basis (the AI never fabricates; it only files facts the user gives it). This attacks the core reason passive-talent data goes stale — users won't maintain a profile by hand for free — and turns J.O.B. into the de-facto lifelong resume maintainer. That is the stickiness moat and the freshness engine behind the aggregate-data business above. The UI adapts to profile/freshness/intent state (deterministic, not runtime-generative — DESIGN.md §2d).
+
 Points Economy (Closed-Loop, Non-Monetary):
 
 Seekers Earn: Points for AI-verified quality actions — passing a skill assessment, a verifiable work-history signal — not for raw profile-field edits (this prevents low-effort profile farming for free redemptions). Points are also earned automatically whenever a profile is revealed (accepted or declined), which pays candidates for participating in the marketplace even when a match doesn't convert.
@@ -77,7 +81,7 @@ SOM: $120 Million (Targeting Tech/Finance professionals and registered agency he
 
 6. Business Moat (Defensibility)
 
-The Verified Candidate "Dark Pool": Candidate data profiles are our ultimate moat. Competitors cannot easily scrape a localized, highly engaged pool of passive talent hidden behind a privacy wall.
+The Verified Candidate "Dark Pool": Candidate data profiles are our ultimate moat. Competitors cannot easily scrape a localized, highly engaged pool of passive talent hidden behind a privacy wall. The continuous-AI-maintenance loop (§3, roadmap) deepens this: a *fresh, structured, continuously-updated* dataset compounds in value and is far harder to replicate than a one-time scrape of stale profiles — and it is the raw material for the aggregate market-intelligence line in §7.
 
 Sandboxed Private LLM Fine-Tuning (Roadmap, Month 12+): By hosting private models fine-tuned on APAC hiring nuances (Cantonese/Singlish NLP), we aim to create matching accuracy that generic wrappers of frontier-model APIs cannot replicate. At MVP, we rely on strong open-weight base models plus prompt engineering and region-specific retrieval — fine-tuning is deferred until we have real usage data, since the compute cost is trivial but the corpus curation (an estimated $5-15K and 3-6 months to build a quality Cantonese/Singlish hiring corpus) is not worth front-loading before product-market fit.
 
@@ -120,6 +124,16 @@ Strategy: Provide enterprise-grade ATS integration at a fraction of LinkedIn Cor
 Pro SaaS Tier ($599/month/seat or $6,000/year): Includes a monthly points bundle, ATS integrations (Workday/Greenhouse), team collaboration, and prioritized AI matching for corporate career pages.
 
 Enterprise Success Fee (working model, still evolving): unlike the independent-headhunter segment, Enterprise clients can carry an optional, tiered commission on successful placements — lower percentage for entry-level roles, higher for executive placements — with pricing negotiated per client. Enterprises can partially offset this commission by paying a higher platform-fee tier, and get job-listing priority/visibility as a stated benefit. We're intentionally not locking exact percentages here; they'll be set once we have real placement data.
+
+4. Data & Adjacency Revenue Lines (Roadmap — not yet built; see DESIGN.md §2e, §7a-7c)
+
+These monetize the data moat (§6) and the engaged user base *without* ever exposing individual PII. All are documented adjacencies, gated behind hiring-side product-market fit — the mission stays hiring-core (VISION.md).
+
+- **B2B Market-Intelligence (aggregate signals)**: in-demand skills, expected salary raises, hiring velocity, and similar market signals — sold as a standalone product to enterprises, recruiters, and potentially non-hiring buyers. Packaging is **free teaser + paid depth**: aggregate teasers surfaced free (top-of-funnel/flywheel), full depth paid. Built on **opt-in, k-anonymized** data only (hard minimum-cohort threshold, no signal below it — DESIGN.md §2e); PII is never sold.
+  - **Honest sequencing (read this before modeling revenue)**: opt-in consent + a hard k-threshold means the signal product is *structurally starved early*. The launch-readiness gate targets only ~50 candidate profiles pre-launch (§9), and only opted-in profiles in cohorts ≥ k produce any sellable aggregate. So market-intelligence revenue is a **late-stage line, not a near-term one** — treated the same way as the upside-vs-base-case discipline in §10. Do not put it in an early breakeven model.
+- **Training / Reskilling (credit-based)**: AI-driven quizzes + guided learning (individual career-path programs and corporate compliance training — AML, security). Feeds the verified-action point-earning loop. See DESIGN.md §7a.
+- **Benefits / Loyalty (credit-based — HARD LEGAL BLOCKER)**: group-deal benefits for corporates and individuals (career benefits first: flights, accommodation, wellness, IT-equipment upgrades, healthcare products, career advisory; long-term global loyalty programme). **Runs on a separate credit rail, walled off from the points ledger** — redeeming credits for real third-party goods breaks the closed-loop points exemption (§11), so it cannot ship until counsel completes a dedicated stored-value analysis (LEGAL_REVIEW.md). Regulated financial benefits are future-roadmap beyond this.
+- **Contextual advertising (later-stage)**: contextual only — no behavioral/individual tracking, no PII to advertisers (DESIGN.md §7c).
 
 8. Product & Technical Architecture (Hyper-Lean)
 
@@ -193,6 +207,8 @@ Tokenomics/Licensing: The points economy is deliberately closed-loop and non-mon
 
 **Hard blocker, not just a flag**: the single-purpose/closed-loop exemption this relies on assumes redemption stays narrow (our own services). The AI-Credit Marketplace (§3 pillar 5) redeems points for general-purpose compute usable with arbitrary third-party agents — a materially broader redemption surface than "AI resume rewriting," and closer to fungible value than a single-purpose facility. Separately, the reveal-override flow (recruiter pays cash-purchased points → candidate is compensated in points regardless of outcome) routes cash-origin value from one party to another through the platform, which stresses the "non-transferable" premise. **The AI-Credit Marketplace does not ship until SG/HK counsel has signed off on this specific exemption question** — see [LEGAL_REVIEW.md](./LEGAL_REVIEW.md) for the briefing memo and exact questions for counsel. This is stricter than the general private-beta-plus-parallel-review sequencing for the rest of the points system.
 
+The same hard-blocker logic extends to the **Benefits/Loyalty programme** (§7, DESIGN.md §7b): redeeming credits for real third-party goods/services (flights, IT equipment, healthcare, a global loyalty programme) is an even broader redemption surface. It is quarantined onto a **separate credit rail, walled off from the points ledger**, specifically so it cannot contaminate the points-system exemption — and it does not ship until counsel completes a dedicated stored-value/licensing analysis (LEGAL_REVIEW.md).
+
 Re-identification Risk: Acknowledged as a residual, non-zero risk (see §3, Pillar 1) rather than designed around an absolute anonymity claim. Mitigated via redaction, quasi-identifier generalization, and rate-limited reveals; not eliminated.
 
 Marketplace Leakage: Addressed via product stickiness ("hurdles, not blockers") rather than contractual restriction — per-role reveals, same-role multi-candidate discounts, in-platform messaging/scheduling, and contact-info gating — since a legal anti-circumvention clause or placement-fee revenue share was a dealbreaker for independent headhunters (see §3, §7).
@@ -221,3 +237,4 @@ Team: Solo founder, building with AI coding agents ("vibe coding") — consisten
 | 1.1 | 2026-07-17 | Research-driven revision: TAM corrected to ~$16-20B; "zero re-identification" reframed as pseudonymization + defense-in-depth; tokenomics redesigned as closed-loop non-monetary points; base-case (18-24mo) breakeven added alongside 9mo upside; reveal "engagement moat" mechanics; company setup section. |
 | 1.2 | 2026-07-17 | AI-Credit Marketplace named as pillar 5 with hard legal blocker (LEGAL_REVIEW.md); dual-role registration; enterprise tiered-commission working model. |
 | 1.3 | 2026-07-18 | §9 GTM gains the job-supply cold-start mechanism (ATS-feed/schema.org consent-gated sourcing, candidate-paste reverse-match, launch-readiness gate) — see DESIGN.md §2b for the full design and legal reasoning. |
+| 1.4 | 2026-07-20 | Data-collection-as-moat thesis (within privacy-first) in §1/§6; §3 pillar 6 continuous AI resume maintenance (roadmap); §7 Data & Adjacency Revenue Lines (aggregate-signal market-intelligence with free-teaser/paid-depth + honest late-stage sequencing, credit-based Training, Benefits/loyalty on a walled-off rail, contextual-only ads); §11 extends the tokenomics hard-blocker to the benefits/loyalty rail. All new lines roadmap/not-built; mission stays hiring-core. |

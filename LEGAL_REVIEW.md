@@ -1,12 +1,14 @@
 # LEGAL_REVIEW.md — Briefing for SG/HK Counsel: Points Economy & AI-Credit Marketplace
 
-**Version 1.0** · Last updated 2026-07-17 · Revision history at the end of this document.
+**Version 1.1** · Last updated 2026-07-20 · Revision history at the end of this document.
 
 Not legal advice — this is a fact summary and question list to hand to actual Singapore/Hong Kong counsel. Nothing in BUSINESS.md, DESIGN.md, or MEMORY.md should be treated as a final compliance position until this review is complete. See those docs for full product context.
 
 ## Status
 
 **Hard blocker**: the AI-Credit Marketplace feature (BUSINESS.md §3 pillar 5, DESIGN.md §7) does not ship until counsel has signed off on the specific exemption question below. This is stricter than the general "private beta + parallel legal review" approach for the rest of MVP (BUSINESS.md §11) — the rest of the points system can launch under that lighter sequencing; this one feature cannot.
+
+**Second hard blocker (added 2026-07-20)**: the credit-based **Benefits/Loyalty programme** (BUSINESS.md §7, DESIGN.md §7b) does not ship until counsel has completed the dedicated stored-value analysis in Part 2 below. It is deliberately built on a credit rail walled off from the points ledger; the review must confirm that wall holds. Same hard-blocker status as the AI-Credit Marketplace.
 
 ## The mechanism, as designed
 
@@ -35,7 +37,19 @@ The intended design rationale (see BUSINESS.md §3/§11) is that a closed-loop, 
 
 ## What's NOT in scope for this review
 
-General PDPA/PDPO data-privacy review (candidate data, retention, cross-border transfer) is a separate, already-flagged item (BUSINESS.md §11, DESIGN.md §5) and can proceed on the lighter "private beta + parallel review" timeline. This document is scoped specifically to the points/tokenomics licensing question.
+General PDPA/PDPO data-privacy review (candidate data, retention, cross-border transfer) is a separate, already-flagged item (BUSINESS.md §11, DESIGN.md §5) and can proceed on the lighter "private beta + parallel review" timeline. Part 1 above is scoped specifically to the points/tokenomics licensing question. **Exception (added 2026-07-20)**: the resume-first / data-monetization pivot generated a small set of *specific, discrete* questions (Part 2 below) that don't fit the lighter general-review sweep — two are stored-value/licensing (in this doc's original wheelhouse), two are targeted PDPA/PDPO questions about the aggregate-signal product. They are listed here concretely so counsel can answer them directly rather than folding them into the broad review.
+
+## Part 2 — Resume-First Pivot & Data-Monetization (added 2026-07-20)
+
+Context: DESIGN.md §2c-§2e and §7a-§7c, BUSINESS.md §1/§7. The product is pivoting to continuous AI resume maintenance (a persistent PII-bearing asset per user) and monetizing the resulting dataset **only in aggregate, non-identifiable form** — plus credit-based Benefits/loyalty and Training adjacencies. New questions:
+
+6. **Aggregate signals as "personal data"**: If market-intelligence signals (in-demand skills, expected salary raises, hiring velocity) are computed only from **opt-in** profiles and only over cohorts of **≥ k distinct people** (proposed starting k≥20), with any below-threshold cohort suppressed entirely — do the published aggregates fall **outside** "personal data" under Singapore PDPA and Hong Kong PDPO? What minimum k (and what other conditions — e.g. added noise, quasi-identifier generalization) would counsel require to rely on that position in small/niche APAC verticals where re-identification risk is highest?
+
+7. **Secondary-purpose consent for the signal product**: Is a **separate, explicit opt-in consent** (distinct from the AI-processing/redaction consent already captured at onboarding) sufficient to lawfully use a candidate's data to produce the saleable aggregates in Q6? What specific notice/consent language is required, and does the continuous-maintenance model (data kept and updated indefinitely for an active account) change the consent or retention analysis versus one-time ingest?
+
+8. **Benefits/Loyalty stored-value analysis (hard blocker)**: The Benefits/loyalty programme (BUSINESS.md §7, DESIGN.md §7b) redeems **credits for real third-party goods/services** (flights, accommodation, IT-equipment upgrades, healthcare products; long-term a global loyalty programme). It is deliberately on a **credit rail walled off from the points ledger**. (a) Does this rail, on its own, trigger SG Payment Services Act (e-money/SVF) or HK MSO/SVF Ordinance licensing? (b) Does its mere existence within the same platform risk re-characterizing the *points* ledger as part of a broader stored-value facility, and what separation (accounting, ToS, technical, entity) is required to keep the points exemption intact? (c) Does a cross-jurisdiction "global loyalty programme" pull in additional regimes we should scope now?
+
+9. **Contextual-ad consent posture**: For contextual-only advertising (targeted by page/role/skill context, **no** behavioral or individual-level tracking, no PII disclosed to advertisers — DESIGN.md §7c), what consent/notice posture is required under PDPA/PDPO? And if any *cohort-level* ad targeting reuses the Q6 k-anonymity threshold, does that change the answer?
 
 ---
 
@@ -44,3 +58,4 @@ General PDPA/PDPO data-privacy review (candidate data, retention, cross-border t
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 2026-07-17 | Initial briefing: points-economy exemption facts + five questions for counsel; AI-Credit Marketplace launch blocker. |
+| 1.1 | 2026-07-20 | Part 2 added for the resume-first/data-monetization pivot: Q6 aggregate-signals-as-personal-data (k-anonymity), Q7 secondary-purpose opt-in consent, Q8 Benefits/loyalty stored-value analysis (second hard blocker), Q9 contextual-ad consent. Benefits/loyalty rail flagged as a hard blocker in Status. |
