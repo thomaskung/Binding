@@ -1,4 +1,4 @@
-import { Textarea } from "jumponboard";
+import { Textarea } from "@jumponboard/ui";
 
 export function Default() {
   return (

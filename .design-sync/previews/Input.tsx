@@ -1,4 +1,4 @@
-import { Input } from "jumponboard";
+import { Input } from "@jumponboard/ui";
 
 export function Default() {
   return <Input placeholder="jane@company.com" style={{ width: 260 }} />;

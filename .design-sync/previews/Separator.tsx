@@ -1,4 +1,4 @@
-import { Separator } from "jumponboard";
+import { Separator } from "@jumponboard/ui";
 
 export function Horizontal() {
   return (

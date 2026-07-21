@@ -1,4 +1,4 @@
-import { Badge } from "jumponboard";
+import { Badge } from "@jumponboard/ui";
 
 export function Default() {
   return <Badge>New</Badge>;

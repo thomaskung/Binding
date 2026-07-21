@@ -4,10 +4,9 @@
   "pkg": "@jumponboard/ui",
   "globalName": "JumpOnBoardUI",
   "srcDir": "packages/ui/src",
-  "entry": "packages/ui/src/index.ts",
-  "tsconfig": "tsconfig.json",
-  "buildCmd": "npx @tailwindcss/cli -i packages/ui/src/theme.css -o .design-sync/.cache/tailwind-compiled.css",
-  "cssEntry": ".design-sync/.cache/tailwind-compiled.css",
+  "tsconfig": "../../tsconfig.json",
+  "buildCmd": "npx @tailwindcss/cli -i packages/ui/src/theme.css -o packages/ui/.ds-tailwind-cache.css",
+  "cssEntry": ".ds-tailwind-cache.css",
   "componentSrcMap": {
     "CardHeader": null,
     "CardTitle": null,

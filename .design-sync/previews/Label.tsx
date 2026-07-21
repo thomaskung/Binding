@@ -1,4 +1,4 @@
-import { Label, Input } from "jumponboard";
+import { Label, Input } from "@jumponboard/ui";
 
 export function Default() {
   return (

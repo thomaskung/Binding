@@ -6,7 +6,7 @@ import {
   SelectGroup,
   SelectLabel,
   SelectItem,
-} from "jumponboard";
+} from "@jumponboard/ui";
 
 export function Open() {
   return (

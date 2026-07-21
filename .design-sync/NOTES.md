@@ -28,9 +28,46 @@ history around 2026-07-21 for the migration that split it out.
   `packages/ui/src` — this is also what fixes the old whole-repo-scan
   false-positive (see "Re-sync risks", now removed below). `cfg.buildCmd` runs
   a one-off `@tailwindcss/cli` compile scoped to `packages/ui/src/theme.css`
-  → `.design-sync/.cache/tailwind-compiled.css` (gitignored) and `cssEntry`
-  points there. Re-run `buildCmd` before every build/rebuild — the cache file
-  isn't committed.
+  → `packages/ui/.ds-tailwind-cache.css` (gitignored — see "PKG_DIR-relative
+  config paths" below for why it lives there and not under `.design-sync/`)
+  and `cssEntry` points there. Re-run `buildCmd` before every build/rebuild —
+  the cache file isn't committed.
+
+## PKG_DIR-relative config paths (bit this on the first post-migration re-sync)
+
+Once `packages/ui` got its own real `package.json`, `package-build.mjs`'s
+ancestor-walk resolves `PKG_DIR` to `packages/ui` itself (previously it
+soft-failed up to the repo root, since there was no real package.json to find
+closer in). This silently changed what `cfg.tsconfig` and `cfg.cssEntry`
+resolve relative to — both go through `cfgPath()`, which is **always**
+`resolve(PKG_DIR, rel)` regardless of which bounds-check root is passed:
+
+- `cfg.tsconfig` — bounds-checked against `workspaceRoot` (the enclosing git
+  repo), so it CAN reach outside `packages/ui`. Root's `tsconfig.json` is
+  reached via `"../../tsconfig.json"`, not `"tsconfig.json"`.
+- `cfg.cssEntry` — bounds-checked against `pkgRoot` (`packages/ui` itself), so
+  it must resolve to somewhere **inside** `packages/ui` or the build silently
+  skips it (`! cssEntry: ... not found — skipped`, easy to miss in the log).
+  This is why `buildCmd` writes its compiled output to
+  `packages/ui/.ds-tailwind-cache.css` instead of somewhere under
+  `.design-sync/.cache/` — the old location is now out of bounds for
+  `cssEntry` specifically (`tsconfig` and `cssEntry` have different bounds).
+
+If either config path changes again, re-verify against `cfgPath()` in
+`.ds-sync/package-build.mjs` rather than assuming repo-root-relative — the
+same silent-skip failure mode applies to both.
+
+## Preview files hardcode the package name — update them on any `pkg` rename
+
+`.design-sync/previews/*.tsx` are hand-authored and `import { ... } from
+"<pkg>"` by the OLD literal package name. When `cfg.pkg` changes (e.g. the
+2026-07-21 `jumponboard` → `@jumponboard/ui` rename), every preview import
+breaks (`Could not resolve "<old-pkg>"`) and all 11 previews silently fall
+back to the floor card — the build doesn't fail, so this is easy to miss
+unless you actually read the preview-build warnings. Fix: `sed -i` the old
+package name to the new one across `.design-sync/previews/*.tsx` (and check
+`.design-sync/conventions.md`'s code sample too — it hardcodes the same
+import and the design agent reads it verbatim as usage guidance).
 
 ## Component scope: 11 of 38 real exports
 
@@ -66,17 +103,20 @@ the same `window.JumpOnBoardUI` namespace as the main bundle — the preview's
 `import { toast } from "sonner"` then resolves through the same ds-shim to the
 same bundled module instance as `Toaster`. Build logs an
 `[EXPORT_COLLISION]` warning (sonner's own `Toaster` name collides with ours)
-— informational only; our preview imports `Toaster` from `"jumponboard"`
+— informational only; our preview imports `Toaster` from `"@jumponboard/ui"`
 explicitly, never from `"sonner"`, so it isn't affected.
 
 ## Re-sync risks
 
-- The first re-sync after the 2026-07-21 `packages/ui` migration will be a
-  **full re-verify**, not an incremental diff — `pkg`/`srcDir` both changed,
-  which invalidates the `sourceKeys` anchor, so all 11 components get
-  re-captured. Grades carry forward (keyed on component name, not the
-  anchor), so this shouldn't require re-approving anything, just
-  re-confirming. Expected, not a bug.
+- Confirmed on the 2026-07-21 `packages/ui` migration's first re-sync: `pkg`/
+  `srcDir` changing invalidates the `sourceKeys` anchor, so all 11 components
+  come back `changed` (not `unchanged`) and need a **full re-grade** — every
+  grade got cleared (`contract changed`), not carried forward. (An earlier
+  version of this note claimed grades carry forward across a `pkg` rename —
+  that was wrong; corrected here.) Re-grading was fast since nothing visually
+  changed (Read each `_screenshots/review/<group>__<Name>.png`, confirm
+  against the pre-migration look, write `good`) — budget for that pass, not
+  a silent no-op, on any future `pkg`/`srcDir` change.
 - Only 11 of 38 real exports are synced. If the app adds new top-level
   primitives to `packages/ui/src/`, they're picked up automatically by the
   `componentSrcMap`-based exclusion list (nothing to update) — only new

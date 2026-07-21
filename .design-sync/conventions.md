@@ -37,7 +37,7 @@ Components already apply sensible defaults from this table internally — you on
 ## Composing components
 
 ```tsx
-import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent, CardFooter, Badge, Button } from "jumponboard";
+import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent, CardFooter, Badge, Button } from "@jumponboard/ui";
 
 <Card style={{ width: 340 }}>
   <CardHeader>

@@ -6,7 +6,7 @@ import {
   DialogDescription,
   DialogFooter,
   Button,
-} from "jumponboard";
+} from "@jumponboard/ui";
 
 export function Open() {
   return (
