@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { Button } from "@jumponboard/ui";
 
 /** Dual-role navigation: switch link when the user holds both roles, opt-in
  * CTA for the missing role otherwise. Sets a lightweight cookie so `/`

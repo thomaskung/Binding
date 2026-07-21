@@ -1,18 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge, Button, Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle, Separator, Tabs, TabsList, TabsTrigger } from "@jumponboard/ui";
 import { completeAssignedTraining, completeTrainingProgram } from "./actions";
 
 export interface TrainingProgramView {

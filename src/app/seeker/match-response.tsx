@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@jumponboard/ui";
 import { respondToMatch } from "./actions";
 
 export function MatchResponseButtons({ matchId }: { matchId: string }) {

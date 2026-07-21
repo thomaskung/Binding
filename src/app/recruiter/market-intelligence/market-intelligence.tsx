@@ -1,10 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Separator } from "@jumponboard/ui";
 import type { SalaryTrendRow, SkillDemandRow } from "@/lib/market-signals";
 
 const FREE_TEASER_ROW_LIMIT = 2;

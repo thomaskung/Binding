@@ -2,26 +2,35 @@
 
 ## Repo shape
 
-Not a published component library — `src/components/ui/` (10 shadcn/ui files,
-11 PascalCase component exports) inside a private Next.js app, no `dist/`,
-no package `exports`. Confirmed with the user (2026-07-20) to sync anyway,
-scoped to those 11 top-level exports.
+As of 2026-07-21, `packages/ui` (`@jumponboard/ui`) is a real workspace
+package — not a published npm package, but a real `package.json` with a real,
+existing entry (`packages/ui/src/index.ts`), consumed by the app itself via
+Next's `transpilePackages`. Previously this was a bare folder
+(`src/components/ui/`) inside the app with no package boundary at all; see git
+history around 2026-07-21 for the migration that split it out.
 
-- `srcDir` pinned to `src/components/ui` (NOT the default `src/`) — the repo's
-  `src/` is the whole app (server actions, pages, "use server" modules); a
-  default srcDir scan would try to bundle server-only code into the browser
-  IIFE.
-- No dist → synth-entry mode. `--entry ./src/components/ui/index.ts` (a
-  nonexistent file) is passed on every build/rebuild purely so
-  `package-build.mjs`'s ancestor-walk finds the real repo-root `package.json`
-  (name `jumponboard`) instead of trying to resolve `node_modules/jumponboard`
-  (which doesn't exist — this is the DS's own repo, not an installed dep).
-- CSS: Tailwind v4, CSS-first config (`@theme` in `src/app/globals.css`), no
-  compiled stylesheet shipped anywhere — Next's own build pipeline compiles it
-  at app-build time. `cfg.buildCmd` runs a one-off
-  `@tailwindcss/cli` compile to `.design-sync/.cache/tailwind-compiled.css`
-  (gitignored) and `cssEntry` points there. Re-run `buildCmd` before every
-  build/rebuild — the cache file isn't committed.
+- `srcDir` is `packages/ui/src` — a real, isolated package directory, not a
+  folder scoped out of the whole-app `src/` tree anymore.
+- `entry` (`packages/ui/src/index.ts`) is a REAL, EXISTING file now — this is
+  the fix for the old weak `.d.ts` fallback (`Button.d.ts` used to be
+  `{[key: string]: unknown}`): the converter bundles directly from whatever
+  `--entry` it's given via its own esbuild pass, so a real barrel with real
+  typed exports is what produces real per-component `.d.ts`, not a build step.
+  Do not repoint `entry` at a `dist/` — the app deliberately never consumes
+  one (see the package's own `package.json`: `main`/`module`/`types` all point
+  at `src/index.ts` too, so Next's `transpilePackages` preserves the `"use
+  client"` directives on these components, which a bundled `dist/index.js`
+  would not reliably do).
+- CSS: Tailwind v4, CSS-first config, tokens live in `packages/ui/src/theme.css`
+  (not `src/app/globals.css` anymore — that file is now just
+  `@import "@jumponboard/ui/theme.css";`). `theme.css` has its own
+  `@source "./";` directive scoping Tailwind's content-detection to
+  `packages/ui/src` — this is also what fixes the old whole-repo-scan
+  false-positive (see "Re-sync risks", now removed below). `cfg.buildCmd` runs
+  a one-off `@tailwindcss/cli` compile scoped to `packages/ui/src/theme.css`
+  → `.design-sync/.cache/tailwind-compiled.css` (gitignored) and `cssEntry`
+  points there. Re-run `buildCmd` before every build/rebuild — the cache file
+  isn't committed.
 
 ## Component scope: 11 of 38 real exports
 
@@ -62,28 +71,14 @@ explicitly, never from `"sonner"`, so it isn't affected.
 
 ## Re-sync risks
 
-- The Tailwind CLI compile (`buildCmd`) has automatic content-detection
-  scanning the whole repo — if classes referenced only inside
-  `.design-sync/previews/*.tsx` inline styles change, no risk (we use inline
-  `style={}` there, not Tailwind classes), but if a future preview adds
-  Tailwind utility classes not used elsewhere in the app, re-run `buildCmd`
-  before rebuilding or they won't be in the compiled CSS.
-- This cuts both ways: since `buildCmd` scans the WHOLE repo (not just
-  `src/components/ui/`), any Tailwind class added anywhere in the app (new
-  pages, new features) also changes the compiled CSS's hash and flips
-  `styleChanged: true` on the next re-sync — even when zero design-system
-  component source changed (confirmed 2026-07-21: a large app feature build
-  touched none of the 11 synced components, `sourceHashes` matched the
-  anchor exactly for all 11, yet `styling: true` still triggered a re-upload
-  of `styles.css`/`_ds_bundle.css`). Expected and harmless — just re-run
-  `buildCmd` before the resync driver, same as always; don't mistake a
-  styling-only upload with 0 changed/added components for a real diff.
-- `--entry ./src/components/ui/index.ts` is a synthetic, nonexistent path —
-  don't "fix" this by creating that file; it's load-bearing exactly because
-  it doesn't exist (soft-fails into synth-entry mode after establishing
-  `PKG_DIR`).
+- The first re-sync after the 2026-07-21 `packages/ui` migration will be a
+  **full re-verify**, not an incremental diff — `pkg`/`srcDir` both changed,
+  which invalidates the `sourceKeys` anchor, so all 11 components get
+  re-captured. Grades carry forward (keyed on component name, not the
+  anchor), so this shouldn't require re-approving anything, just
+  re-confirming. Expected, not a bug.
 - Only 11 of 38 real exports are synced. If the app adds new top-level
-  primitives to `src/components/ui/`, they're picked up automatically by the
+  primitives to `packages/ui/src/`, they're picked up automatically by the
   `componentSrcMap`-based exclusion list (nothing to update) — only new
   *sub-parts* of already-synced compounds need a new `componentSrcMap: null`
   entry, or they'll surface as their own (likely low-value) card.

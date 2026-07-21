@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@jumponboard/ui";
 import { overrideRevealCandidate, revealCandidate } from "../../../actions";
 
 export function RevealButton({ matchId }: { matchId: string }) {

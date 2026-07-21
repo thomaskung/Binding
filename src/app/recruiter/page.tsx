@@ -1,7 +1,5 @@
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge, Button, Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@jumponboard/ui";
 import { requireRole } from "@/lib/auth";
 import { EMPLOYMENT_TYPE_LABEL, salaryDisplay, type EmploymentType, type SalaryVisibility } from "@/lib/jobs";
 import { getBalance } from "@/lib/points";

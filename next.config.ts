@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // packages/ui ships client components ("use client") as TS source, not a
+  // pre-built dist — Next must transpile it itself so "use client" directives
+  // survive (a bundled dist wouldn't preserve them reliably).
+  transpilePackages: ["@jumponboard/ui"],
   // unpdf ships its own serverless-friendly PDF.js build; keep it external so
   // the Workers bundle doesn't try to inline its dynamic requires.
   serverExternalPackages: ["unpdf"],

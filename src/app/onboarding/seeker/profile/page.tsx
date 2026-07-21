@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AuthNav } from "@/components/auth-nav";
-import { Button } from "@/components/ui/button";
+import { Button } from "@jumponboard/ui";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { OnboardingWizard } from "./onboarding-wizard";

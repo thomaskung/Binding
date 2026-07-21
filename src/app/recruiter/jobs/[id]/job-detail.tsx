@@ -2,9 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge, Button, Card, CardAction, CardContent, CardHeader, CardTitle } from "@jumponboard/ui";
 import { EMPLOYMENT_TYPE_LABEL, salaryDisplay } from "@/lib/jobs";
 import { JobEditor, type EditableJob } from "../job-editor";
 

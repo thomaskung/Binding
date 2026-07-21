@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { AuthNav } from "@/components/auth-nav";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@jumponboard/ui";
 import { getSessionProfile } from "@/lib/auth";
 import { resolveIntent, resolveOnboardingRedirect } from "@/lib/signup-intent";
 import { OnboardingChooser } from "./chooser";

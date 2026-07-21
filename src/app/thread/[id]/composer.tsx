@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button, Input } from "@jumponboard/ui";
 import { sendMessage } from "@/app/recruiter/actions";
 
 export function MessageComposer({ threadId }: { threadId: string }) {

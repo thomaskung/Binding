@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AuthNav } from "@/components/auth-nav";
-import { Button } from "@/components/ui/button";
+import { Button } from "@jumponboard/ui";
 import { getSessionProfile } from "@/lib/auth";
 
 export default async function LandingPage() {

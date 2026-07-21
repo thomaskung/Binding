@@ -2,16 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Separator, Textarea } from "@jumponboard/ui";
 import { acceptMaintenanceUpdate, requestMaintenanceDraft } from "@/app/seeker/actions";
 
 interface Props {
