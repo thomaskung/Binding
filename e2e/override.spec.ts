@@ -91,7 +91,7 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
     timeout: 15_000,
   });
 
-  // --- Seeker registration: chooser -> consent -> wizard profile publish ---
+  // --- Seeker registration: chooser -> consent -> resume-first wizard publish ---
   await signIn(seeker, SEEKER);
   await seeker.waitForURL(/onboarding/);
   await seeker.getByTestId("choose-seeker").click();
@@ -101,10 +101,16 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   await seeker.getByTestId("onboard-consent").check();
   await seeker.getByTestId("onboard-continue").click();
   await seeker.waitForURL(/onboarding\/seeker\/profile/);
-  await seeker.getByTestId("profile-draft").fill(
+  await seeker.getByTestId("onboarding-resume-paste").fill(
     "Rust systems engineer: async runtimes, tokio, low-latency networking, observability tooling, performance profiling.",
   );
-  await seeker.getByTestId("publish-profile").click();
+  await seeker.getByTestId("onboarding-extract").click();
+  await expect(seeker.getByTestId("onboarding-continue-dealbreakers")).toBeEnabled({ timeout: 15_000 });
+  await seeker.getByTestId("onboarding-continue-dealbreakers").click();
+  await seeker.getByTestId("onboarding-finish").click();
+  await seeker.waitForURL(/\/seeker$/);
+
+  await seeker.goto("/seeker/profile");
   await expect(seeker.getByTestId("redacted-preview")).toBeVisible({ timeout: 15_000 });
 
   // Ensure override is allowed (toggle on) — set via settings on the wizard page.

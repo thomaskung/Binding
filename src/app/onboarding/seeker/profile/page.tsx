@@ -3,31 +3,27 @@ import { AuthNav } from "@/components/auth-nav";
 import { Button } from "@/components/ui/button";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { ProfileEditor } from "@/app/seeker/profile/profile-editor";
+import { OnboardingWizard } from "./onboarding-wizard";
 
-/** Wizard steps 2-3: resume + dealbreakers + publish, reusing the standard
- * profile editor. Skippable — the dashboard shows a finish-profile banner
+/** Wizard steps 2-3, resume-first (DESIGN.md §2c): resume upload/paste with
+ * AI-extraction suggest-and-approve, then dealbreakers, then publish.
+ * Skippable at every point — the dashboard shows a finish-profile banner
  * until published. */
 export default async function SeekerOnboardingProfilePage() {
   const session = await requireRole("seeker");
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: profile }, { data: consent }, { data: vector }] = await Promise.all([
+  const [{ data: profile }, { data: experience }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("draft_text, published_text, visibility, dealbreaker_matrix")
+      .select("draft_text, dealbreaker_matrix, skills, desired_roles, industries")
       .eq("id", session.userId)
       .single(),
     supabase
-      .from("consent_flags")
-      .select("reveal_override_enabled")
+      .from("seeker_experience")
+      .select("role, company, industry, start_date, end_date")
       .eq("profile_id", session.userId)
-      .maybeSingle(),
-    supabase
-      .from("skill_vectors")
-      .select("redacted_text")
-      .eq("profile_id", session.userId)
-      .maybeSingle(),
+      .order("start_date", { ascending: false }),
   ]);
 
   const dealbreakers = (profile?.dealbreaker_matrix ?? {}) as {
@@ -38,23 +34,28 @@ export default async function SeekerOnboardingProfilePage() {
   return (
     <div>
       <AuthNav context="authenticated" />
-      <div className="mx-auto flex max-w-3xl items-center justify-between px-8 pt-6">
-        <p className="text-sm text-muted-foreground">
-          Step 2 of 3 — your profile and dealbreakers. Publish to enter the pool.
-        </p>
+      <div className="mx-auto flex max-w-2xl items-center justify-end px-8 pt-6">
         <Button variant="ghost" size="sm" data-testid="wizard-skip" render={<Link href="/seeker" />}>
           Skip for now
         </Button>
       </div>
-      <ProfileEditor
-        draftText={profile?.draft_text ?? ""}
-        publishedText={profile?.published_text ?? null}
-        redactedText={vector?.redacted_text ?? null}
-        visibility={(profile?.visibility ?? "active") as "active" | "paused"}
-        overrideEnabled={consent?.reveal_override_enabled ?? false}
-        minSalary={dealbreakers.min_salary ?? null}
-        workSetups={dealbreakers.work_setups ?? []}
-      />
+      <main className="p-8">
+        <OnboardingWizard
+          draftText={profile?.draft_text ?? ""}
+          skills={profile?.skills ?? []}
+          desiredRoles={profile?.desired_roles ?? []}
+          industries={profile?.industries ?? []}
+          experience={(experience ?? []).map((e) => ({
+            role: e.role,
+            company: e.company,
+            industry: e.industry,
+            startDate: e.start_date,
+            endDate: e.end_date,
+          }))}
+          minSalary={dealbreakers.min_salary ?? null}
+          workSetups={dealbreakers.work_setups ?? []}
+        />
+      </main>
     </div>
   );
 }

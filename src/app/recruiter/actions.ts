@@ -19,6 +19,26 @@ import {
 } from "@/lib/points";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 
+/** Save recruiter identity + company profile fields. */
+export async function saveRecruiterProfile(formData: FormData) {
+  const session = await requireRole("recruiter");
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      display_name: String(formData.get("display_name") ?? "").trim(),
+      recruiter_title: String(formData.get("recruiter_title") ?? "").trim() || null,
+      company_name: String(formData.get("company_name") ?? "").trim() || null,
+      company_industry: String(formData.get("company_industry") ?? "").trim() || null,
+      company_size: String(formData.get("company_size") ?? "") || null,
+      phone: String(formData.get("phone") ?? "").trim() || null,
+    })
+    .eq("id", session.userId);
+  if (error) throw new Error(`profile save failed: ${error.message}`);
+  revalidatePath("/recruiter/profile");
+}
+
 export async function saveJob(formData: FormData) {
   const session = await requireRole("recruiter");
   const supabase = await createSupabaseServerClient();

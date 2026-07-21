@@ -3,11 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { getAiProvider } from "@/lib/ai";
 import { requireRole } from "@/lib/auth";
+import { MARKET_SIGNALS_CONSENT_VERSION } from "@/lib/consent";
+import { computeExperienceStats, experienceFactsSentence } from "@/lib/experience";
+import { parseCommaList } from "@/lib/jobs";
 import { refreshMatchesForProfile } from "@/lib/matching";
 import { appendLedger, expireStaleOverride, OVERRIDE_PREMIUM_REFUND } from "@/lib/points";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 
-/** Save draft profile text + dealbreakers without republishing. */
+/** Save draft profile text + dealbreakers + identity/preference fields
+ * without republishing (no AI round-trip — that only happens on publish). */
 export async function saveDraft(formData: FormData) {
   const session = await requireRole("seeker");
   const supabase = await createSupabaseServerClient();
@@ -25,9 +29,60 @@ export async function saveDraft(formData: FormData) {
         currency: "USD",
         work_setups: workSetups,
       },
+      headline: String(formData.get("headline") ?? "").trim() || null,
+      phone: String(formData.get("phone") ?? "").trim() || null,
+      location: String(formData.get("location") ?? "").trim() || null,
+      skills: parseCommaList(String(formData.get("skills") ?? "")),
+      desired_roles: parseCommaList(String(formData.get("desired_roles") ?? "")),
+      industries: parseCommaList(String(formData.get("industries") ?? "")),
+      references_available: formData.get("references_available") === "on",
+      share_salary: formData.get("share_salary") === "on",
     })
     .eq("id", session.userId);
   if (error) throw new Error(`draft save failed: ${error.message}`);
+  revalidatePath("/seeker/profile");
+}
+
+export interface ExperienceRowInput {
+  role: string;
+  company: string;
+  industry: string | null;
+  startDate: string;
+  endDate: string | null;
+}
+
+/** Replace-all save for the work-history list — same "edit the whole form,
+ * save" pattern as the rest of this page. Structured entries stay
+ * owner-only (RLS); only aggregated facts derived from them ever reach the
+ * match embedding (see publishProfile). */
+export async function saveExperience(rows: ExperienceRowInput[]) {
+  const session = await requireRole("seeker");
+  const admin = createSupabaseAdminClient();
+
+  const { error: deleteError } = await admin
+    .from("seeker_experience")
+    .delete()
+    .eq("profile_id", session.userId);
+  if (deleteError) throw new Error(deleteError.message);
+
+  const validRows = rows.filter((r) => r.role.trim() && r.company.trim() && r.startDate);
+  if (validRows.length > 0) {
+    const { error: insertError } = await admin.from("seeker_experience").insert(
+      validRows.map((r) => ({
+        profile_id: session.userId,
+        role: r.role.trim(),
+        company: r.company.trim(),
+        industry: r.industry?.trim() || null,
+        start_date: r.startDate,
+        end_date: r.endDate || null,
+      })),
+    );
+    if (insertError) throw new Error(insertError.message);
+  }
+  await admin
+    .from("profiles")
+    .update({ last_profile_activity_at: new Date().toISOString() })
+    .eq("id", session.userId);
   revalidatePath("/seeker/profile");
 }
 
@@ -39,22 +94,47 @@ export async function publishProfile() {
   const admin = createSupabaseAdminClient();
   const ai = getAiProvider();
 
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("draft_text")
-    .eq("id", session.userId)
-    .single();
+  const [{ data: profile, error }, { data: experience }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("draft_text, skills, desired_roles, industries, references_available")
+      .eq("id", session.userId)
+      .single(),
+    supabase
+      .from("seeker_experience")
+      .select("role, company, industry, start_date, end_date")
+      .eq("profile_id", session.userId),
+  ]);
   if (error || !profile?.draft_text?.trim()) {
     throw new Error("nothing to publish — write your profile first");
   }
 
   const { redactedText } = await ai.redact(profile.draft_text);
-  const embedding = await ai.embed(redactedText);
+
+  // Derived, aggregated facts from structured work history — never the raw
+  // entries — blended into what gets embedded so matching benefits from
+  // them without a separate scoring formula (see src/lib/experience.ts).
+  const stats = computeExperienceStats(
+    (experience ?? []).map((e) => ({
+      startDate: e.start_date,
+      endDate: e.end_date,
+      industry: e.industry,
+    })),
+  );
+  const factsSentence = experienceFactsSentence(stats, {
+    skills: profile.skills ?? [],
+    desiredRoles: profile.desired_roles ?? [],
+    industries: profile.industries ?? [],
+    referencesAvailable: profile.references_available ?? false,
+  });
+  const composedText = factsSentence ? `${redactedText}\n\n${factsSentence}` : redactedText;
+
+  const embedding = await ai.embed(composedText);
 
   const { error: vecError } = await admin.from("skill_vectors").upsert(
     {
       profile_id: session.userId,
-      redacted_text: redactedText,
+      redacted_text: composedText,
       embedding: JSON.stringify(embedding),
     },
     { onConflict: "profile_id" },
@@ -63,7 +143,10 @@ export async function publishProfile() {
 
   await supabase
     .from("profiles")
-    .update({ published_text: profile.draft_text })
+    .update({
+      published_text: profile.draft_text,
+      last_profile_activity_at: new Date().toISOString(),
+    })
     .eq("id", session.userId);
 
   // Surface matches against already-active jobs immediately — a candidate
@@ -84,6 +167,59 @@ export async function refineProfileText(draftText: string): Promise<string> {
   return ai.refineProfile(draftText);
 }
 
+/** Resume-first onboarding's suggest-and-approve step (DESIGN.md §2c):
+ * structure skills/roles/industries/work-history out of the raw resume text
+ * for the wizard to render as approve/edit/remove cards. Private path only —
+ * raw resume text, pre-redaction. Never applied automatically; the caller
+ * decides what to keep. */
+export async function extractOnboardingFields(resumeText: string) {
+  await requireRole("seeker");
+  const ai = getAiProvider();
+  return ai.extractProfileFields(resumeText);
+}
+
+/** Maintenance nudge (DESIGN.md §2c continuous-maintenance loop), draft
+ * half: turns the seeker's free-text answer to "anything new?" into a
+ * suggested addition. Suggest-and-approve — returns the suggestion only,
+ * never writes anything (see acceptMaintenanceUpdate for the write path). */
+export async function requestMaintenanceDraft(userAnswer: string): Promise<string> {
+  const session = await requireRole("seeker");
+  const supabase = await createSupabaseServerClient();
+  const ai = getAiProvider();
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("draft_text, published_text")
+    .eq("id", session.userId)
+    .single();
+  const currentSummary = profile?.published_text ?? profile?.draft_text ?? "";
+  return ai.draftMaintenanceUpdate(currentSummary, userAnswer);
+}
+
+/** Maintenance nudge, approve half: appends the approved addition to the
+ * profile draft and republishes (redact -> embed -> match, same one-AI-pass-
+ * per-publish discipline as the regular publish flow) — this is also what
+ * refreshes last_profile_activity_at, clearing the dashboard's stale state. */
+export async function acceptMaintenanceUpdate(addition: string): Promise<void> {
+  const session = await requireRole("seeker");
+  const supabase = await createSupabaseServerClient();
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("draft_text")
+    .eq("id", session.userId)
+    .single();
+  const nextDraft = [profile?.draft_text?.trim(), addition.trim()].filter(Boolean).join("\n\n");
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ draft_text: nextDraft })
+    .eq("id", session.userId);
+  if (error) throw new Error(`maintenance update save failed: ${error.message}`);
+
+  await publishProfile();
+}
+
 export async function updateSettings(formData: FormData) {
   const session = await requireRole("seeker");
   const supabase = await createSupabaseServerClient();
@@ -102,6 +238,24 @@ export async function updateSettings(formData: FormData) {
     .upsert({ profile_id: session.userId, reveal_override_enabled: overrideEnabled });
   if (cErr) throw new Error(cErr.message);
 
+  revalidatePath("/seeker/profile");
+}
+
+/** Aggregate market-signals opt-in (DESIGN.md §2e) — a SEPARATE, independently
+ * revocable consent from AI-processing consent (src/lib/consent.ts). Toggling
+ * off clears the timestamp entirely (not just a boolean flip) so the
+ * market_skill_demand/market_salary_trend RPCs' "opted-in" filter drops this
+ * profile immediately. */
+export async function updateMarketSignalsConsent(optIn: boolean) {
+  const session = await requireRole("seeker");
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase.from("consent_flags").upsert({
+    profile_id: session.userId,
+    market_signals_opt_in_at: optIn ? new Date().toISOString() : null,
+    market_signals_consent_version: optIn ? MARKET_SIGNALS_CONSENT_VERSION : null,
+  });
+  if (error) throw new Error(`market-signals consent update failed: ${error.message}`);
   revalidatePath("/seeker/profile");
 }
 

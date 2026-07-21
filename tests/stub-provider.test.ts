@@ -42,3 +42,50 @@ describe("stub embeddings", () => {
     expect(cos(profile, similarJob)).toBeGreaterThan(cos(profile, differentJob));
   });
 });
+
+describe("stub profile-field extraction", () => {
+  it("finds skills, industries and work-history entries actually present in the text", async () => {
+    const resume = [
+      "Senior Backend Engineer, Acme Pay (2021 - 2024)",
+      "Backend Engineer at Nimbus Logistics (2018-2021)",
+      "Built payment pipelines with TypeScript, PostgreSQL and Kubernetes for a Fintech platform.",
+    ].join("\n");
+    const result = await stubProvider.extractProfileFields(resume);
+    expect(result.skills).toEqual(expect.arrayContaining(["TypeScript", "PostgreSQL", "Kubernetes"]));
+    expect(result.industries).toContain("Fintech");
+    expect(result.experience).toHaveLength(2);
+    expect(result.experience[0]).toMatchObject({
+      role: "Senior Backend Engineer",
+      company: "Acme Pay",
+      startDate: "2021-01-01",
+      endDate: "2024-12-31",
+    });
+    expect(result.roles).toEqual(["Senior Backend Engineer", "Backend Engineer"]);
+  });
+
+  it("never invents skills/industries not present in the text", async () => {
+    const result = await stubProvider.extractProfileFields("A person who enjoys hiking and painting.");
+    expect(result.skills).toEqual([]);
+    expect(result.industries).toEqual([]);
+    expect(result.experience).toEqual([]);
+  });
+
+  it("treats an open-ended end year as ongoing", async () => {
+    const result = await stubProvider.extractProfileFields("Staff Engineer, Nimbus Core (2023 - Present)");
+    expect(result.experience[0]?.endDate).toBeNull();
+  });
+});
+
+describe("stub maintenance-update draft", () => {
+  it("restructures only what the user supplied", async () => {
+    const draft = await stubProvider.draftMaintenanceUpdate(
+      "Senior Backend Engineer at Acme Pay.",
+      "led the migration to event-driven payments this year",
+    );
+    expect(draft).toBe("led the migration to event-driven payments this year.");
+  });
+
+  it("returns empty for a blank answer rather than fabricating content", async () => {
+    expect(await stubProvider.draftMaintenanceUpdate("current profile", "   ")).toBe("");
+  });
+});

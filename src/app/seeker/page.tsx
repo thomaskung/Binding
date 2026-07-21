@@ -6,6 +6,7 @@ import { requireRole } from "@/lib/auth";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { expireStaleOverride, getBalance, OVERRIDE_COMPENSATION } from "@/lib/points";
 import { matchBand, type SeekerTier } from "@/lib/matching";
+import { isStale } from "@/lib/profile";
 import { RoleSwitcher } from "@/components/role-switcher";
 import { SignOutButton } from "@/components/sign-out-button";
 import { OverrideResponseButtons } from "./override-response";
@@ -19,7 +20,7 @@ export default async function SeekerDashboard() {
   const [{ data: profile }, { data: matches }, { data: reveals }, balance] = await Promise.all([
     supabase
       .from("profiles")
-      .select("published_text, visibility, seeker_tier")
+      .select("published_text, visibility, seeker_tier, last_profile_activity_at")
       .eq("id", session.userId)
       .single(),
     supabase
@@ -120,6 +121,12 @@ export default async function SeekerDashboard() {
             <Button variant="outline" render={<Link href="/seeker/profile" />}>
               Manage profile
             </Button>
+            <Button variant="outline" render={<Link href="/training" />}>
+              Training
+            </Button>
+            <Button variant="outline" render={<Link href="/benefits" />}>
+              Benefits
+            </Button>
             <RoleSwitcher current="seeker" isSeeker={session.isSeeker} isRecruiter={session.isRecruiter} />
             <SignOutButton />
           </div>
@@ -135,6 +142,19 @@ export default async function SeekerDashboard() {
             </p>
             <Button size="sm" render={<Link href="/seeker/profile" />}>
               Finish profile
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {profile?.published_text && isStale(profile.last_profile_activity_at) && (
+        <Card className="border-primary" data-testid="stale-nudge-card">
+          <CardContent className="flex items-center justify-between py-4">
+            <p className="text-sm">
+              Your profile hasn&apos;t changed in a while — a quick update keeps your matches sharp.
+            </p>
+            <Button size="sm" render={<Link href="/seeker/nudge" />}>
+              Draft update
             </Button>
           </CardContent>
         </Card>

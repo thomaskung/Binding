@@ -50,6 +50,12 @@ export default async function RecruiterDashboard() {
           <Badge variant="secondary" data-testid="points-balance">
             {balance} pts
           </Badge>
+          <Button variant="outline" render={<Link href="/recruiter/profile" />}>
+            Manage profile
+          </Button>
+          <Button variant="outline" render={<Link href="/recruiter/market-intelligence" />}>
+            Market insights
+          </Button>
           <Button render={<Link href="/recruiter/jobs/new" />}>Post a job</Button>
           <RoleSwitcher
             current="recruiter"

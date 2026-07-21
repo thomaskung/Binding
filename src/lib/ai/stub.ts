@@ -1,4 +1,4 @@
-import type { AiProvider, JDTextOnly, RedactionResult } from "./types";
+import type { AiProvider, ExtractedExperienceEntry, ExtractedProfileFields, JDTextOnly, RedactionResult } from "./types";
 
 /**
  * Deterministic stub provider for local dev and CI: zero network calls, zero
@@ -6,6 +6,45 @@ import type { AiProvider, JDTextOnly, RedactionResult } from "./types";
  */
 
 const EMBED_DIMS = 1024;
+
+// Keyword dictionaries for the deterministic extraction heuristic — plausible
+// and stable, not an NLP model. Real extraction quality comes from the Modal
+// path (see modal.ts).
+const SKILL_KEYWORDS = [
+  "JavaScript", "TypeScript", "React", "Node.js", "Python", "Go", "Rust", "Java", "C++",
+  "PostgreSQL", "MySQL", "MongoDB", "AWS", "GCP", "Azure", "Docker", "Kubernetes", "GraphQL",
+  "SQL", "Redis", "Kafka", "Terraform", "System Design", "CI/CD",
+];
+const INDUSTRY_KEYWORDS = [
+  "Fintech", "Healthtech", "E-commerce", "DevTools", "Gaming", "Logistics", "EdTech",
+  "Cybersecurity", "Payments", "Insurtech", "Proptech", "Adtech",
+];
+// Matches lines like "Senior Backend Engineer, Acme Pay (2021 – 2024)" or
+// "Backend Engineer at Acme Pay (2019-Present)".
+const EXPERIENCE_LINE = /^(.+?)(?:,|\bat\b)\s*(.+?)\s*\((\d{4})\s*[-–—]\s*(\d{4}|present)\)\s*$/i;
+
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extractExperienceEntries(text: string): ExtractedExperienceEntry[] {
+  const fallbackIndustry = INDUSTRY_KEYWORDS.find((i) => text.toLowerCase().includes(i.toLowerCase())) ?? null;
+  const entries: ExtractedExperienceEntry[] = [];
+  for (const rawLine of text.split("\n")) {
+    const match = EXPERIENCE_LINE.exec(rawLine.trim());
+    if (!match) continue;
+    const [, role, company, startYear, endRaw] = match as unknown as [string, string, string, string, string];
+    const isPresent = endRaw.toLowerCase() === "present";
+    entries.push({
+      role: role.trim(),
+      company: company.trim(),
+      industry: fallbackIndustry,
+      startDate: `${startYear}-01-01`,
+      endDate: isPresent ? null : `${endRaw}-12-31`,
+    });
+  }
+  return entries;
+}
 
 // Naive PII patterns. The real redaction quality comes from the Modal path;
 // this only needs to be plausible and deterministic.
@@ -81,5 +120,20 @@ export const stubProvider: AiProvider = {
       .join("\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
+  },
+
+  async extractProfileFields(resumeText: string): Promise<ExtractedProfileFields> {
+    const experience = extractExperienceEntries(resumeText);
+    const skills = SKILL_KEYWORDS.filter((k) => new RegExp(`\\b${escapeRegex(k)}\\b`, "i").test(resumeText));
+    const industries = INDUSTRY_KEYWORDS.filter((k) => resumeText.toLowerCase().includes(k.toLowerCase()));
+    const roles = [...new Set(experience.map((e) => e.role))];
+    return { skills, roles, industries, experience };
+  },
+
+  async draftMaintenanceUpdate(_currentProfileSummary: string, userAnswer: string): Promise<string> {
+    const trimmed = userAnswer.trim();
+    if (!trimmed) return "";
+    // Deterministic stub: restructure only what the user supplied — never invent.
+    return `${trimmed.replace(/\.+$/, "")}.`;
   },
 };

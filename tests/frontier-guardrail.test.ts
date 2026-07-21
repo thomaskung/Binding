@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertJDTextOnly, type JDTextOnly } from "@/lib/ai/types";
+import { assertJDTextOnly, type AiProvider, type JDTextOnly } from "@/lib/ai/types";
 
 /**
  * The frontier-API privacy rule (DESIGN.md): candidate-derived data may only
@@ -32,5 +32,34 @@ describe("JDTextOnly boundary", () => {
     // JDTextOnly is required without going through assertJDTextOnly.
     const leak: JDTextOnly = candidate.redactedText as string;
     expect(leak).toBeDefined();
+  });
+});
+
+/**
+ * The two candidate-derived AI capabilities (resume-field extraction, the
+ * maintenance-nudge draft) are private-path only, same as redact/embed/
+ * refineProfile — they must take a plain `string`, never JDTextOnly. Pinning
+ * this the other direction from the tests above: if either signature is ever
+ * changed to require JDTextOnly, that would (wrongly) suggest candidate data
+ * is safe to send to a frontier API.
+ */
+describe("candidate-derived AI capabilities stay off the frontier-capable path", () => {
+  it("extractProfileFields takes plain resume text, not JDTextOnly", () => {
+    const extract: AiProvider["extractProfileFields"] = async (resumeText) => {
+      // @ts-expect-error — a JDTextOnly-only signature must NOT compile here;
+      // if this stops erroring, extraction was wrongly branded frontier-capable.
+      const _wouldRequireBrand: JDTextOnly = resumeText;
+      return { skills: [], roles: [], industries: [], experience: [] };
+    };
+    expect(typeof extract).toBe("function");
+  });
+
+  it("draftMaintenanceUpdate takes plain strings, not JDTextOnly", () => {
+    const draft: AiProvider["draftMaintenanceUpdate"] = async (summary, answer) => {
+      // @ts-expect-error — same pin as above, for both parameters.
+      const _wouldRequireBrand: JDTextOnly = summary;
+      return answer;
+    };
+    expect(typeof draft).toBe("function");
   });
 });

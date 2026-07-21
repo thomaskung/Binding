@@ -1,4 +1,4 @@
-import type { AiProvider, JDTextOnly, RedactionResult } from "./types";
+import type { AiProvider, ExtractedProfileFields, JDTextOnly, RedactionResult } from "./types";
 
 /**
  * Private-LLM provider: self-hosted Qwen3 8B + Qwen3-Embedding-0.6B on Modal
@@ -11,6 +11,7 @@ interface ModalConfig {
   summaryUrl: string;
   refineUrl: string;
   embedUrl: string;
+  extractUrl: string;
   apiToken: string;
 }
 
@@ -19,13 +20,14 @@ function config(): ModalConfig {
   const summaryUrl = process.env.MODAL_SUMMARY_URL;
   const refineUrl = process.env.MODAL_REFINE_URL;
   const embedUrl = process.env.MODAL_EMBED_URL;
+  const extractUrl = process.env.MODAL_EXTRACT_URL;
   const apiToken = process.env.MODAL_API_TOKEN;
-  if (!redactUrl || !summaryUrl || !refineUrl || !embedUrl || !apiToken) {
+  if (!redactUrl || !summaryUrl || !refineUrl || !embedUrl || !extractUrl || !apiToken) {
     throw new Error(
-      "AI_PROVIDER=modal requires MODAL_REDACT_URL, MODAL_SUMMARY_URL, MODAL_REFINE_URL, MODAL_EMBED_URL and MODAL_API_TOKEN",
+      "AI_PROVIDER=modal requires MODAL_REDACT_URL, MODAL_SUMMARY_URL, MODAL_REFINE_URL, MODAL_EMBED_URL, MODAL_EXTRACT_URL and MODAL_API_TOKEN",
     );
   }
-  return { redactUrl, summaryUrl, refineUrl, embedUrl, apiToken };
+  return { redactUrl, summaryUrl, refineUrl, embedUrl, extractUrl, apiToken };
 }
 
 async function post<T>(url: string, token: string, body: unknown): Promise<T> {
@@ -78,6 +80,21 @@ export const modalProvider: AiProvider = {
     const { refined } = await post<{ refined: string }>(c.refineUrl, c.apiToken, {
       text: jd,
       kind: "job_description",
+    });
+    return refined;
+  },
+
+  async extractProfileFields(resumeText: string): Promise<ExtractedProfileFields> {
+    const c = config();
+    return post<ExtractedProfileFields>(c.extractUrl, c.apiToken, { text: resumeText });
+  },
+
+  async draftMaintenanceUpdate(currentProfileSummary: string, userAnswer: string): Promise<string> {
+    const c = config();
+    const { refined } = await post<{ refined: string }>(c.refineUrl, c.apiToken, {
+      text: userAnswer,
+      context: currentProfileSummary,
+      kind: "maintenance_update",
     });
     return refined;
   },

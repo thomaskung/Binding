@@ -26,6 +26,21 @@ export interface RedactionResult {
   redactedText: string;
 }
 
+export interface ExtractedExperienceEntry {
+  role: string;
+  company: string;
+  industry: string | null;
+  startDate: string; // ISO date
+  endDate: string | null; // null = present / ongoing
+}
+
+export interface ExtractedProfileFields {
+  skills: string[];
+  roles: string[];
+  industries: string[];
+  experience: ExtractedExperienceEntry[];
+}
+
 export interface AiProvider {
   /** Strip PII / generalize quasi-identifiers from resume text. Private-path only. */
   redact(resumeText: string): Promise<RedactionResult>;
@@ -43,4 +58,15 @@ export interface AiProvider {
   /** Refine a recruiter-authored JD. This is the one method that MAY be served
    * by a frontier API — hence the branded input type. */
   refineJobDescription(jd: JDTextOnly): Promise<string>;
+
+  /** Structure skills/roles/industries/work-history out of a seeker's raw
+   * resume text for onboarding's suggest-and-approve step. Private-path only
+   * (raw resume text, pre-redaction — same posture as seeker_experience).
+   * Never fabricates: only files what the resume actually says. */
+  extractProfileFields(resumeText: string): Promise<ExtractedProfileFields>;
+
+  /** Draft the maintenance-nudge's suggested profile addition from the
+   * seeker's free-text answer to "anything new?". Private-path only.
+   * Suggest-and-approve — the result is never auto-applied. */
+  draftMaintenanceUpdate(currentProfileSummary: string, userAnswer: string): Promise<string>;
 }
