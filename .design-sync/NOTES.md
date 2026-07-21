@@ -68,6 +68,16 @@ explicitly, never from `"sonner"`, so it isn't affected.
   `style={}` there, not Tailwind classes), but if a future preview adds
   Tailwind utility classes not used elsewhere in the app, re-run `buildCmd`
   before rebuilding or they won't be in the compiled CSS.
+- This cuts both ways: since `buildCmd` scans the WHOLE repo (not just
+  `src/components/ui/`), any Tailwind class added anywhere in the app (new
+  pages, new features) also changes the compiled CSS's hash and flips
+  `styleChanged: true` on the next re-sync — even when zero design-system
+  component source changed (confirmed 2026-07-21: a large app feature build
+  touched none of the 11 synced components, `sourceHashes` matched the
+  anchor exactly for all 11, yet `styling: true` still triggered a re-upload
+  of `styles.css`/`_ds_bundle.css`). Expected and harmless — just re-run
+  `buildCmd` before the resync driver, same as always; don't mistake a
+  styling-only upload with 0 changed/added components for a real diff.
 - `--entry ./src/components/ui/index.ts` is a synthetic, nonexistent path —
   don't "fix" this by creating that file; it's load-bearing exactly because
   it doesn't exist (soft-fails into synth-entry mode after establishing
