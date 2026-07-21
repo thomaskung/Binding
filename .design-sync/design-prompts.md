@@ -165,3 +165,86 @@ cards). Targeted by page context only (role/skill), never by tracking. Label it
 clearly "Sponsored" with a small note "Contextual only — no tracking." Keep it
 visually distinct but unobtrusive. Use Card + Badge + Button.
 ```
+
+---
+
+# Fixes — round 1 (2026-07-21)
+
+Corrections to templates already generated from prompts ②–⑦ above, found by reviewing
+those mockups against DESIGN.md/BUSINESS.md. Paste each into the existing template's
+chat thread in Claude Design (not a fresh ① setup) so it edits in place.
+
+## Fix: Training Home — remove unverified regulatory claim, clarify credit funding
+
+```
+Fix the "AML Fundamentals" card: remove "(MAS-aligned)" from the title — that's an
+unverified regulatory claim, not something we've actually had reviewed/certified.
+Just "AML Fundamentals".
+
+Also, the credits balance shown in the header ("120 credits") is a real, separate
+instrument, not fake demo data — keep it, but it has three legitimate funding paths
+worth knowing for any future edits: (1) users convert existing points into training
+credits (one-way only — never back), (2) users earn credits directly by completing
+quizzes/courses, (3) enterprises purchase credit bundles for staff seats (e.g. the
+mandatory compliance-track programs) — those enterprise-assigned credits are a
+SEPARATE balance from personal credits, never shown mixed into the same number if
+you ever split the header into "personal" vs "assigned" credits.
+```
+
+## Fix: Seeker Dashboard — match-band cap must be invisible in every frame
+
+```
+Fix frames B (published/active looker) and D (dual-role) — BOTH currently show an
+uncapped "High match" badge on the first match card. This contradicts a real, already-
+shipped privacy rule: a free-tier seeker's true "High match" is capped down to display
+as "Normal match" — and it must be visually and structurally IDENTICAL to a genuine
+Normal match, no different styling, no upsell hint, nothing that lets you infer a
+cap happened. Change both frames' first match card band to "Normal match" with the
+same secondary Badge variant already used for real Normal matches elsewhere.
+
+If you want to also show what a Pro seeker (uncapped) sees, that must be a distinct,
+clearly labeled frame — e.g. "B2 · Pro seeker, uncapped" — never inferable from
+frames B or D themselves.
+```
+
+## Fix: Market Intelligence — don't imply a priced tier that doesn't exist yet
+
+```
+Fix the locked-card overlays and the "Pro" header badge in the paid-depth frame:
+change "Upgrade for full depth" to "Get full access" and change the "Pro" badge to
+"Contact us" (outline variant). We haven't priced this product yet — it's a new,
+standalone line item, not part of the existing Pro Headhunter/Pro SaaS subscriptions
+— so the copy shouldn't imply an existing purchasable tier.
+```
+
+## Fix: connective UX — settings link + maintenance-nudge handoff
+
+```
+Two small additions to the Seeker Dashboard frames:
+1. Add a "Settings" tab or link (in the Tabs row alongside Matches/Profile/Points)
+   that would lead to the Market Insights Consent screen — just the affordance/tab,
+   doesn't need to render that screen's content here.
+2. In frame C (published, passive & stale), the "Refresh profile" button should
+   visually read as leading into the Maintenance Nudge card flow (same product
+   moment) rather than an unspecified generic action — e.g. same button label
+   language as the Maintenance Nudge template's entry point.
+```
+
+## New: Benefits Discount Catalog (DESIGN §7b — reframed, now unblocked for design)
+
+```
+Surface: Benefits/Loyalty discount catalog. This is NOT a credit-spend screen — there
+is no benefit-specific currency. Structure:
+
+Header: user's current tier (e.g. "Tier 2" — generic/unnamed, tenure/activity-based,
+NOT purchased — a short line like "Reached via 8 months of active engagement").
+
+Below: a catalog grid of partner discount cards across categories — flights,
+accommodation, wellness, IT equipment, healthcare, career advisory. Each card: partner
+name, discount description (e.g. "15% off with partner code"), a "Get code" button.
+Clicking reveals a generic code (same code for every user at that tier — never
+personalized/tracked) and a clear line: "You'll pay [Partner] directly on their site —
+JumpOnBoard never processes this payment." No checkout, no cart, no payment form
+anywhere in this surface — every card ends at a redirect-out affordance, not a
+transaction. Use Card, Badge (for tier + category), Button, Separator.
+```

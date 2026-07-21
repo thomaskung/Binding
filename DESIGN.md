@@ -1,6 +1,6 @@
 # DESIGN.md — JumpOnBoard (J.O.B.) Technical Architecture
 
-**Version 1.5** · Last updated 2026-07-20 · Revision history at the end of this document.
+**Version 1.6** · Last updated 2026-07-21 · Revision history at the end of this document.
 
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [VISION.md](./VISION.md) (goals/metrics). This document describes how the product is actually built. Status: walking-skeleton MVP implemented (see §12 for what's built vs. deferred and where the MVP diverges from the target architecture below).
 
@@ -80,6 +80,7 @@ The founder asked whether the UI should become generative — changing according
 - **What we build**: deterministic components; a **profile-state machine** decides *which modules surface and in what priority*; AI generates *content* (nudge copy, suggested edits, summaries) inside fixed, testable slots — never markup at render time.
 - **State axes**: completeness (draft / published), freshness (fresh / stale by last-update or tenure-milestone), intent (active vs passive looker), role (seeker / recruiter / dual). Example mappings: incomplete → finish-profile flow forward; passive + stale → maintenance nudge forward; active seeker → matches forward; dual-role → role-appropriate surface via the existing switcher.
 - **Why not runtime-generative** (considered and rejected): an LLM emitting UI markup per render is (a) not deterministically testable, which breaks the standing unit+e2e convention (CLAUDE.md); (b) expensive per render; (c) an accessibility and injection-surface risk (untrusted markup rendered into the app). Adaptive-with-AI-content-in-fixed-slots captures ~90% of the intent while staying green under Playwright.
+- **Match-band-cap invariant (added 2026-07-21)**: any adaptive-dashboard state that renders a match card must reflect the already-shipped `seeker_tier` cap (`matchBand()`, `src/lib/matching.ts` — `high` caps to `normal` unless `seeker_tier='pro'`), with **no differential signal** for a capped match — it must be fully indistinguishable from a genuine `normal` match, across every frame/state that shows matches (a dual-role frame is not exempt just because it also shows a recruiter view). A true, uncapped `high` state may only ever appear in a separately, explicitly-labeled Pro-tier frame. This guards against UI work silently reintroducing the privacy leak a first draft of the adaptive dashboard mockup had.
 
 ## 2e. Aggregate Signal Pipeline — privacy-preserving monetization (strategy/roadmap — not yet built)
 
@@ -162,23 +163,32 @@ This is a distinct subsystem, not a one-line feature — it's the core answer to
 - **Earning also occurs automatically on reveal events** (accepted or declined) — candidates get compensated for being part of the marketplace even when a match doesn't convert.
 - **Redemption catalog**: AI resume rewriting (available at MVP); AI-Credit Marketplace allowance (fast-follow, see §7).
 - **Spend side (recruiters)**: Reveal Requests (per-role, same-role multi-candidate discount) and the consent-override path.
-- **Benefits/loyalty credits run on a SEPARATE, walled-off rail — NOT this points ledger.** The credit-based benefits/loyalty programme (§7b) redeems for real third-party goods and services (flights, accommodation, IT-equipment upgrades, healthcare products, etc.). That is exactly the broad-redemption surface that breaks the closed-loop, single-purpose exemption this points ledger relies on (SG Payment Services Act / HK SVF Ordinance — see §6 first bullet, BUSINESS.md §11, LEGAL_REVIEW.md). To stop it contaminating the points-system exemption, benefits/loyalty must be a distinct instrument with its own licensing analysis, never fungible with points earned/spent here. Treated as a hard blocker (does not ship until counsel signs off), same status as the AI-Credit Marketplace.
+- **Benefits/loyalty carries no credit currency at all — nothing to wall off from this ledger.** See §7b: tier eligibility is activity/tenure-based, and the benefit itself is a discount code the user redeems by paying the vendor directly. Since no value is ever purchased, held, or redeemed through JumpOnBoard for it, it was reframed away from the credit-based/walled-off-rail design this bullet used to describe (superseded 2026-07-21 — see MEMORY.md).
 
 ## 7. AI-Credit Marketplace (fast-follow feature — design now, build immediately after MVP)
 
-Confirmed scope: a genuinely **open, OpenAI-compatible API key**, usable with any third-party agent (Hermes Agent, OpenClaw, or anything else) — not restricted to a JumpOnBoard-branded skill. This is a deliberately bigger cost/abuse surface than a scoped-down version, accepted as a tradeoff for how attractive/differentiated it is to a technical seeker audience. Validated against a real comparable: **OpenCode Go** ($10/mo, dollar-value usage caps, OpenAI-compatible, explicitly Hermes-Agent/OpenClaw-compatible).
+**Scope narrowed 2026-07-21** (see MEMORY.md): this is no longer a genuinely open, general-purpose API key. The redemption is scoped to **career/JOB-related AI tasks only** — resume rewriting, cover letters, interview prep, career-path guidance, and similar. This narrowing exists specifically to keep the redemption single-purpose (same category as "AI resume rewriting," DESIGN §6), which is what lets this drop from a hard legal blocker to a confirmation-only question for counsel (see below and LEGAL_REVIEW.md).
+
+Why the narrowing was necessary: the original design's own words — "a genuinely open, OpenAI-compatible API key, usable with any third-party agent… not restricted to a JumpOnBoard-branded skill" — directly contradicted a narrow-redemption defense. Being JumpOnBoard's own compute doesn't narrow what the user can *do* with an unrestricted key; redemption **breadth**, not who hosts the model, is what a single-purpose exemption turns on. Self-hosting general-purpose, point-anywhere compute is closer to fungible value than a single-purpose facility regardless of provider.
+
+**Enforcement mechanism**: a classifier-gated OpenAI-compatible passthrough — the API key keeps its OpenAI-compatible shape (still usable with agent frameworks like Hermes Agent/OpenClaw), but a moderation/classifier layer at the gateway rejects requests outside the career-task scope. This preserves more of the original differentiator than dedicated single-purpose endpoints would, at a real, acknowledged cost: enforcement is imperfect (adversarially-phrased requests can slip through) and the classifier itself is nontrivial engineering. Exact classifier design is an open question (§11).
+
+**General-purpose AI-infrastructure reselling — explicitly out of scope, not part of this feature.** The original "genuinely open, any third-party agent, point-it-at-anything" idea is a distinct, unscoped future business line, not this pillar. If ever pursued, it needs its own full legal review from scratch (same weight this feature originally carried) — it is not folded into or grandfathered by this narrower feature's confirmation-only status.
 
 Architecture:
-- **API gateway/proxy service** issues per-user OpenAI-compatible keys.
+- **API gateway/proxy service** issues per-user OpenAI-compatible keys, gated by the career-task classifier above.
 - Backed by the **same Modal/Baseten-hosted open-weight models** (Llama 3 / Mistral) already used for matching — reuses existing serverless LLM infra rather than standing up a separate stack.
-- **Metering is dollar-value-based per user per period** (mirrors OpenCode Go's model, not raw request counts) — funded from the user's points balance.
-- **Hard per-period $-cap enforced at the gateway**, regardless of which third-party agent is driving the calls — this is the abuse/cost guardrail given the key works with agents that can run autonomous/unattended loops (e.g. OpenClaw's "heartbeat" polling).
+- **Metering is dollar-value-based per user per period** (mirrors OpenCode Go's model, not raw request counts).
+- **Hybrid funding**: a points-funded free allowance continues to exist (same mechanism as before), alongside a new direct-cash top-up/subscription option. Both paths sit within the now-narrowed, single-purpose scope, so neither reopens the breadth concern the fully-open design had.
+- **Hard per-period $-cap enforced at the gateway** regardless of funding path — the abuse/cost guardrail, since even a scoped key can still be driven by an agent running unattended loops.
 - **Never proxies to premium/frontier models** — open-weight only, to keep the cost model survivable.
-- **Allowance tiers**: free seekers get a small points-funded allowance; Pro seekers ($9.99/mo) get a guaranteed larger allowance bundled into the subscription.
+- **Allowance tiers**: free seekers get a small points-funded allowance; Pro seekers ($9.99/mo) get a guaranteed larger allowance bundled into the subscription, or can top up with cash.
 
-**Explicitly not MVP**: ships as the first feature immediately after MVP, once real usage data exists to size the $-caps safely. Building the gateway's metering/cap enforcement can start during MVP development, but it should not gate MVP launch.
+**Repositioning**: with the scope narrowed, this is now positioned as an **AI career-assistant credit allowance** — a scoped extension of the existing resume-rewriting benefit, not a general-purpose dev-tool differentiator. The OpenCode Go comparison is weaker than before (OpenCode Go's own differentiator is unrestricted general-purpose use, which this feature no longer offers) — still citable as evidence that $-capped AI subscriptions are viable, not as evidence this product matches OpenCode Go's shape.
 
-**Hard launch blocker**: the points system's licensing exemption (§6, BUSINESS.md §11) depends on redemption staying narrow/single-purpose. Redeeming points for general-purpose compute usable with arbitrary third-party agents is a broader redemption surface than "AI resume rewriting" and pushes toward fungible value rather than a single-purpose facility. **This feature does not ship until SG/HK counsel has signed off on the exemption question** — see [LEGAL_REVIEW.md](./LEGAL_REVIEW.md) for the briefing memo. Treat this as a launch blocker for the AI-Credit Marketplace specifically, distinct from the rest of MVP, which proceeds under the private-beta-plus-parallel-legal-review approach (BUSINESS.md §11).
+**Explicitly not MVP**: ships as the first feature immediately after MVP, once real usage data exists to size the $-caps safely. This operational gate is unrelated to licensing and is unaffected by the scope-narrowing above.
+
+**Legal status: confirmation-only, not a hard blocker** (downgraded 2026-07-21 — see MEMORY.md), conditional on the career-task scoping being real and enforced, not just described. Ask counsel to confirm the scoped redemption sits within the same narrow-redemption logic as AI resume rewriting, and what enforcement/verification they'd want to see — see [LEGAL_REVIEW.md](./LEGAL_REVIEW.md). Like the rest of the points system, this falls back to the general private-beta-plus-parallel-legal-review sequencing (BUSINESS.md §11) — engineering can build without waiting on counsel; only real public launch should wait for confirmation to land.
 
 ## 7a. Roadmap adjacency — Training / Reskilling (design later, not yet built)
 
@@ -188,11 +198,27 @@ AI-driven quiz + guided-learning product (reference point: Gemini Guided Learnin
 
 Reuses the existing serverless open-weight LLM infra (§8) for content generation and the `verified_actions` mechanism — completing a program is an AI-verified action that earns points (§6), tightening the earn-loop. Mission stays hiring-core (VISION.md); this is an adjacency the data moat enables, not a headline feature.
 
-## 7b. Roadmap adjacency — Benefits / Loyalty programme (hard blocker; not yet built)
+**Training credits — a separate, narrow-redemption instrument** (not points-ledger reuse, distinct from the AI-Credit Marketplace/Benefits mechanics above and below):
+- **Three funding sources**: (a) convert existing points into training credits, (b) earn directly by completing quizzes/courses, (c) enterprises purchase credit bundles for staff (mandatory compliance-training seats).
+- **One-way only**: points → credits, never back. Credits are a pure sink — no fungibility-back-to-points concern.
+- **Segregated balances**: enterprise-assigned seats (compliance-training) never commingle with personal credits (points-converted or quiz-earned) — a corporate compliance seat can't be spent on the employee's own career-path courses, and vice versa.
+- Redemption stays narrow: JumpOnBoard's own training content only — same category as "AI resume rewriting," which is what keeps this out of hard-blocker territory. (An AWS-exam-voucher-style card sometimes shown alongside training content is a zero-cost contextual ad — no credit spend, no referral tracking — and doesn't touch this redemption claim; see §7c.)
+- **Legal status: confirmation-only** — see LEGAL_REVIEW.md, which explicitly flags the enterprise cash-purchase path (cash-in → held credit balance → later redemption is the classic prepaid/stored-value trigger pattern; narrow single-purpose redemption is the defense, but counsel should be pointed at this specific funding path).
+- Training credit costs and the points→credit conversion rate are not yet numbered (§11) — no placeholder invented ahead of real usage data.
 
-Credit-based benefits: enterprises bargain group deals for employees (corporate deals on flights, accommodation, wellness programs, festive goods/services); individuals get similar (IT-equipment upgrades, healthcare products, career-advisory services). Long-term ambition: a global loyalty programme.
+## 7b. Roadmap adjacency — Benefits / Loyalty programme (confirmation-only; not yet built)
 
-**Runs on a separate, walled-off credit rail — never the points ledger (§6).** Redeeming credits for real third-party goods/services is precisely the broad-redemption surface that breaks the closed-loop single-purpose exemption the points economy depends on; a cross-jurisdiction "global loyalty programme" multiplies the exposure. This is a **hard blocker**: no benefits/loyalty credit mechanism ships until SG/HK counsel has completed a dedicated stored-value/licensing analysis (LEGAL_REVIEW.md), same status as the AI-Credit Marketplace. Near-term scope is career benefits only; regulated financial benefits (insurance, etc.) are explicitly future-roadmap.
+**Reframed 2026-07-21, replacing the credit-based/walled-off-rail design committed 2026-07-20** (see MEMORY.md, which supersedes that entry).
+
+**No benefit-specific credit currency exists.** Tier eligibility is **activity/tenure-based** — mirrors the existing points-earning pattern (engagement over time), not a purchased or held balance. There is nothing to wall off because there is no benefit currency.
+
+**Pure discount-code redirect — no payment nexus.** JumpOnBoard hands a tier-eligible user a discount code; the user pays the vendor (airline, hotel, IT retailer, healthcare provider, etc.) directly, on the vendor's own payment page. JumpOnBoard's systems never process, hold, or forward funds for the benefit itself.
+
+**Applies uniformly across all categories** — flights, accommodation, wellness, IT-equipment, healthcare, career advisory are all "tier status unlocks a partner discount code," not a redeemable credit purchase. No category keeps a credit-based mechanic. Long-term ambition: a global loyalty programme, same tier/discount-code shape, cross-jurisdiction.
+
+**Privacy invariant**: this model is only privacy-clean if discount codes stay **generic** (the same code for everyone at a tier) — same pattern as the Training AWS-voucher ad's "no tracking." A personalized/tracked code would reintroduce a data-sharing consent question with the partner vendor.
+
+**Legal status: confirmation-only, not a hard blocker** (downgraded 2026-07-21), conditional on the no-stored-value/no-payment-nexus facts above holding. See LEGAL_REVIEW.md for the confirmation question and the residual risks it must still surface (affiliate/referral disclosure, consumer-protection/advertising rules on discount-claim accuracy, "loyalty programme" branding/jurisdiction rules independent of stored value, the cross-jurisdiction angle). Falls back to the general private-beta-plus-parallel-review sequencing, same as Training and the narrowed AI-Credit Marketplace. Near-term scope is career benefits only; regulated financial benefits (insurance, etc.) are explicitly future-roadmap.
 
 ## 7c. Roadmap adjacency — Contextual advertising (later-stage; not yet built)
 
@@ -219,6 +245,9 @@ Ads, if introduced, are **contextual only — no behavioral or individual-level 
 - Exact data-retention window (pending legal review — see BUSINESS.md §11).
 - Exact enterprise commission percentages (pending further business-side brainstorming).
 - Exact $-cap sizing for free vs. Pro AI-Credit Marketplace allowances — needs real cost modeling from early usage before the fast-follow ships.
+- AI-Credit Marketplace career-task classifier design (exact scope-enforcement mechanism, §7) — deferred to build time.
+- Training credit costs per course and the points→credit conversion rate (§7a) — no placeholder invented ahead of real usage data.
+- Market Intelligence pricing (§2e) — deferred/roadmap-only, same philosophy as the AI-Credit Marketplace $-caps.
 
 ## 12. MVP Implementation Notes (2026-07-17 — what's actually built)
 
@@ -253,7 +282,8 @@ sections above remain the target architecture.
 - **Deferred, tables in place**: point purchases ("top-ups coming soon" error
   path exists), verified-action earning, interview-scheduling UI, enterprise
   entitlements, company verification, email notifications, AI-Credit
-  Marketplace (hard legal blocker — LEGAL_REVIEW.md).
+  Marketplace (§7 — confirmation-only legal status as of 2026-07-21, not a
+  hard blocker; still not-yet-built pending real usage-cost data).
 - **Placeholder economics** (constants in `src/lib/points.ts`): recruiter
   seed 100 / reveal 10 / compensation 3 / seeker seed 10. Matching constants:
   top-20, cosine ≥ 0.55, both env-tunable.
@@ -276,3 +306,4 @@ sections above remain the target architecture.
 | 1.3 | 2026-07-18 | Signup/sign-in split on landing (dedicated /signup, env-gated password login, intent-wins redirect rule); points_ledger PK to uuid. |
 | 1.4 | 2026-07-18 | §2b External Job Supply & Cold-Start Strategy (roadmap, not yet built): Indeed-scraping rejected, Google-for-Jobs-as-justification rejected, two-stage consent-gated ATS/schema.org pipeline adopted, candidate-paste (text-first) reverse-match, launch-readiness gate. |
 | 1.5 | 2026-07-20 | Resume-first pivot + data-monetization roadmap (all not yet built): §2c resume-first onboarding & continuous AI maintenance (suggest-and-approve, AI-never-fabricates, all-triggers loop, consent-before-processing), §2d adaptive-not-generative UI, §2e k-anonymized opt-in aggregate-signal pipeline; §5 resume-persistence invariant (owner-only, unchanged redaction boundary, expanded-retention consent); §6 benefits/loyalty on a separate walled-off credit rail; §7a Training, §7b Benefits/loyalty (hard blocker), §7c contextual-only ads. Mission stays hiring-core. |
+| 1.6 | 2026-07-21 | Reconciled new Claude Design mockups against strategy — two reframes, both replacing prior committed text: §7 AI-Credit Marketplace scope-narrowed to career/JOB-related tasks only (classifier-gated passthrough), general AI-infrastructure reselling hived off as a separate out-of-scope future line, downgraded to confirmation-only; §7b Benefits/Loyalty replaced entirely with a discount-code/no-payment-nexus model (activity/tenure-based tiers, no credit currency), also confirmation-only. §7a Training gains an explicit credit instrument (one-way, segregated balances, confirmation-only). §2d gains the match-band-cap invariant (must stay invisible across every dashboard frame). §6 and §12 updated to match — zero hard blockers remain in the docs. |

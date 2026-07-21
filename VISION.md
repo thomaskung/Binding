@@ -1,6 +1,6 @@
 # VISION.md — JumpOnBoard (J.O.B.) Goals & Evaluation
 
-**Version 1.2** · Last updated 2026-07-20 · Revision history at the end of this document.
+**Version 1.3** · Last updated 2026-07-21 · Revision history at the end of this document.
 
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [DESIGN.md](./DESIGN.md) (architecture). This document defines what success looks like and how we'll measure it, so decisions have a shared reference point instead of being re-litigated each time.
 
@@ -12,7 +12,7 @@ Build a privacy-first, AI-driven hiring ecosystem for APAC (HK/SG) that lets pro
 
 ## Long-Horizon Adjacency (explicitly gated behind hiring PMF — not the near-term plan)
 
-The continuous-AI-resume-maintenance loop (DESIGN.md §2c) makes J.O.B. the user's lifelong career-record keeper, which enables a longer-term "career super-app" horizon: aggregate market-intelligence signals (§2e), AI-driven Training/reskilling (§7a), and a credit-based Benefits/loyalty programme (§7b). These are documented so the direction is on record, but they are **strictly gated behind hiring-side product-market fit** — the data moat that powers them only exists once the hiring loop works. Do not let them pull focus or headcount before the hiring KRs below are met. Two of them (Benefits/loyalty rail, AI-Credit Marketplace) also carry hard legal blockers (LEGAL_REVIEW.md).
+The continuous-AI-resume-maintenance loop (DESIGN.md §2c) makes J.O.B. the user's lifelong career-record keeper, which enables a longer-term "career super-app" horizon: aggregate market-intelligence signals (§2e), AI-driven Training/reskilling (§7a), and a discount-code-based Benefits/loyalty programme (§7b). These are documented so the direction is on record, but they are **strictly gated behind hiring-side product-market fit** — the data moat that powers them only exists once the hiring loop works. Do not let them pull focus or headcount before the hiring KRs below are met. As of 2026-07-21, none of these carry a hard legal blocker — Training, Benefits/Loyalty, and the AI-Credit Marketplace (repositioned as a scoped AI career-assistant allowance, DESIGN.md §7) are all confirmation-only questions for counsel (LEGAL_REVIEW.md), falling back to the same private-beta-plus-parallel-review sequencing as the rest of the points system.
 
 ## North Star Metric
 
@@ -79,3 +79,4 @@ Monthly review of:
 | 1.0 | 2026-07-17 | Initial: mission, north star, dual shipping/breakeven timelines, phased OKRs, cadence, kill-criteria. |
 | 1.1 | 2026-07-18 | Phase 1 gains the ATS-feed discovery→consent KR and an explicit launch-readiness gate (DESIGN.md §2b), distinct from the shipping-timeline date. |
 | 1.2 | 2026-07-20 | Mission reaffirmed hiring-core; added gated long-horizon "career super-app" adjacency note (Training/Benefits/loyalty/signals, behind hiring PMF); Phase-1 profile-freshness / maintenance-loop KR and a caveat that aggregate-signal revenue is gated on k-anonymous cohort density. |
+| 1.3 | 2026-07-21 | Updated the career-super-app adjacency note: Benefits/loyalty is now discount-code-based (not credit-based), and none of Training/Benefits/AI-Credit Marketplace carry a hard legal blocker anymore — all confirmation-only (see LEGAL_REVIEW.md, DESIGN.md §7/§7a/§7b). |
