@@ -1,6 +1,6 @@
 # LEGAL_REVIEW.md — Briefing for SG/HK Counsel: Points Economy & Adjacent Monetization
 
-**Version 1.2** · Last updated 2026-07-21 · Revision history at the end of this document.
+**Version 1.3** · Last updated 2026-07-22 · Revision history at the end of this document.
 
 Not legal advice — this is a fact summary and question list to hand to actual Singapore/Hong Kong counsel. Nothing in BUSINESS.md, DESIGN.md, or MEMORY.md should be treated as a final compliance position until this review is complete. See those docs for full product context.
 
@@ -13,6 +13,8 @@ Not legal advice — this is a fact summary and question list to hand to actual 
 - **Training credits** (DESIGN.md §7a, new 2026-07-21): a separate, narrow, one-way (points→credit only) redemption instrument for JumpOnBoard's own training content. Confirmation-only from the start — see new Q10 below.
 
 **One idea remains explicitly out of scope, not confirmation-only and not designed here**: general-purpose AI-infrastructure reselling (the AI-Credit Marketplace's original "genuinely open, any third-party agent" shape) has been hived off as a separate, unscoped future business line. If ever pursued, it would need its own full hard-blocker-style review from scratch — this document's confirmation-only status for the narrowed AI-Credit Marketplace does not extend to it.
+
+- **Recruiter-initiated override reversal** (BUSINESS.md §7, DESIGN.md §4a, new 2026-07-22): a new recruiter monetization mechanic where a recruiter cancels a pending override before the candidate responds; the recruiter's charge is forfeited (not refunded) and paid to the candidate as compensation. This is a variant of the cross-party value flow already flagged under Q3 below, now triggered by recruiter cancellation rather than candidate decline. Confirmation-only, same posture as the rest of this document — see new Q11 in Part 3.
 
 ## The mechanism, as designed
 
@@ -60,6 +62,12 @@ Context: DESIGN.md §2c-§2e and §7a-§7c, BUSINESS.md §1/§7. The product is 
 
 10. **Training credit redemption (new, confirmation-only from the start)**: Training credits (DESIGN.md §7a) are a separate, narrow, one-way (points→credit only) instrument redeemable only for JumpOnBoard's own training content, with three funding paths: points-conversion, direct quiz/course earning, and **enterprise cash purchase of staff seats** (segregated from personal credits, never commingled). Please confirm this narrow, same-service redemption doesn't require SVF/PSA treatment — flagging the enterprise cash-purchase path specifically: cash-in → held credit balance → later redemption is the classic prepaid/stored-value trigger pattern, and narrow single-purpose redemption is the defense being relied on, but counsel should evaluate that specific funding path on its own rather than have it folded anonymously under the broader "segregated-balance" description.
 
+## Part 3 — Recruiter Monetization (added 2026-07-22)
+
+Context: BUSINESS.md §7, DESIGN.md §4a. Recruiter-side monetization now includes a recruiter-initiated override "take-back": a recruiter can cancel a pending override before the candidate responds, forfeiting the charge (not refunded) to the candidate as compensation, in addition to the per-role dynamic reveal pricing, spend budgeting, and paid AI JD-assist described in those sections (none of which raise a distinct tokenomics question beyond what's already covered above — they change *how much* is spent and *when*, not the closed-loop/non-redeemable nature of the points themselves).
+
+11. **Recruiter-initiated override reversal — forfeited charge paid to candidate**: This is a variant of the cross-party value flow already flagged under Q3 (cash-purchased points moving from recruiter to candidate via the platform), now triggered by the recruiter's own cancellation rather than the candidate's decline. Product rationale as stated by the founder (not a legal conclusion): the points system is non-monetary and non-redeemable outside the platform — positioned as closer to a coupon/airline-miles model than a payment instrument — so a point movement between two platform participants is not, in the product's design intent, a cash-equivalent transfer. Please confirm whether this new trigger (recruiter-initiated cancellation, as opposed to candidate decline, which Q3 already covers) changes the regulatory analysis, or whether it should simply be assessed together with Q3 as the same underlying "cash-origin value moves from recruiter to candidate via the platform" pattern.
+
 ---
 
 ## Revision History
@@ -69,3 +77,4 @@ Context: DESIGN.md §2c-§2e and §7a-§7c, BUSINESS.md §1/§7. The product is 
 | 1.0 | 2026-07-17 | Initial briefing: points-economy exemption facts + five questions for counsel; AI-Credit Marketplace launch blocker. |
 | 1.1 | 2026-07-20 | Part 2 added for the resume-first/data-monetization pivot: Q6 aggregate-signals-as-personal-data (k-anonymity), Q7 secondary-purpose opt-in consent, Q8 Benefits/loyalty stored-value analysis (second hard blocker), Q9 contextual-ad consent. Benefits/loyalty rail flagged as a hard blocker in Status. |
 | 1.2 | 2026-07-21 | Title broadened (now covers Training + Benefits, not just AI-Credit Marketplace). Status rewritten — no hard blockers remain: AI-Credit Marketplace scope-narrowed to career/JOB tasks (Q1-5 rewritten to match), Benefits/Loyalty reframed to a discount-code/no-payment-nexus model (Q8 rewritten), both downgraded to confirmation-only. New Q10 for Training credits, explicitly flagging the enterprise cash-purchase funding path. General AI-infrastructure reselling named as a separate, out-of-scope future line requiring its own full review if ever pursued. |
+| 1.3 | 2026-07-22 | Part 3 added for recruiter-side monetization (BUSINESS.md §7, DESIGN.md §4a): new Q11 on the recruiter-initiated override reversal (forfeited charge paid to candidate as compensation) — flagged as a variant of the existing Q3 cross-party value-flow question, confirmation-only from the start, same posture as the rest of this document. Status section updated to note it. |
