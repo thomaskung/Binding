@@ -118,7 +118,7 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   await seeker.getByRole("button", { name: "Save settings" }).click();
 
   // Seeker sees the match but does NOT opt in.
-  await seeker.goto("/seeker");
+  await seeker.goto("/seeker?view=matches");
   await expect(seeker.getByTestId("seeker-match-card").first()).toBeVisible();
 
   // --- Recruiter override-reveals the non-opted-in candidate ---

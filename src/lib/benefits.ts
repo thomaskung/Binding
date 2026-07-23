@@ -33,6 +33,21 @@ export function benefitTier(lifetimeEarnedPoints: number): number {
   return tier;
 }
 
+/** Progress toward the next tier, for a decorative progress ring — pure
+ * derivation from `benefitTier`/`BENEFIT_TIER_THRESHOLDS`, no new metric. At
+ * the top tier, `fraction` is 1 (full ring) and `nextThreshold` is null. */
+export function benefitTierProgress(
+  lifetimePoints: number,
+): { tier: number; fraction: number; nextThreshold: number | null } {
+  const tier = benefitTier(lifetimePoints);
+  const nextThreshold = BENEFIT_TIER_THRESHOLDS[tier] ?? null;
+  if (nextThreshold === null) return { tier, fraction: 1, nextThreshold: null };
+  const currentThreshold = BENEFIT_TIER_THRESHOLDS[tier - 1]!;
+  const span = nextThreshold - currentThreshold;
+  const fraction = span <= 0 ? 1 : Math.min(1, Math.max(0, (lifetimePoints - currentThreshold) / span));
+  return { tier, fraction, nextThreshold };
+}
+
 /** Sum of allowlisted earn-events only — never a spend, never a purchase. */
 export async function getLifetimeEarnedPoints(
   supabase: SupabaseClient,
@@ -45,4 +60,43 @@ export async function getLifetimeEarnedPoints(
     .in("event", BENEFIT_EARN_EVENTS as unknown as string[]);
   if (error) throw new Error(`lifetime points lookup failed: ${error.message}`);
   return (data ?? []).reduce((sum, row) => sum + Math.max(0, row.amount as number), 0);
+}
+
+/**
+ * Spend-side counterpart, for recruiters/corporates — who never earn points
+ * in this spend-only economy (BUSINESS.md §7/§6a, DESIGN.md §7b, formalized
+ * 2026-07-23). Same ALLOWLIST hardening rationale as BENEFIT_EARN_EVENTS:
+ * only real spend/purchase-adjacent debits count toward tier eligibility.
+ * `partial_refund` is excluded — it's a refund of the recruiter's own past
+ * spend, not new participation.
+ */
+export const BENEFIT_SPEND_EVENTS = ["reveal_spend", "override_spend", "redemption"] as const;
+
+/** Sum of allowlisted spend-events only (absolute value — the ledger stores
+ * debits as negative amounts). Same monotonic-historical-sum shape as
+ * getLifetimeEarnedPoints: never reduced by a current balance running low. */
+export async function getLifetimeSpentPoints(
+  supabase: SupabaseClient,
+  profileId: string,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from("points_ledger")
+    .select("amount")
+    .eq("profile_id", profileId)
+    .in("event", BENEFIT_SPEND_EVENTS as unknown as string[]);
+  if (error) throw new Error(`lifetime spend lookup failed: ${error.message}`);
+  return (data ?? []).reduce((sum, row) => sum + Math.abs(Math.min(0, row.amount as number)), 0);
+}
+
+/** Per-side lifetime metric feeding tier eligibility: seekers on lifetime
+ * EARNED, recruiters/corporates (no earn mechanism) on lifetime SPENT — both
+ * monotonic historical sums, neither a balance. */
+export async function getLifetimeBenefitPoints(
+  supabase: SupabaseClient,
+  profileId: string,
+  role: "seeker" | "recruiter",
+): Promise<number> {
+  return role === "seeker"
+    ? getLifetimeEarnedPoints(supabase, profileId)
+    : getLifetimeSpentPoints(supabase, profileId);
 }

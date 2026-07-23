@@ -1,6 +1,6 @@
 # DESIGN.md — JumpOnBoard (J.O.B.) Technical Architecture
 
-**Version 1.7** · Last updated 2026-07-22 · Revision history at the end of this document.
+**Version 1.8** · Last updated 2026-07-23 · Revision history at the end of this document.
 
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [VISION.md](./VISION.md) (goals/metrics). This document describes how the product is actually built. Status: walking-skeleton MVP implemented (see §12 for what's built vs. deferred and where the MVP diverges from the target architecture below).
 
@@ -54,9 +54,9 @@ Neither channel is sufficient on its own to publish a listing: even ATS public A
 
 **Launch sequencing — a readiness gate, not just a calendar date.** Public signups do not open until both a minimum candidate density and a minimum consented/claimed employer density exist in the target vertical (starting targets, adjustable: ~50 real candidate profiles, ~15 consented/claimed ATS-sourced postings — see VISION.md). The existing Oct 2026 date remains the *build* target; public opening is gated on density, so "a solid match from Day 1" is literally true for the first real public users rather than aspirational. This makes the ATS-feed/schema.org tooling primarily a **concierge-outreach accelerant** (auto-discovered leads with real current openings + a one-click consent link, instead of cold manual research) rather than a way to skip relationship-building entirely — a pre-launch outreach sprint is still required, just a much faster one.
 
-## 2c. Resume-First Onboarding & Continuous AI Maintenance (strategy/roadmap — not yet built)
+## 2c. Resume-First Onboarding & Continuous AI Maintenance (built)
 
-**Status**: recorded architecture decision only, same treatment as §2b and §7. No schema or UI beyond the existing ingest/onboarding wizard exists for this yet.
+**Status (corrected 2026-07-23 — this line previously said "not yet built," which was stale)**: live. Resume-first onboarding, the lazy-on-login staleness check, and the maintenance-nudge suggest-and-approve loop (`/seeker/nudge`, `requestMaintenanceDraft`/`acceptMaintenanceUpdate` in `src/app/seeker/actions.ts`) all ship, with e2e coverage in `e2e/maintenance-nudge.spec.ts`. Scheduled/email reminders (below) remain deferred, not MVP.
 
 **The problem it solves**: traditional profile-maintenance UI puts the upkeep burden on the user. Free-tier users won't spend time keeping a profile current, so they update only when actively job-hunting — which is exactly when their data is *least* useful to the passive dark pool. Stale profiles starve the recruiter side (the supply-side liquidity problem in VISION.md) and force recruiters back to "please send me your latest resume," reintroducing the friction the product exists to remove.
 
@@ -70,10 +70,13 @@ Neither channel is sufficient on its own to publish a listing: even ATS public A
   - *User-initiated*: an always-available "update my profile" entry point.
   - *Scheduled / email reminders (deferred)*: proactive time-based nudges independent of login. Needs the Resend SMTP swap (§12) plus a scheduler the design has so far deliberately avoided — documented as a later-stage addition, not MVP.
 - **Manual entry stays as a fallback**, never removed: users without a resume, career-changers, and anyone who prefers direct editing must still be able to build/edit the structured layer by hand. Resume-first is the default path, not the only one.
+- **Freshness-confirmation earning (added this revision — see BUSINESS.md §6a/§3)**: answering a maintenance nudge with a genuine suggest-and-approve update earns points, **rate-limited** (e.g. once per quarter, or once per crossing a tenure milestone) so it can't be farmed by repeatedly re-triggering the nudge. This is deliberately *not* marketed as "AI-verified" — the AI enforces the rate limit and the suggest-and-approve shape, but it cannot independently verify that a self-reported "still at Company X" or a new accomplishment is true, unlike a skill-assessment pass. The rate limit plus the requirement that it's a real maintenance event (not a raw field edit) is what preserves the existing anti-farming rule, not a verification claim the mechanism can't back up.
 
 **Privacy consequence — the invariant this whole pivot hinges on**: raw resumes are already retained owner-only today; continuous maintenance changes the raw resume from a *persisted-but-static input* into a *continuously-updated, longer-retained, PII-bearing asset* (a deepening of an existing asset, not a new retention of something previously discarded). See §5 for the owner-only / unchanged-redaction-boundary / expanded-retention-consent invariant that keeps "we maintain your resume" and "privacy-first" from contradicting each other.
 
-## 2d. Adaptive UI (state-driven, not generative) (strategy/roadmap — not yet built)
+## 2d. Adaptive UI (state-driven, not generative) (built)
+
+**Status (corrected 2026-07-23)**: live on `/seeker` — the profile-state machine (completeness/freshness/intent/role) drives which module surfaces, including the stale-nudge card. Match-band-cap and ranking-boost-disclosure invariants below remain load-bearing and testable against real code, not just a strategy note.
 
 The founder asked whether the UI should become generative — changing according to profile, preference, and resume. Decision: **adaptive/state-driven UI, not runtime-generative UI.**
 
@@ -83,7 +86,9 @@ The founder asked whether the UI should become generative — changing according
 - **Match-band-cap invariant (added 2026-07-21)**: any adaptive-dashboard state that renders a match card must reflect the already-shipped `seeker_tier` cap (`matchBand()`, `src/lib/matching.ts` — `high` caps to `normal` unless `seeker_tier='pro'`), with **no differential signal** for a capped match — it must be fully indistinguishable from a genuine `normal` match, across every frame/state that shows matches (a dual-role frame is not exempt just because it also shows a recruiter view). A true, uncapped `high` state may only ever appear in a separately, explicitly-labeled Pro-tier frame. This guards against UI work silently reintroducing the privacy leak a first draft of the adaptive dashboard mockup had.
 - **Ranking-boost disclosure (added 2026-07-22)**: a boosted job posting (§4a) must carry a visible "Promoted" label on the seeker-facing card, in every frame that renders it. This is a distinct signal from the match-band-cap invariant above (sponsorship disclosure vs. match-quality signal) — both must coexist on the same card, neither substitutes for the other.
 
-## 2e. Aggregate Signal Pipeline — privacy-preserving monetization (strategy/roadmap — not yet built)
+## 2e. Aggregate Signal Pipeline — privacy-preserving monetization (built)
+
+**Status (corrected 2026-07-23)**: live. `market_skill_demand`/`market_salary_trend` (migration `0012_market_signals.sql`) are the sole, security-definer, k-anonymized access path, consumed by `src/app/recruiter/market-intelligence/`; unit coverage in `tests/market-signals.test.ts`. Comp/bonus/commission/equity dimensions (BUSINESS.md §7 item 4a) are not yet added to these RPCs — that expansion is still roadmap.
 
 The data JumpOnBoard collects (fresh, structured, continuously-maintained career data) is a monetizable asset **only in aggregate, non-identifiable form**. PII is never sold or shared. This is a data-collection business *within* privacy-first, not a departure from it (see BUSINESS.md §3/§7).
 
@@ -183,9 +188,11 @@ This is a distinct subsystem, not a one-line feature — it's the core answer to
 - **Closed-loop, non-monetary ledger.** No cash-out, no real-world voucher redemption — this is what keeps it outside SG's Payment Services Act (e-money/SVF licensing) and HK's MSO/SVF licensing regimes. ToS must state points are non-transferable and non-cash-redeemable to preserve this.
 - **Earning is gated behind AI-verified quality actions**: skill assessment pass (AI-generated content, human-reviewed before use), verifiable work-history signal — *not* raw profile-field edits, to prevent low-effort farming for free redemptions.
 - **Earning also occurs automatically on reveal events** (accepted or declined) — candidates get compensated for being part of the marketplace even when a match doesn't convert.
+- **A third earning category, added this revision: freshness confirmation** (§2c) — narrow and rate-limited (not "AI-verified" in the same sense as a skill assessment; see §2c for why that phrasing is deliberately avoided), tied to a genuine suggest-and-approve maintenance update rather than a raw field edit.
 - **Redemption catalog**: AI resume rewriting (available at MVP); AI-Credit Marketplace allowance (fast-follow, see §7).
 - **Spend side (recruiters)**: Reveal Requests (per-role, match-quality-tiered + same-role multi-candidate discount — §4a), AI JD-assist (§4a), the consent-override path, and its recruiter-initiated reversal (§4a, LEGAL_REVIEW.md).
-- **Benefits/loyalty carries no credit currency at all — nothing to wall off from this ledger.** See §7b: tier eligibility is activity/tenure-based, and the benefit itself is a discount code the user redeems by paying the vendor directly. Since no value is ever purchased, held, or redeemed through JumpOnBoard for it, it was reframed away from the credit-based/walled-off-rail design this bullet used to describe (superseded 2026-07-21 — see MEMORY.md).
+- **Benefits/loyalty carries no credit currency at all — nothing to wall off from this ledger.** See §7b: tier eligibility is now a concrete per-side cumulative counter (formalized this revision), and the benefit itself is a discount code the user redeems by paying the vendor directly. Since no value is ever purchased, held, or redeemed through JumpOnBoard for it, it was reframed away from the credit-based/walled-off-rail design this bullet used to describe (superseded 2026-07-21 — see MEMORY.md).
+- **A directional, far-roadmap idea — the External Loyalty Partner Bridge (§7d)** — would sit entirely outside this ledger by construction: a partner independently credits its own loyalty currency; nothing here is ever converted or exchanged.
 
 ## 7. AI-Credit Marketplace (fast-follow feature — design now, build immediately after MVP)
 
@@ -212,7 +219,9 @@ Architecture:
 
 **Legal status: confirmation-only, not a hard blocker** (downgraded 2026-07-21 — see MEMORY.md), conditional on the career-task scoping being real and enforced, not just described. Ask counsel to confirm the scoped redemption sits within the same narrow-redemption logic as AI resume rewriting, and what enforcement/verification they'd want to see — see [LEGAL_REVIEW.md](./LEGAL_REVIEW.md). Like the rest of the points system, this falls back to the general private-beta-plus-parallel-legal-review sequencing (BUSINESS.md §11) — engineering can build without waiting on counsel; only real public launch should wait for confirmation to land.
 
-## 7a. Roadmap adjacency — Training / Reskilling (design later, not yet built)
+## 7a. Roadmap adjacency — Training / Reskilling (built)
+
+**Status (corrected 2026-07-23)**: live (migration `0010_training.sql`, `src/lib/training.ts`, `/training`, e2e in `e2e/training-benefits.spec.ts`). The credit-bootstrap gap noted below is real and still unresolved, not a leftover roadmap caveat.
 
 AI-driven quiz + guided-learning product (reference point: Gemini Guided Learning). Two tracks delivered simultaneously:
 - **Individual career-path programs**: personalized reskilling toward a target role, informed by the gap between the seeker's skill vector and in-demand roles (the same aggregate signals from §2e).
@@ -228,11 +237,13 @@ Reuses the existing serverless open-weight LLM infra (§8) for content generatio
 - **Legal status: confirmation-only** — see LEGAL_REVIEW.md, which explicitly flags the enterprise cash-purchase path (cash-in → held credit balance → later redemption is the classic prepaid/stored-value trigger pattern; narrow single-purpose redemption is the defense, but counsel should be pointed at this specific funding path).
 - Training credit costs and the points→credit conversion rate are not yet numbered (§11) — no placeholder invented ahead of real usage data.
 
-## 7b. Roadmap adjacency — Benefits / Loyalty programme (confirmation-only; not yet built)
+## 7b. Roadmap adjacency — Benefits / Loyalty programme (built; confirmation-only)
+
+**Status (corrected 2026-07-23)**: live (migration `0011_benefit_partners.sql`, `src/lib/benefits.ts`, `/benefits`, e2e in `e2e/training-benefits.spec.ts`). "Confirmation-only" describes legal status (LEGAL_REVIEW.md Q8), not build status.
 
 **Reframed 2026-07-21, replacing the credit-based/walled-off-rail design committed 2026-07-20** (see MEMORY.md, which supersedes that entry).
 
-**No benefit-specific credit currency exists.** Tier eligibility is **activity/tenure-based** — mirrors the existing points-earning pattern (engagement over time), not a purchased or held balance. There is nothing to wall off because there is no benefit currency.
+**No benefit-specific credit currency exists.** Tier eligibility is a **per-side cumulative counter** (formalized this revision, replacing the previous vague "activity/tenure-based" placeholder): **seekers** qualify on cumulative lifetime points **earned** (sum of earn-type `points_ledger` entries — skill assessments, work-history verification, reveal events, freshness confirmation); **recruiters/corporates** — who never earn points in this spend-only economy — qualify on cumulative lifetime points **spent** (sum of debit-type entries: reveals, overrides, JD-assist, ranking boost). Both are monotonic historical sums, never reduced by a current balance running low or by spending points down, so this reconciles "corporates and individuals" (both eligible) with the recruiter side having no earn mechanism, without introducing anything resembling a redeemable balance. This is a query-only addition whenever §7b itself gets built — no schema change, since both sums are already derivable from `points_ledger`. There is nothing to wall off because there is no benefit currency.
 
 **Pure discount-code redirect — no payment nexus.** JumpOnBoard hands a tier-eligible user a discount code; the user pays the vendor (airline, hotel, IT retailer, healthcare provider, etc.) directly, on the vendor's own payment page. JumpOnBoard's systems never process, hold, or forward funds for the benefit itself.
 
@@ -245,6 +256,20 @@ Reuses the existing serverless open-weight LLM infra (§8) for content generatio
 ## 7c. Roadmap adjacency — Contextual advertising (later-stage; not yet built)
 
 Ads, if introduced, are **contextual only — no behavioral or individual-level tracking**. Targeted by page context (role/skill/surface shown), never by profiling an individual across their data or via cross-site pixels. No PII is exposed to advertisers. Any cohort-level targeting would reuse the §2e k-anonymity threshold and require its own consent posture (LEGAL_REVIEW.md). This keeps advertising consistent with the privacy-first moat rather than in tension with it.
+
+## 7d. Roadmap adjacency — External Loyalty Partner Bridge (far roadmap; not an active initiative, no partner outreach yet)
+
+**Origin and correction**: prompted by researching how OpenRice's Asia Miles integration works, as a candidate model. OpenRice does **not** convert its own points into Asia Miles — the two are separate ledgers, never transferred either way (per OpenRice's own FAQ). What actually happens is **dual-crediting**: Cathay Pacific independently credits its own Asia Miles for qualifying actions on OpenRice's platform, while OpenRice's own point ledger is untouched. This design follows that shape, not a conversion shape.
+
+**Mechanism**: a partner (e.g. an airline or hotel loyalty programme) independently awards its own currency for a qualifying event. **J.O.B.'s points ledger is never debited, converted, or exchanged** — there is no exchange rate between J.O.B. points and any partner currency, ever. Applies to both seekers and recruiters, and is deliberately **independent of Benefits/Loyalty tier** (§7b) — it triggers off the qualifying event itself, not off reaching a tier.
+
+**Two trigger tiers, kept in separate legal buckets (see LEGAL_REVIEW.md — this distinction matters and is easy to blur back together when editing)**:
+- **Near-term concept**: a subscription-based bonus — Pro seekers and paid recruiter tiers earn partner miles on each renewed subscription period. This is a **retention sweetener on a payment already being made**, structurally closer to a card-rewards pattern (miles-for-cash-spend) than to a loyalty-activity exemption — it must not be described as resolving the recruiter earn-loop gap named in BUSINESS.md §6a, and must not be described as covered by the activity-based research below.
+- **Future, infrastructure-gated**: activity-based crediting (a successful placement, a reveal-accept) — deferred until end-to-end placement-outcome tracking exists, which it does not today (the same gap flagged for the recruiter-monetization pricing-ceiling heuristic). Not to be implied as buildable now.
+
+**Privacy**: partner data sharing (name, email, or a partner-loyalty-account number) requires a new, explicit, separate opt-in consent — same shape as the market-signals/comp-data consents (§2e; off by default, its own plain-language explainer) — and, for a cross-border partner, rides the existing cross-border PDPA/PDPO transfer posture (BUSINESS.md §11), not just a UI consent toggle.
+
+**Legal status: not yet reviewed, no active initiative.** See LEGAL_REVIEW.md for the two separate confirmation items this needs before any real partner agreement.
 
 ## 8. AI/LLM Strategy
 
@@ -335,3 +360,4 @@ sections above remain the target architecture.
 | 1.5 | 2026-07-20 | Resume-first pivot + data-monetization roadmap (all not yet built): §2c resume-first onboarding & continuous AI maintenance (suggest-and-approve, AI-never-fabricates, all-triggers loop, consent-before-processing), §2d adaptive-not-generative UI, §2e k-anonymized opt-in aggregate-signal pipeline; §5 resume-persistence invariant (owner-only, unchanged redaction boundary, expanded-retention consent); §6 benefits/loyalty on a separate walled-off credit rail; §7a Training, §7b Benefits/loyalty (hard blocker), §7c contextual-only ads. Mission stays hiring-core. |
 | 1.6 | 2026-07-21 | Reconciled new Claude Design mockups against strategy — two reframes, both replacing prior committed text: §7 AI-Credit Marketplace scope-narrowed to career/JOB-related tasks only (classifier-gated passthrough), general AI-infrastructure reselling hived off as a separate out-of-scope future line, downgraded to confirmation-only; §7b Benefits/Loyalty replaced entirely with a discount-code/no-payment-nexus model (activity/tenure-based tiers, no credit currency), also confirmation-only. §7a Training gains an explicit credit instrument (one-way, segregated balances, confirmation-only). §2d gains the match-band-cap invariant (must stay invisible across every dashboard frame). §6 and §12 updated to match — zero hard blockers remain in the docs. |
 | 1.7 | 2026-07-22 | New §4a Recruiter Monetization (roadmap): per-role spend budget as a governance layer on the existing single `points_ledger` (hard-cap reservation across postings, auto-release on posting close, seniority derived from mandatory-but-privacy-visible salary bands); dynamic match-quality-tiered + same-role-discounted reveal pricing as a deliberate bid/allocation mechanism (trade-off named explicitly), replacing flat `REVEAL_COST`/`OVERRIDE_COST`; recruiter-initiated override reversal (counts toward the existing daily cap/30-day block); paid AI JD-assistant; Market Intelligence gains comp/bonus/commission/equity dimensions (new seeker capture + consent dependency, gated on data-coverage); enterprise ranking-boost SKU with a mandatory seeker-facing "Promoted" label. §4/§7 corrected — the "same-role 2nd+ reveal discount" was previously described as already implemented; confirmed by code read that it was not. §2d gains the ranking-boost disclosure note alongside the existing match-band-cap invariant. §6/§10/§11 updated to match. |
+| 1.8 | 2026-07-23 | §2c gains a new "freshness confirmation" points-earning category (rate-limited, tied to a real suggest-and-approve maintenance update — deliberately not described as "AI-verified"), closing the gap where the platform's core freshness/stickiness mechanic earned no points. §6 updated to list it. §7b's Benefits/Loyalty tier-eligibility formula replaced: from vague "activity/tenure-based" to a concrete per-side cumulative counter (seekers: lifetime points earned; recruiters/corporates: lifetime points spent) — reconciles the "corporates and individuals" promise with the recruiter spend-only economy without introducing a redeemable balance. New §7d External Loyalty Partner Bridge (far roadmap, no active partner): dual-crediting model, corrected from an initial assumption that OpenRice converts points into Asia Miles (it does not — dual-credits only); documents two trigger tiers in separate legal buckets (near-term subscription-based bonus vs. future infra-gated activity-based crediting), with the subscription trigger explicitly flagged as not covered by the activity-based HK/SG loyalty-exemption research. See BUSINESS.md §6a for the cross-side flywheel framing this pass is part of. Also corrected stale "not yet built" headers on §2c/§2d/§2e/§7a/§7b discovered while wiring the above — all five are actually live in code (migrations 0009-0012, `/seeker/nudge`, `/training`, `/benefits`, `/recruiter/market-intelligence`), unrelated to this pass's own changes but caught in the same review. |

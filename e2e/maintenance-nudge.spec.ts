@@ -95,4 +95,16 @@ test("stale profile nudges, and approving the draft clears staleness", async ({ 
   await page.waitForURL(/\/seeker$/, { timeout: 15_000 });
 
   await expect(page.getByTestId("stale-nudge-card")).toHaveCount(0);
+
+  // Freshness-confirmation earning (BUSINESS.md §3/§6a) — approving a real
+  // suggest-and-approve update earns points, rate-limited to once per
+  // cooldown window (src/lib/points.ts earnFreshnessConfirmation).
+  const { data: pointRows } = await admin
+    .from("points_ledger")
+    .select("event, amount")
+    .eq("profile_id", userId)
+    .eq("event", "verified_action")
+    .eq("note", "freshness confirmation");
+  expect(pointRows).toHaveLength(1);
+  expect(pointRows?.[0]?.amount).toBe(3);
 });

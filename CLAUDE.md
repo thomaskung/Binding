@@ -42,3 +42,4 @@ Demo logins (seeded): `seeker@demo.local` / `recruiter@demo.local`, password `J0
 - New tables need explicit `grant` statements (end of `0002_rls.sql`) — RLS policies alone return 42501.
 - TypeScript pinned to 5.x (typescript-eslint breaks on TS 7); ESLint pinned to 9 (eslint-config-next 16 incompatible with ESLint 10).
 - Strategy docs (BUSINESS/DESIGN/VISION/MEMORY/LEGAL_REVIEW) are load-bearing context — decisions there were deliberately made; check MEMORY.md before re-litigating one.
+- Local Supabase (`pnpm db:start`) runs in Docker — don't leave it running once you're done testing/dev-serving. `npx supabase stop` after (data persists in the docker volume; `pnpm db:reset` reloads it next time). Other unrelated containers may be running on the same machine — only stop this project's `supabase_*_jumponboard` stack, not others.

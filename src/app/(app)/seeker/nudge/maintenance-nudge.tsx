@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Separator, Textarea } from "@jumponboard/ui";
-import { acceptMaintenanceUpdate, requestMaintenanceDraft } from "@/app/seeker/actions";
+import { acceptMaintenanceUpdate, requestMaintenanceDraft } from "@/app/(app)/seeker/actions";
 
 interface Props {
   stale: boolean;

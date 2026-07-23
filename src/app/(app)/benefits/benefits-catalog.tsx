@@ -15,6 +15,7 @@ interface Partner {
 interface Props {
   tier: number;
   lifetimePoints: number;
+  metricKind: "earned" | "spent";
   partners: Partner[];
 }
 
@@ -61,7 +62,7 @@ function PartnerCard({ partner, unlocked }: { partner: Partner; unlocked: boolea
   );
 }
 
-export function BenefitsCatalog({ tier, lifetimePoints, partners }: Props) {
+export function BenefitsCatalog({ tier, lifetimePoints, metricKind, partners }: Props) {
   return (
     <>
       <header className="flex flex-col gap-1">
@@ -70,8 +71,8 @@ export function BenefitsCatalog({ tier, lifetimePoints, partners }: Props) {
           <Badge data-testid="benefit-tier-badge">Tier {tier}</Badge>
         </div>
         <p className="text-sm text-muted-foreground">
-          Reached via {lifetimePoints} lifetime points earned — this is a read-only signal, never a
-          spend; your points balance is untouched.
+          Reached via {lifetimePoints} lifetime points {metricKind} — this is a read-only signal, never
+          debits your points balance to reach or keep.
         </p>
       </header>
 

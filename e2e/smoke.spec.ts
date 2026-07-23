@@ -52,7 +52,7 @@ test("full reveal slice", async ({ browser }) => {
   });
 
   // --- Seeker: match surfaced, express interest ---
-  await seeker.goto("/seeker");
+  await seeker.goto("/seeker?view=matches");
   const matchCard = seeker.getByTestId("seeker-match-card").first();
   await expect(matchCard).toBeVisible();
   await matchCard.getByTestId("match-interested").click();
@@ -77,7 +77,7 @@ test("full reveal slice", async ({ browser }) => {
   await recruiter.getByTestId("message-send").click();
   await expect(recruiter.getByTestId("message-bubble")).toHaveCount(1);
 
-  await seeker.goto("/seeker");
+  await seeker.goto("/seeker?view=matches");
   await seeker.getByRole("button", { name: "Open conversation" }).click();
   await expect(seeker.getByTestId("message-bubble")).toHaveCount(1);
   await seeker.getByTestId("message-input").fill("Sounds interesting — tell me more.");

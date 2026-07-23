@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Button, Input } from "@jumponboard/ui";
-import { sendMessage } from "@/app/recruiter/actions";
+import { sendMessage } from "@/app/(app)/recruiter/actions";
 
 export function MessageComposer({ threadId }: { threadId: string }) {
   const [body, setBody] = useState("");

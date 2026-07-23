@@ -7,7 +7,12 @@ import { MARKET_SIGNALS_CONSENT_VERSION } from "@/lib/consent";
 import { computeExperienceStats, experienceFactsSentence } from "@/lib/experience";
 import { parseCommaList } from "@/lib/jobs";
 import { refreshMatchesForProfile } from "@/lib/matching";
-import { appendLedger, expireStaleOverride, OVERRIDE_PREMIUM_REFUND } from "@/lib/points";
+import {
+  appendLedger,
+  earnFreshnessConfirmation,
+  expireStaleOverride,
+  OVERRIDE_PREMIUM_REFUND,
+} from "@/lib/points";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 
 /** Save draft profile text + dealbreakers + identity/preference fields
@@ -199,10 +204,13 @@ export async function requestMaintenanceDraft(userAnswer: string): Promise<strin
 /** Maintenance nudge, approve half: appends the approved addition to the
  * profile draft and republishes (redact -> embed -> match, same one-AI-pass-
  * per-publish discipline as the regular publish flow) — this is also what
- * refreshes last_profile_activity_at, clearing the dashboard's stale state. */
+ * refreshes last_profile_activity_at, clearing the dashboard's stale state.
+ * Also earns freshness-confirmation points (BUSINESS.md §3/§6a, rate-limited
+ * — see src/lib/points.ts), a silent no-op if still within the cooldown. */
 export async function acceptMaintenanceUpdate(addition: string): Promise<void> {
   const session = await requireRole("seeker");
   const supabase = await createSupabaseServerClient();
+  const admin = createSupabaseAdminClient();
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -218,6 +226,7 @@ export async function acceptMaintenanceUpdate(addition: string): Promise<void> {
   if (error) throw new Error(`maintenance update save failed: ${error.message}`);
 
   await publishProfile();
+  await earnFreshnessConfirmation(admin, session.userId);
 }
 
 export async function updateSettings(formData: FormData) {

@@ -8,7 +8,7 @@ import {
   publishProfile,
   saveDraft,
   saveExperience,
-} from "@/app/seeker/actions";
+} from "@/app/(app)/seeker/actions";
 
 const WORK_SETUPS = ["onsite", "hybrid", "remote"] as const;
 

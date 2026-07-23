@@ -2,9 +2,6 @@ import Link from "next/link";
 import { Badge, Button, Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@jumponboard/ui";
 import { requireRole } from "@/lib/auth";
 import { EMPLOYMENT_TYPE_LABEL, salaryDisplay, type EmploymentType, type SalaryVisibility } from "@/lib/jobs";
-import { getBalance } from "@/lib/points";
-import { RoleSwitcher } from "@/components/role-switcher";
-import { SignOutButton } from "@/components/sign-out-button";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const STATUS_VARIANT = { draft: "outline", active: "default", closed: "secondary" } as const;
@@ -13,16 +10,13 @@ export default async function RecruiterDashboard() {
   const session = await requireRole("recruiter");
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: jobs }, balance] = await Promise.all([
-    supabase
-      .from("job_postings")
-      .select(
-        "id, title, status, created_at, department, location, employment_type, salary_min, salary_max, salary_visibility",
-      )
-      .eq("recruiter_id", session.userId)
-      .order("created_at", { ascending: false }),
-    getBalance(supabase, session.userId),
-  ]);
+  const { data: jobs } = await supabase
+    .from("job_postings")
+    .select(
+      "id, title, status, created_at, department, location, employment_type, salary_min, salary_max, salary_visibility",
+    )
+    .eq("recruiter_id", session.userId)
+    .order("created_at", { ascending: false });
 
   const jobIds = (jobs ?? []).map((j) => j.id);
   const { data: matchRows } = jobIds.length
@@ -37,31 +31,14 @@ export default async function RecruiterDashboard() {
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-8">
-      <header className="flex items-center justify-between">
+      <header className="jb-fade flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Job postings</h1>
+          <h1 className="font-heading text-2xl font-medium tracking-tight">Job postings</h1>
           <p className="text-sm text-muted-foreground">
             {(jobs ?? []).length} posting{(jobs ?? []).length === 1 ? "" : "s"} · {activeCount} active
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Badge variant="secondary" data-testid="points-balance">
-            {balance} pts
-          </Badge>
-          <Button variant="outline" render={<Link href="/recruiter/profile" />}>
-            Manage profile
-          </Button>
-          <Button variant="outline" render={<Link href="/recruiter/market-intelligence" />}>
-            Market insights
-          </Button>
-          <Button render={<Link href="/recruiter/jobs/new" />}>Post a job</Button>
-          <RoleSwitcher
-            current="recruiter"
-            isSeeker={session.isSeeker}
-            isRecruiter={session.isRecruiter}
-          />
-          <SignOutButton />
-        </div>
+        <Button render={<Link href="/recruiter/jobs/new" />}>Post a job</Button>
       </header>
 
       {(jobs ?? []).length === 0 ? (
@@ -78,9 +55,9 @@ export default async function RecruiterDashboard() {
             .filter(Boolean)
             .join(" · ");
           return (
-            <Card key={job.id}>
+            <Card key={job.id} className="jb-lift">
               <CardHeader>
-                <CardTitle className="text-lg">
+                <CardTitle className="font-heading text-lg font-medium">
                   <Link href={`/recruiter/jobs/${job.id}`} className="hover:underline">
                     {job.title}
                   </Link>

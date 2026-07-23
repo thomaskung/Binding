@@ -76,6 +76,51 @@ export async function appendLedger(
   if (error) throw new Error(`ledger append failed: ${error.message}`);
 }
 
+// ---------------------------------------------------------------------------
+// Freshness-confirmation earning (BUSINESS.md §3/§6a, DESIGN.md §2c — added
+// 2026-07-23): a genuine suggest-and-approve maintenance update earns points,
+// rate-limited so the maintenance nudge can't be farmed by repeatedly
+// re-triggering it. Deliberately not "AI-verified" like a skill assessment —
+// a self-reported update isn't independently verifiable; the cooldown plus
+// the requirement that it's a real suggest-and-approve event (never a raw
+// field edit) is what preserves the anti-farming intent.
+// ---------------------------------------------------------------------------
+export const FRESHNESS_CONFIRMATION_POINTS = 3;
+export const FRESHNESS_CONFIRMATION_COOLDOWN_DAYS = Number(
+  process.env.FRESHNESS_CONFIRMATION_COOLDOWN_DAYS ?? 90,
+);
+const FRESHNESS_CONFIRMATION_NOTE = "freshness confirmation";
+
+/** Earn freshness-confirmation points if outside the cooldown window since
+ * the last one. Returns true if points were earned, false if still cooling
+ * down (silent no-op — callers don't need to surface this to the user). */
+export async function earnFreshnessConfirmation(
+  admin: SupabaseClient,
+  profileId: string,
+): Promise<boolean> {
+  const since = new Date(
+    Date.now() - FRESHNESS_CONFIRMATION_COOLDOWN_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const { data, error } = await admin
+    .from("points_ledger")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("event", "verified_action")
+    .eq("note", FRESHNESS_CONFIRMATION_NOTE)
+    .gte("created_at", since)
+    .limit(1);
+  if (error) throw new Error(`freshness confirmation check failed: ${error.message}`);
+  if ((data ?? []).length > 0) return false;
+
+  await appendLedger(admin, {
+    profileId,
+    event: "verified_action",
+    amount: FRESHNESS_CONFIRMATION_POINTS,
+    note: FRESHNESS_CONFIRMATION_NOTE,
+  });
+  return true;
+}
+
 export class InsufficientPointsError extends Error {
   constructor(profileId: string, balance: number, needed: number) {
     super(`profile ${profileId} has ${balance} points, needs ${needed}`);

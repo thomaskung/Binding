@@ -2,10 +2,17 @@
 
 Prompts for the **JumpOnBoard UI** design project (`dc871eb6-6c3c-48a1-bcff-c841313b456e`).
 Paste **① Setup** first to establish shared rules, then one surface block per screen.
-Surfaces ②–⑧ are backed by DESIGN.md §2c/§2d/§2e/§7a/§7c (roadmap, not yet built).
+Surfaces ②–⑦ are backed by DESIGN.md §2c/§2d/§2e/§7a — all of which **shipped** since
+these prompts were first written (corrected 2026-07-23; these blocks were mocked
+ahead of build and the app has since caught up — re-mocking here is for design
+iteration on a live surface, not a spec for a first build). Surface ⑧ (§7c,
+contextual ads) remains genuinely not yet built.
 Surfaces ⑨–⑯ (added 2026-07-22) are backed by DESIGN.md §4a / BUSINESS.md §7
-(recruiter-side monetization, also roadmap — not yet built; source-code wiring is a
-separate, later ask gated on these mockups being reviewed). When a design is
+(recruiter-side monetization — still roadmap, not built; source-code wiring is a
+separate, later ask gated on these mockups being reviewed).
+Surfaces ⑰–⑱ (added 2026-07-23) extend two of the now-built surfaces above (④ and
+the Benefits catalog) with the new flywheel mechanics from BUSINESS.md §6a/§7 —
+see the section header below for what's built vs. still roadmap. When a design is
 approved, hand-translate the `.dc.html` back to React/JSX (same as prior template pulls).
 
 **Setup was updated 2026-07-22** — re-paste it in full (not just the new surface blocks)
@@ -435,4 +442,49 @@ B. Personalized benchmark view (shown after at least one field is filled): a
    suppression language as ⑬.
 
 Use Card, Label, Input, Select, Button, Badge.
+```
+
+---
+
+# Flywheel-completion surfaces (added 2026-07-23, DESIGN §2c/§7b / BUSINESS §6a/§7)
+
+Both blocks below extend an **already-built, already-shipped** surface (④ and the
+Benefits catalog) — this is real code wiring (`src/lib/points.ts`
+`earnFreshnessConfirmation`, `src/lib/benefits.ts` `getLifetimeBenefitPoints`), not a
+first-build mockup. Deliberately NOT mocked here: the External Loyalty Partner
+Bridge (BUSINESS §7, DESIGN §7d) — it's a far-roadmap idea with no active partner,
+and per the 2026-07-21 lesson in MEMORY.md, mocking a surface ahead of a real,
+settled mechanic just invites the design agent to invent unspecified details. Wait
+until a partner/mechanism is real before mocking it.
+
+## ⑰ Freshness-confirmation earn moment (extends ④ — DESIGN §2c)
+
+```
+Surface: extends the existing maintenance-nudge flow (④) with one more state, after
+the user clicks Approve on a drafted update. If this is their first update in the
+last quarter (a real rate limit — max once per ~90 days, not every nudge), show a
+brief confirmation: a Toaster message "Profile updated — +3 pts for keeping your
+profile fresh" alongside the normal "updated" confirmation. If they're still inside
+the cooldown from a prior freshness confirmation, the update still saves normally
+but there is NO points message — don't show a "0 pts" or disabled-looking state,
+just the plain update confirmation with no points mention at all. This is
+deliberately understated: a toast, not a full-screen celebration — it's a small,
+recurring earn event, not a milestone. Use Toaster, Card, Button, Badge.
+```
+
+## ⑱ Recruiter Benefits/Loyalty view (extends the Benefits Discount Catalog block above — DESIGN §7b)
+
+```
+Surface: the SAME Benefits/Loyalty discount catalog screen as the existing block
+above, viewed by a recruiter/corporate account instead of a seeker. Structure is
+identical (same partner-card grid, same "Get code" -> reveal-code -> "you pay the
+vendor directly" flow) — the only thing that changes is the header line, because
+recruiters have no points-earning mechanism (a spend-only economy): instead of
+"Reached via N lifetime points earned," show "Reached via N lifetime points spent"
+(e.g. "Reached via 340 lifetime points spent on reveals and JD assistance"). Do NOT
+show a progress-toward-next-tier bar with a specific target number — tier
+thresholds are placeholder economics, not committed pricing, so don't imply a
+precise number the recruiter can rely on; if showing progress at all, use a vague
+qualitative cue only (e.g. "Getting closer to Tier 3"). Use Card, Badge, Button,
+Separator — same component set as the seeker version.
 ```
