@@ -40,7 +40,8 @@
     "Dialog": { "cardMode": "single", "viewport": "420x320" },
     "Select": { "cardMode": "single", "viewport": "260x260" },
     "Card": { "cardMode": "column" },
-    "Toaster": { "cardMode": "single", "viewport": "360x140" }
+    "Toaster": { "cardMode": "single", "viewport": "360x140" },
+    "Progress": { "cardMode": "single", "primaryStory": "Default" }
   },
   "extraEntries": ["sonner"],
   "readmeHeader": ".design-sync/conventions.md"

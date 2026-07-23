@@ -25,6 +25,7 @@ export {
 } from "./dialog"
 export { Input } from "./input"
 export { Label } from "./label"
+export { Progress } from "./progress"
 export {
   Select,
   SelectContent,
@@ -38,6 +39,7 @@ export {
   SelectValue,
 } from "./select"
 export { Separator } from "./separator"
+export { Slider } from "./slider"
 export { Toaster } from "./sonner"
 export { Tabs, TabsList, TabsTrigger, TabsContent, tabsListVariants } from "./tabs"
 export { Textarea } from "./textarea"

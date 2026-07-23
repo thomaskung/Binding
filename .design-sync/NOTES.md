@@ -106,6 +106,10 @@ same bundled module instance as `Toaster`. Build logs an
 — informational only; our preview imports `Toaster` from `"@jumponboard/ui"`
 explicitly, never from `"sonner"`, so it isn't affected.
 
+## 2026-07-22: added Slider + Progress (13 components total)
+
+Added for the recruiter-monetization per-role budget UI (budget-cap slider + spend-used bar). Both are thin wrappers over `@base-ui/react`'s `slider`/`progress` primitives, same convention as `separator.tsx`. `Progress`'s single-cell preview tripped `[GRID_OVERFLOW]` on first sync (its two exports, `Default`/`Empty`, don't tile well in the grid) — fixed via `cfg.overrides.Progress: {"cardMode": "single", "primaryStory": "Default"}`, same fix already applied to Dialog/Select/Toaster. Both graded `good` on first capture, no iteration needed.
+
 ## Re-sync risks
 
 - Confirmed on the 2026-07-21 `packages/ui` migration's first re-sync: `pkg`/

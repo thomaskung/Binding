@@ -1,19 +1,25 @@
-# Claude Design prompts — resume-first pivot surfaces
+# Claude Design prompts — resume-first pivot + recruiter-monetization surfaces
 
 Prompts for the **JumpOnBoard UI** design project (`dc871eb6-6c3c-48a1-bcff-c841313b456e`).
 Paste **① Setup** first to establish shared rules, then one surface block per screen.
-Backed by DESIGN.md §2c/§2d/§2e/§7a/§7c (roadmap, not yet built). When a design is
+Surfaces ②–⑧ are backed by DESIGN.md §2c/§2d/§2e/§7a/§7c (roadmap, not yet built).
+Surfaces ⑨–⑯ (added 2026-07-22) are backed by DESIGN.md §4a / BUSINESS.md §7
+(recruiter-side monetization, also roadmap — not yet built; source-code wiring is a
+separate, later ask gated on these mockups being reviewed). When a design is
 approved, hand-translate the `.dc.html` back to React/JSX (same as prior template pulls).
+
+**Setup was updated 2026-07-22** — re-paste it in full (not just the new surface blocks)
+before starting ⑨–⑯; the allowlist and shared facts both changed.
 
 ---
 
-## ① Setup — paste first
+## ① Setup — paste first (updated 2026-07-22 — re-paste even if you pasted the old version earlier)
 
 ```
 You are designing screens for JumpOnBoard, a privacy-first APAC (HK/SG) hiring
 platform. Build ONLY with the JumpOnBoard UI components (Button, Card + parts,
-Tabs, Input, Label, Select, Textarea, Badge, Dialog, Separator, Toaster). Do
-not invent components or pull generic ones.
+Tabs, Input, Label, Select, Textarea, Badge, Dialog, Separator, Toaster, Slider,
+Progress). Do not invent components or pull generic ones.
 
 Hard rules for every screen:
 - Use real APAC tech/finance content, never lorem (e.g. "Backend Engineer,
@@ -26,6 +32,13 @@ Hard rules for every screen:
   based on state. Design the distinct states explicitly as separate frames.
 - Any AI-written content is SUGGEST-AND-APPROVE: shown as a draft the user
   accepts / edits / rejects. Never auto-applied, never presented as final.
+- Job postings require a salary range at posting time — only the exact
+  figure's visibility to candidates is optional (a recruiter can hide the
+  number from candidates, but can't post with no range at all).
+- Privacy controls (market-signal opt-ins, reveal-override toggle) live on
+  their own Privacy Settings page under Profile, separate from
+  profile-visibility settings — don't fold them into a visibility/appearance
+  screen.
 Acknowledge and wait for the first surface.
 ```
 
@@ -247,4 +260,179 @@ personalized/tracked) and a clear line: "You'll pay [Partner] directly on their 
 JumpOnBoard never processes this payment." No checkout, no cart, no payment form
 anywhere in this surface — every card ends at a redirect-out affordance, not a
 transaction. Use Card, Badge (for tier + category), Button, Separator.
+```
+
+---
+
+# Recruiter-monetization surfaces (added 2026-07-22, DESIGN §4a / BUSINESS §7)
+
+Re-paste the updated ① Setup above before starting these — the component allowlist
+(Slider, Progress) and two shared facts (mandatory salary range, separate Privacy
+Settings page) are new and every block below depends on at least one of them.
+
+## ⑨ Recruiter pricing/tier page (BUSINESS §7 — Free / Solo / Advanced)
+
+```
+Surface: Recruiter pricing/plans page, three tiers side by side as Card columns:
+Free, Solo, Advanced.
+
+Free: "1-2 reveals/month to try AI matching" — a taste, not a working plan.
+Solo: monthly reveal-credit bundle, per-role spend budgeting, advanced Dark Pool
+search, AI-optimized outbound messaging. Mark as "Most popular" — this is the
+core paid tier for an independent recruiter/headhunter.
+Advanced: everything in Solo, plus Market Intelligence (comp/bonus/commission/
+equity trend data) and job-post ranking boost. Frame Market Intelligence
+carefully: "Get full access" rather than "Upgrade" — this product isn't fully
+priced/self-serve yet, so don't imply an existing purchasable sub-tier inside
+Advanced.
+
+Each column: a short feature checklist (Badge or plain list), a CTA button
+("Current plan" disabled state on Free, "Upgrade" on Solo/Advanced). No dollar
+figures on Solo/Advanced yet — show "Contact us" or leave price as a Badge
+placeholder rather than a specific number. Use Card, Badge, Button, Separator.
+```
+
+## ⑩ Per-role budget & spend visualization (DESIGN §4a — job posting edit page)
+
+```
+Surface: Job posting edit page, "Budget" section (alongside the existing salary/
+skills/description fields). Two states:
+
+A. Setting a budget: a Slider for the posting's spend cap, labeled "Per-role
+   budget cap." Show an abstract suggested-default marker on the slider track
+   (a small tick/label reading "Suggested" — NO concrete point or dollar number
+   next to it, pricing isn't final). Directly below the slider, a line showing
+   the recruiter's actual constraint: "You have 340 pts unallocated across 2
+   other active postings" — the slider's max is limited by this number, not an
+   arbitrary ceiling. If the recruiter tries to drag past it, the slider simply
+   stops there with a caption: "Limited by your available balance."
+B. Spend-used view (once the posting has some reveal activity): a Progress bar
+   labeled "Spend used this posting" showing e.g. 62 of a 150-pt cap, with the
+   numbers as a caption above the bar.
+
+State inline: this budget is a spend ceiling on the recruiter's single shared
+points balance — not a separate wallet or currency. Use Card, Label, Slider,
+Progress, Badge (for the unallocated-balance figure).
+```
+
+## ⑪ Match-list & reveal economics (DESIGN §4a — recruiter match list, multiple frames)
+
+```
+Surface: Recruiter's candidate match list for a job posting (same screen as the
+existing match cards with the "% match" badge). Design FOUR frames:
+
+A. Standard reveal pricing: each match card's reveal button shows a cost that
+   scales with the match badge already shown (e.g. a 91% match costs more to
+   reveal than a 68% match) — a small caption/tooltip on the price: "Stronger
+   matches cost more — you're bidding for the best fit." Name this plainly, do
+   not hide it in fine print.
+B. Same-role volume discount: a second/third reveal against this SAME posting
+   shows a visibly discounted price on the reveal button (e.g. a small strike-
+   through or "2nd reveal discount" Badge next to the price).
+C. Pending override, recruiter view: a pending-override card with a "Withdraw
+   request" button. Clicking opens a confirm Dialog whose copy states a
+   TRANSFER, not a refund-to-nobody: "Your points for this reveal aren't
+   refunded to you — they go to the candidate as compensation for the
+   interruption." Never phrase this as the points simply disappearing.
+D. Seeker-facing counterpart (design as a second screen — candidate's pending-
+   override card): after the recruiter withdraws, the card reads "Recruiter
+   withdrew their request — you've been compensated 15 pts," visually distinct
+   from the existing "you declined" state, and clearly showing the candidate
+   gained value, not just that the request went away.
+
+Use Card, Badge, Button, Dialog, Separator.
+```
+
+## ⑫ Paid AI JD-assist (DESIGN §4a — job posting edit page)
+
+```
+Surface: Job posting edit page, the existing "Refine with AI" button. Add a
+visible cost caption/badge next to it: "Refine with AI · 5 pts". Design both
+the enabled state and a disabled state for insufficient balance ("Refine with
+AI · 5 pts — add points to use"). Use Button, Badge.
+```
+
+## ⑬ Market Intelligence dashboard extension (DESIGN §2e/§4a — new comp dimensions)
+
+```
+Surface: Recruiter/enterprise market-intelligence dashboard (extends the
+existing free-teaser + paid-depth screen). Add THREE new aggregate signal
+cards alongside the existing skill-demand and salary-trend cards: "Expected
+cash bonus — SG backend engineers," "Expected sales commission — HK client-
+facing sales roles," "Equity expectations — SG fintech." Same free-teaser
+(blurred/locked) vs. paid-depth (unlocked, trend detail) pattern as the
+existing cards.
+
+State inline on every card, new and existing: every figure is aggregate-only,
+with a persistent footnote "Aggregated from opted-in profiles, minimum cohort
+of 20 — no individual data." A cohort below that threshold shows the card as
+"Not enough data yet" rather than hiding it or showing a number. Don't imply
+an existing priced/self-serve tier where none exists yet — same "Get full
+access," not "Upgrade," language as the existing paid-depth frame. Use Card,
+Badge, Tabs, Button, Separator.
+```
+
+## ⑭ Ranking-boost purchase + seeker-facing disclosure (DESIGN §4a — two frames)
+
+```
+Surface, frame A (recruiter side): a job posting's management page gains a
+"Boost this posting" section, gated behind an "Advanced plan" Badge/lock if
+the recruiter isn't on that tier. When available: a simple purchase flow —
+pick a duration (7 / 14 / 30 days), see a points cost, confirm via Dialog. No
+dollar prices — points only.
+
+Surface, frame B (seeker side): the seeker's job/match list, where one boosted
+posting's card carries a small, clearly visible "Promoted" Badge in a corner
+or header of the card. State inline, explicitly: this label sits ALONGSIDE,
+never replaces, the existing qualitative match-band Badge (High/Normal/Low) —
+a boosted post's match band still follows the existing free-tier cap (a capped
+"Normal" match must look visually identical to a genuine Normal match, whether
+or not it's also Promoted). Use Card, Badge, Button, Dialog, Separator.
+```
+
+## ⑮ Privacy Settings page (new — under Profile, separate from visibility settings)
+
+```
+Surface: A new "Privacy" page/tab under Profile, distinct from the existing
+profile-visibility settings screen. Contains THREE toggles, each with its own
+plain-language explainer, stacked as separate Card sections:
+
+1. Market signals (existing, moved here): "Contribute to anonymized market
+   insights" — off by default. Explainer: aggregate-only, minimum cohort of
+   20, opt out anytime.
+2. Reveal override (existing, moved here): "Allow recruiters to reveal my
+   profile before I express interest" — off by default, with the existing
+   compensation-on-decline explainer.
+3. Comp/bonus/equity signals (NEW, visually distinct from #1 — its own Card,
+   not a sub-toggle): "Share comp expectations for market insights" — off by
+   default. Explainer: "This is separate from general market signals above —
+   it covers more sensitive data (bonus, commission, equity expectations), so
+   it needs its own opt-in." Enabling this reveals a "Set your expectations"
+   button leading to surface ⑯.
+
+Use Card, Label, a toggle affordance (Switch if available, else a checkbox
+pattern already used elsewhere in the product), Separator, Button.
+```
+
+## ⑯ Comp/bonus/equity expectations — capture form (new, standalone — DESIGN §4a)
+
+```
+Surface: A standalone page reached from the Privacy Settings toggle (⑮) — NOT
+part of onboarding. Two frames:
+
+A. Capture form: extends the existing dealbreaker-matrix-style inputs with
+   three new optional fields — "Expected cash bonus," "Expected sales
+   commission" (shown only if the seeker's profile indicates a client-facing/
+   sales role), "Expected equity." Above the form, a banner card stating the
+   incentive plainly: "Share your comp expectations, earn 5 pts, and unlock a
+   personalized benchmark — see how your expectations compare to the market
+   (once enough people share)." Below the form, a small line: "Shared, not
+   verified" — distinguishing this from the AI-verified actions that earn
+   points elsewhere in the product.
+B. Personalized benchmark view (shown after at least one field is filled): a
+   small aggregate comparison card, e.g. "Your expected bonus vs. SG backend-
+   engineer median: —" with a "Not enough data yet" fallback state, same
+   suppression language as ⑬.
+
+Use Card, Label, Input, Select, Button, Badge.
 ```

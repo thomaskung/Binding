@@ -27,6 +27,8 @@ Components already apply sensible defaults from this table internally — you on
 - `Button` / `Badge`: `variant="default" | "secondary" | "outline" | "ghost" | "destructive" | "link"`. `Button` also takes `size="xs" | "sm" | "default" | "lg" | "icon" | "icon-sm" | "icon-lg"`.
 - `Card`: `size="default" | "sm"` (sm = tighter padding, for dense lists).
 - `TabsList`: `variant="default" | "line"` (pill-background tabs vs. underline tabs).
+- `Slider`: uncontrolled via `defaultValue` (or controlled `value`/`onValueChange`), plus `min`/`max`/`step`/`disabled` — a single numeric value, not a range, unless `defaultValue`/`value` is an array. Pair with a `Label` above it (see the Slider preview) rather than relying on any built-in caption.
+- `Progress`: `value` is a number 0–100 (or `null` for an indeterminate state) — no variant/size prop; pair with a `Label` above it the same way as `Slider`.
 
 ## Where the truth lives
 
