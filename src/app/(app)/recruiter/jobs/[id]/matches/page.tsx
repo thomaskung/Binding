@@ -125,9 +125,9 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-8">
-      <header className="flex items-start justify-between gap-6">
+      <header className="jb-fade flex items-start justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-bold">Matches — {job.title}</h1>
+          <h1 className="font-heading text-2xl font-medium tracking-tight">Matches — {job.title}</h1>
           <p className="text-sm text-muted-foreground">
             Candidates are pseudonymized until you reveal. Standard reveal (10
             pts) needs candidate interest; override ({OVERRIDE_COST} pts)

@@ -82,7 +82,7 @@ export function MatchList({ cards }: { cards: RecruiterMatchCard[] }) {
         </Card>
       ) : (
         visible.map((card) => (
-          <Card key={card.id} data-testid="recruiter-match-card">
+          <Card className="jb-lift" key={card.id} data-testid="recruiter-match-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-3 text-lg">
                 {card.status === "revealed" && card.revealedName ? (
