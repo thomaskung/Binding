@@ -2,10 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { getAiProvider } from "@/lib/ai";
+import { AI_REFINE_CHAT_DAILY_CAP, countRefineChatCallsToday, logRefineChatCall } from "@/lib/ai-usage";
 import { requireRole } from "@/lib/auth";
 import { MARKET_SIGNALS_CONSENT_VERSION } from "@/lib/consent";
 import { computeExperienceStats, experienceFactsSentence } from "@/lib/experience";
+import { filterFieldsForSurface, type FieldVisibilityMap } from "@/lib/field-visibility";
 import { parseCommaList } from "@/lib/jobs";
+import { isQuickActionInstruction } from "@/lib/profile";
 import { refreshMatchesForProfile } from "@/lib/matching";
 import {
   appendLedger,
@@ -102,7 +105,7 @@ export async function publishProfile() {
   const [{ data: profile, error }, { data: experience }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("draft_text, skills, desired_roles, industries, references_available")
+      .select("draft_text, skills, desired_roles, industries, references_available, field_visibility")
       .eq("id", session.userId)
       .single(),
     supabase
@@ -119,6 +122,10 @@ export async function publishProfile() {
   // Derived, aggregated facts from structured work history — never the raw
   // entries — blended into what gets embedded so matching benefits from
   // them without a separate scoring formula (see src/lib/experience.ts).
+  // Two compositions, not one: `field_visibility` lets a seeker mark a field
+  // "matching_only" (hidden from recruiters, still helps matching) or
+  // "hidden" (excluded from both) — see src/lib/field-visibility.ts, the
+  // single source of truth for which fields support which modes.
   const stats = computeExperienceStats(
     (experience ?? []).map((e) => ({
       startDate: e.start_date,
@@ -126,20 +133,34 @@ export async function publishProfile() {
       industry: e.industry,
     })),
   );
-  const factsSentence = experienceFactsSentence(stats, {
+  const fieldVisibility = (profile.field_visibility ?? {}) as FieldVisibilityMap;
+  const rawFields = {
     skills: profile.skills ?? [],
     desiredRoles: profile.desired_roles ?? [],
     industries: profile.industries ?? [],
     referencesAvailable: profile.references_available ?? false,
-  });
-  const composedText = factsSentence ? `${redactedText}\n\n${factsSentence}` : redactedText;
+  };
+  const displayFacts = experienceFactsSentence(
+    stats,
+    filterFieldsForSurface(rawFields, fieldVisibility, "display"),
+  );
+  const matchingFacts = experienceFactsSentence(
+    stats,
+    filterFieldsForSurface(rawFields, fieldVisibility, "matching"),
+  );
+  const displayText = displayFacts ? `${redactedText}\n\n${displayFacts}` : redactedText;
+  const matchingText = matchingFacts ? `${redactedText}\n\n${matchingFacts}` : redactedText;
 
-  const embedding = await ai.embed(composedText);
+  const embedding = await ai.embed(matchingText);
 
+  // redacted_text is what recruiters and the fit-summary generator see
+  // (recruiter/actions.ts revealCandidate/overrideRevealCandidate, the
+  // match_candidates RPC, match-list.tsx) — must be the DISPLAY text, never
+  // the matching text, or a "matching_only" field would leak into view.
   const { error: vecError } = await admin.from("skill_vectors").upsert(
     {
       profile_id: session.userId,
-      redacted_text: composedText,
+      redacted_text: displayText,
       embedding: JSON.stringify(embedding),
     },
     { onConflict: "profile_id" },
@@ -164,12 +185,37 @@ export async function publishProfile() {
 
 /** AI refinement: suggest-and-approve. Returns the suggestion; the client
  * shows a side-by-side diff and the user decides. Free during MVP —
- * points-gating for seekers comes later (see src/lib/points.ts notes). */
-export async function refineProfileText(draftText: string): Promise<string> {
-  await requireRole("seeker");
+ * points-gating for seekers comes later (see src/lib/points.ts notes).
+ *
+ * `instruction` is either one of PROFILE_QUICK_ACTIONS (available to every
+ * seeker) or a free-text/chat instruction — Pro tier ONLY, enforced here
+ * server-side (never trust the client to have hidden the chat input) and
+ * rate-limited (src/lib/ai-usage.ts) since it's the open-ended-cost surface
+ * on the Modal path. */
+export async function refineProfileText(draftText: string, instruction?: string): Promise<string> {
+  const session = await requireRole("seeker");
   const ai = getAiProvider();
+
+  if (instruction && !isQuickActionInstruction(instruction)) {
+    const supabase = await createSupabaseServerClient();
+    const admin = createSupabaseAdminClient();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("seeker_tier")
+      .eq("id", session.userId)
+      .single();
+    if (profile?.seeker_tier !== "pro") {
+      throw new Error("free-text AI refinement is a Pro feature");
+    }
+    const usedToday = await countRefineChatCallsToday(admin, session.userId);
+    if (usedToday >= AI_REFINE_CHAT_DAILY_CAP) {
+      throw new Error("daily AI refinement limit reached — try again tomorrow");
+    }
+    await logRefineChatCall(admin, session.userId);
+  }
+
   // Private path only: profile text is candidate-derived (DESIGN.md rule).
-  return ai.refineProfile(draftText);
+  return ai.refineProfile(draftText, instruction);
 }
 
 /** Resume-first onboarding's suggest-and-approve step (DESIGN.md §2c):
@@ -227,6 +273,22 @@ export async function acceptMaintenanceUpdate(addition: string): Promise<void> {
 
   await publishProfile();
   await earnFreshnessConfirmation(admin, session.userId);
+}
+
+/** Saves the per-field visibility map (src/lib/field-visibility.ts). Takes
+ * effect on the next Publish, same as any other draft field — this never
+ * triggers its own AI round-trip (one-AI-pass-per-explicit-publish holds
+ * here too). */
+export async function updateFieldVisibility(map: FieldVisibilityMap) {
+  const session = await requireRole("seeker");
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ field_visibility: map })
+    .eq("id", session.userId);
+  if (error) throw new Error(`field visibility save failed: ${error.message}`);
+  revalidatePath("/seeker/profile");
 }
 
 export async function updateSettings(formData: FormData) {

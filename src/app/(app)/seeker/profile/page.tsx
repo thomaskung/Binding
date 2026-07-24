@@ -1,4 +1,5 @@
 import { requireRole } from "@/lib/auth";
+import type { FieldVisibilityMap } from "@/lib/field-visibility";
 import { getBalance } from "@/lib/points";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ProfileEditor } from "./profile-editor";
@@ -12,7 +13,7 @@ export default async function SeekerProfilePage() {
       supabase
         .from("profiles")
         .select(
-          "display_name, draft_text, published_text, visibility, dealbreaker_matrix, headline, phone, location, skills, desired_roles, industries, references_available, share_salary",
+          "display_name, draft_text, published_text, visibility, dealbreaker_matrix, headline, phone, location, skills, desired_roles, industries, references_available, share_salary, field_visibility, seeker_tier",
         )
         .eq("id", session.userId)
         .single(),
@@ -64,6 +65,8 @@ export default async function SeekerProfilePage() {
       industries={profile?.industries ?? []}
       referencesAvailable={profile?.references_available ?? false}
       shareSalary={profile?.share_salary ?? true}
+      fieldVisibility={(profile?.field_visibility ?? {}) as FieldVisibilityMap}
+      seekerTier={profile?.seeker_tier === "pro" ? "pro" : "free"}
       experience={(experience ?? []).map((e) => ({
         id: e.id,
         role: e.role,

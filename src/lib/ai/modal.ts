@@ -66,11 +66,12 @@ export const modalProvider: AiProvider = {
     return summary;
   },
 
-  async refineProfile(redactedProfileText: string): Promise<string> {
+  async refineProfile(redactedProfileText: string, instruction?: string): Promise<string> {
     const c = config();
     const { refined } = await post<{ refined: string }>(c.refineUrl, c.apiToken, {
       text: redactedProfileText,
       kind: "profile",
+      instruction,
     });
     return refined;
   },

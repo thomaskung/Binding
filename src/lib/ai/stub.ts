@@ -103,14 +103,18 @@ export const stubProvider: AiProvider = {
       : "Candidate profile surfaced by vector similarity. (stub summary)";
   },
 
-  async refineProfile(redactedProfileText: string): Promise<string> {
-    // Trivial cleanup transform: trim lines, collapse blank runs.
-    return redactedProfileText
+  async refineProfile(redactedProfileText: string, instruction?: string): Promise<string> {
+    // Trivial cleanup transform: trim lines, collapse blank runs. The
+    // instruction doesn't change stub behavior (deterministic, no real AI
+    // call) beyond a visible marker so e2e/manual checks can confirm it
+    // reached the provider.
+    const cleaned = redactedProfileText
       .split("\n")
       .map((l) => l.trim())
       .join("\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
+    return instruction ? `${cleaned}\n\n[stub refine: ${instruction}]` : cleaned;
   },
 
   async refineJobDescription(jd: JDTextOnly): Promise<string> {

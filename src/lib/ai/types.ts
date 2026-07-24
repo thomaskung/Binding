@@ -52,8 +52,11 @@ export interface AiProvider {
    * (consumes redacted candidate text + JD). */
   fitSummary(redactedCandidateText: string, jobDescription: string): Promise<string>;
 
-  /** Refine a seeker profile for better matching. Private-path only. */
-  refineProfile(redactedProfileText: string): Promise<string>;
+  /** Refine a seeker profile for better matching. Private-path only.
+   * `instruction` is either a fixed quick-action (free tier) or free-text
+   * (Pro tier only, rate-limited — see src/lib/ai-usage.ts and
+   * refineProfileText in seeker/actions.ts, which enforce both server-side). */
+  refineProfile(redactedProfileText: string, instruction?: string): Promise<string>;
 
   /** Refine a recruiter-authored JD. This is the one method that MAY be served
    * by a frontier API — hence the branded input type. */

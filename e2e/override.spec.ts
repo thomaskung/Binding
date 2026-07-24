@@ -113,7 +113,8 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   await seeker.goto("/seeker/profile");
   await expect(seeker.getByTestId("redacted-preview")).toBeVisible({ timeout: 15_000 });
 
-  // Ensure override is allowed (toggle on) — set via settings on the wizard page.
+  // Ensure override is allowed (toggle on) — set via settings on the Profile tab.
+  await seeker.getByRole("tab", { name: "Profile" }).click();
   await seeker.locator('input[name="reveal_override_enabled"]').check();
   await seeker.getByRole("button", { name: "Save settings" }).click();
 

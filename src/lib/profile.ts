@@ -25,3 +25,18 @@ export function isStale(lastActivityAt: string | null, now: Date = new Date()): 
   const ageMs = now.getTime() - new Date(lastActivityAt).getTime();
   return ageMs > PROFILE_STALENESS_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 }
+
+/** Fixed quick-action instructions for the Résumé-canvas AI sidebar (free
+ * tier and Pro tier both get these; Pro additionally gets free-text chat —
+ * see refineProfileText in seeker/actions.ts). Shared client/server so the
+ * server can validate an incoming instruction is one of these (vs. a custom
+ * Pro-only chat message) without duplicating the list. */
+export const PROFILE_QUICK_ACTIONS = [
+  { key: "concise", label: "More concise", instruction: "Make this more concise." },
+  { key: "metrics", label: "Add metrics", instruction: "Emphasize quantifiable impact and metrics." },
+  { key: "tone", label: "Fix tone", instruction: "Make the tone more professional and confident." },
+] as const;
+
+export function isQuickActionInstruction(instruction: string): boolean {
+  return PROFILE_QUICK_ACTIONS.some((a) => a.instruction === instruction);
+}
