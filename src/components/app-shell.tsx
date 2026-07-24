@@ -76,6 +76,11 @@ interface AppShellProps {
   companyName: string | null;
   seekerTier: SeekerTier;
   points: number;
+  /** job_active_role cookie, read server-side (see (app)/layout.tsx) — must
+   * NOT be read from document.cookie in this client component: doing so
+   * diverges from the server-rendered HTML whenever it disagrees with the
+   * isSeeker/isRecruiter-based fallback below, causing a hydration mismatch. */
+  cookieRole: Role | null;
   children: React.ReactNode;
 }
 
@@ -86,6 +91,7 @@ export function AppShell({
   companyName,
   seekerTier,
   points,
+  cookieRole,
   children,
 }: AppShellProps) {
   const pathname = usePathname();
@@ -95,17 +101,18 @@ export function AppShell({
 
   // Role-ambiguous routes (/benefits, /training, /thread/*) fall back to the
   // same job_active_role cookie the RoleSwitcher writes and "/" already
-  // reads server-side — mirrors that existing last-used-role-wins pattern.
-  const cookieRole =
-    typeof document !== "undefined"
-      ? (document.cookie.match(/(?:^|; )job_active_role=(seeker|recruiter)/)?.[1] as Role | undefined)
-      : undefined;
+  // reads server-side — mirrors that existing last-used-role-wins pattern
+  // (see BenefitsPage). The cookie only wins when the account actually holds
+  // that role — a stale cookie from a since-abandoned role must never grant
+  // nav access to a role this account doesn't have.
   const role: Role =
     pathname?.startsWith("/recruiter")
       ? "recruiter"
       : pathname?.startsWith("/seeker")
         ? "seeker"
-        : (cookieRole ?? (isSeeker ? "seeker" : "recruiter"));
+        : (cookieRole === "recruiter" && isRecruiter) || (isRecruiter && !isSeeker)
+          ? "recruiter"
+          : "seeker";
 
   const navItems = role === "seeker" ? SEEKER_NAV : RECRUITER_NAV;
   const currentUrl = `${pathname}${searchParams?.toString() ? `?${searchParams.toString()}` : ""}`;

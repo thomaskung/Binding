@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getBalance } from "@/lib/points";
@@ -22,6 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .maybeSingle();
 
   const balance = await getBalance(supabase, user.id);
+  const cookieRole = (await cookies()).get("job_active_role")?.value;
 
   return (
     <Suspense>
@@ -32,6 +34,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         companyName={profile?.company_name ?? null}
         seekerTier={profile?.seeker_tier === "pro" ? "pro" : "free"}
         points={balance}
+        cookieRole={cookieRole === "recruiter" || cookieRole === "seeker" ? cookieRole : null}
       >
         {children}
       </AppShell>
