@@ -84,6 +84,22 @@ export function computeExperienceStats(
   };
 }
 
+export type SeniorityBand = "junior" | "mid" | "senior" | "staff" | "executive";
+
+/** Buckets total years of experience into the market-intel seniority
+ * breakdown (Phase 3B). Boundaries belong to the HIGHER band (>= 2 is
+ * "mid", not "junior") — same convention as benefitTier's threshold check
+ * in src/lib/benefits.ts. Stored on `profiles.seniority_band` at publish
+ * time (see publishProfile in seeker/actions.ts) rather than derived in SQL
+ * — see supabase/migrations/0015_market_signals_by_dimension.sql for why. */
+export function seniorityBand(totalYears: number): SeniorityBand {
+  if (totalYears >= 15) return "executive";
+  if (totalYears >= 10) return "staff";
+  if (totalYears >= 5) return "senior";
+  if (totalYears >= 2) return "mid";
+  return "junior";
+}
+
 /** Renders derived stats as a plain sentence appended to the embedded text —
  * structured, consented facts, not raw prose, so this bypasses redact()
  * (same reasoning as dealbreaker_matrix already bypassing it). */

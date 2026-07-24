@@ -74,3 +74,63 @@ export async function fetchSalaryTrend(
     }),
   );
 }
+
+/** Phase 3B breakdown dimensions — same k-anonymized-RPC-only access path,
+ * same per-cell suppression, see supabase/migrations/0015_market_signals_by_dimension.sql. */
+export interface SkillDemandByLocationRow {
+  skill: string;
+  region: string;
+  seekerCount: number | null;
+  suppressed: boolean;
+}
+
+export interface SalaryTrendBySeniorityRow {
+  desiredRole: string;
+  seniorityBand: string;
+  avgMinSalary: number | null;
+  cohortSize: number | null;
+  suppressed: boolean;
+}
+
+export async function fetchSkillDemandByLocation(
+  supabase: SupabaseClient,
+  minCohort: number = MARKET_SIGNAL_MIN_COHORT,
+): Promise<SkillDemandByLocationRow[]> {
+  const { data, error } = await supabase.rpc("market_skill_demand_by_location", {
+    p_min_cohort: minCohort,
+  });
+  if (error) throw new Error(`market_skill_demand_by_location failed: ${error.message}`);
+  return (data ?? []).map(
+    (r: { skill: string; region: string; seeker_count: number | null; suppressed: boolean }) => ({
+      skill: r.skill,
+      region: r.region,
+      seekerCount: r.seeker_count,
+      suppressed: r.suppressed,
+    }),
+  );
+}
+
+export async function fetchSalaryTrendBySeniority(
+  supabase: SupabaseClient,
+  minCohort: number = MARKET_SIGNAL_MIN_COHORT,
+): Promise<SalaryTrendBySeniorityRow[]> {
+  const { data, error } = await supabase.rpc("market_salary_trend_by_seniority", {
+    p_min_cohort: minCohort,
+  });
+  if (error) throw new Error(`market_salary_trend_by_seniority failed: ${error.message}`);
+  return (data ?? []).map(
+    (r: {
+      desired_role: string;
+      seniority_band: string;
+      avg_min_salary: number | null;
+      cohort_size: number | null;
+      suppressed: boolean;
+    }) => ({
+      desiredRole: r.desired_role,
+      seniorityBand: r.seniority_band,
+      avgMinSalary: r.avg_min_salary,
+      cohortSize: r.cohort_size,
+      suppressed: r.suppressed,
+    }),
+  );
+}

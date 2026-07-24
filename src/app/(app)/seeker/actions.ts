@@ -5,7 +5,7 @@ import { getAiProvider } from "@/lib/ai";
 import { AI_REFINE_CHAT_DAILY_CAP, countRefineChatCallsToday, logRefineChatCall } from "@/lib/ai-usage";
 import { requireRole } from "@/lib/auth";
 import { MARKET_SIGNALS_CONSENT_VERSION } from "@/lib/consent";
-import { computeExperienceStats, experienceFactsSentence } from "@/lib/experience";
+import { computeExperienceStats, experienceFactsSentence, seniorityBand } from "@/lib/experience";
 import { filterFieldsForSurface, type FieldVisibilityMap } from "@/lib/field-visibility";
 import { parseCommaList } from "@/lib/jobs";
 import { isQuickActionInstruction } from "@/lib/profile";
@@ -167,11 +167,16 @@ export async function publishProfile() {
   );
   if (vecError) throw new Error(`vector upsert failed: ${vecError.message}`);
 
+  // Stored, not derived in SQL — the market-intel seniority-band breakdown
+  // (supabase/migrations/0015_market_signals_by_dimension.sql) needs one
+  // scalar per profile, computed from the same canonical interval-merge
+  // total used everywhere else, not a second SQL-side approximation.
   await supabase
     .from("profiles")
     .update({
       published_text: profile.draft_text,
       last_profile_activity_at: new Date().toISOString(),
+      seniority_band: seniorityBand(stats.totalYears),
     })
     .eq("id", session.userId);
 

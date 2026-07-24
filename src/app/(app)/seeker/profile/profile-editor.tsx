@@ -869,6 +869,7 @@ export function ProfileEditor(props: Props) {
                         <ul className="list-disc space-y-1 pl-4 text-muted-foreground">
                           <li>Aggregate skill demand</li>
                           <li>Aggregate salary-range trends</li>
+                          <li>Aggregate demand and salary trends broken down by region and seniority band (same min-20 threshold)</li>
                         </ul>
                       </div>
                       <div>

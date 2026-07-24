@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeExperienceStats, experienceFactsSentence } from "@/lib/experience";
+import { computeExperienceStats, experienceFactsSentence, seniorityBand } from "@/lib/experience";
 
 const NOW = new Date("2026-07-20T00:00:00Z");
 
@@ -107,5 +107,26 @@ describe("experienceFactsSentence", () => {
       { skills: [], desiredRoles: [], industries: [], referencesAvailable: false },
     );
     expect(sentence).toBe("");
+  });
+});
+
+describe("seniorityBand", () => {
+  it("buckets below 2 years as junior", () => {
+    expect(seniorityBand(0)).toBe("junior");
+    expect(seniorityBand(1.9)).toBe("junior");
+  });
+
+  it("boundaries belong to the higher band", () => {
+    expect(seniorityBand(2)).toBe("mid");
+    expect(seniorityBand(5)).toBe("senior");
+    expect(seniorityBand(10)).toBe("staff");
+    expect(seniorityBand(15)).toBe("executive");
+  });
+
+  it("buckets mid/senior/staff/executive ranges", () => {
+    expect(seniorityBand(4.9)).toBe("mid");
+    expect(seniorityBand(9.9)).toBe("senior");
+    expect(seniorityBand(14.9)).toBe("staff");
+    expect(seniorityBand(25)).toBe("executive");
   });
 });
