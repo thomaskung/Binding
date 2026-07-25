@@ -75,9 +75,13 @@ test("hidden and matching_only fields are excluded from what recruiters see; vis
   await expect(page.getByText("Profile fields saved.")).toBeVisible();
 
   // Per-field visibility lives in the Privacy card (always active, not
-  // gated behind edit mode — each change persists immediately).
+  // gated behind edit mode). Each change persists via a server action —
+  // wait for the committed-write signal after each one, or navigating away
+  // can cancel the in-flight save.
   await page.getByLabel("Skills visibility").selectOption("hidden");
+  await expect(page.getByText("Visibility updated.")).toBeVisible();
   await page.getByLabel("Target industries visibility").selectOption("matching_only");
+  await expect(page.getByText("Visibility updated.")).toBeVisible();
 
   await page.goto("/seeker/profile/resume");
   await page.getByTestId("profile-draft").fill(

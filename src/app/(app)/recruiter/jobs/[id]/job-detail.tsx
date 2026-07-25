@@ -32,8 +32,8 @@ export function JobDetail({ job, matchCount }: { job: EditableJob; matchCount: n
           <Button variant="outline" onClick={() => setEditing(true)}>
             Edit posting
           </Button>
-          <Button variant="ghost" size="sm" render={<Link href="/recruiter" />}>
-            ← Postings
+          <Button variant="ghost" size="sm" render={<Link href="/recruiter/jobs" />}>
+            ← All postings
           </Button>
         </div>
       </header>

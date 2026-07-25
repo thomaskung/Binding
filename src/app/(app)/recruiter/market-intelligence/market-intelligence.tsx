@@ -1,15 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Separator, Tabs, TabsList, TabsTrigger } from "@jumponboard/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Tabs, TabsList, TabsTrigger } from "@jumponboard/ui";
 import type {
   SalaryTrendBySeniorityRow,
   SalaryTrendRow,
   SkillDemandByLocationRow,
   SkillDemandRow,
 } from "@/lib/market-signals";
-
-const FREE_TEASER_ROW_LIMIT = 2;
 
 interface Props {
   skillDemand: SkillDemandRow[];
@@ -18,20 +16,49 @@ interface Props {
   salaryTrendBySeniority: SalaryTrendBySeniorityRow[];
 }
 
-function Locked() {
-  return (
-    <div className="flex items-center justify-between rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-      <span>Locked — full breakdown available on request</span>
-      <span className="blur-sm select-none">████ ████</span>
-    </div>
-  );
-}
-
 function Cell({ suppressed, children }: { suppressed: boolean; children: React.ReactNode }) {
   if (suppressed) {
     return <span className="text-sm text-muted-foreground">Not enough data</span>;
   }
-  return <span className="text-lg font-semibold tracking-tight">{children}</span>;
+  return <span className="text-sm font-semibold tracking-tight">{children}</span>;
+}
+
+function Row({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between border-b border-border py-1.5 text-[13px] last:border-b-0">
+      <span>{label}</span>
+      {children}
+    </div>
+  );
+}
+
+/** Blur-locked deep-dive card (MarketIntelligence template frame A): a
+ * placeholder layout renders blurred underneath a Locked badge + sales CTA.
+ * Access is sales-conversation-gated — no self-serve unlock exists. */
+function LockedCard({ title }: { title: string }) {
+  return (
+    <div className="relative">
+      <Card size="sm" className="pointer-events-none select-none opacity-60 blur-[5px]">
+        <CardHeader>
+          <CardTitle className="text-sm">{title}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1.5">
+          <Row label="████ ████">
+            <span className="text-sm">████</span>
+          </Row>
+          <Row label="████ ██">
+            <span className="text-sm">████</span>
+          </Row>
+        </CardContent>
+      </Card>
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 p-4 text-center">
+        <Badge variant="outline">Locked</Badge>
+        <Button size="sm" render={<a href="mailto:sales@jumponboard.example" />}>
+          Get full access
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 const SENIORITY_LABEL: Record<string, string> = {
@@ -42,13 +69,12 @@ const SENIORITY_LABEL: Record<string, string> = {
   executive: "Executive",
 };
 
-/** Free-teaser + paid-depth (DESIGN.md §2e/§7 — unpriced new line item, per
- * the reviewed mockup's "Contact us" copy, not an existing subscription
- * tier). Real recruiters see the teaser; "Preview full access" is a
- * dev-only demo affordance, same posture as the seeker dev-tier toggle —
- * there is no self-serve unlock, access is sales-conversation-gated.
- * Skills/Compensation tabs + the by-location/by-seniority breakdowns are
- * Phase 3B — same free/paid teaser mechanic, more rows behind it. */
+/** Market intelligence (MarketIntelligence template): free teaser keeps the
+ * headline aggregate cards unlocked and blur-locks the deep-dive breakdowns
+ * (frame A); full access (frame B) unlocks them behind the same Skills/
+ * Compensation tabs. Data comes only from the k-anonymized RPCs — cells
+ * below the 20-person cohort render "Not enough data" in either frame.
+ * "Preview full access" stays a dev-only affordance (sales-gated product). */
 export function MarketIntelligence({
   skillDemand,
   salaryTrend,
@@ -61,15 +87,15 @@ export function MarketIntelligence({
 
   return (
     <>
-      <header className="flex items-start justify-between gap-6">
+      <header className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-medium tracking-tight">Market intelligence</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Market intelligence</h1>
           <p className="text-sm text-muted-foreground">
             Aggregate hiring signals from opted-in candidates — never individual data.
           </p>
         </div>
-        <Badge variant={fullAccess ? "default" : "outline"}>
-          {fullAccess ? "Full access" : "Free teaser"}
+        <Badge variant={fullAccess ? "outline" : "secondary"}>
+          {fullAccess ? "Contact us" : "Free"}
         </Badge>
       </header>
 
@@ -81,129 +107,95 @@ export function MarketIntelligence({
       </Tabs>
 
       {section === "skills" ? (
-        <>
-          <Card>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Card size="sm">
             <CardHeader>
-              <CardTitle>In-demand skills</CardTitle>
-              <CardDescription>Seekers with each skill in their profile, opted into market insights.</CardDescription>
+              <CardTitle className="text-sm">In-demand skills</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-1.5">
               {skillDemand.length === 0 && (
                 <p className="text-sm text-muted-foreground">No signals yet.</p>
               )}
-              {skillDemand.map((row, i) =>
-                fullAccess || i < FREE_TEASER_ROW_LIMIT ? (
-                  <div key={row.skill} className="flex items-center justify-between">
-                    <span className="text-sm">{row.skill}</span>
-                    <Cell suppressed={row.suppressed}>{row.seekerCount} seekers</Cell>
-                  </div>
-                ) : (
-                  <Locked key={row.skill} />
-                ),
-              )}
+              {skillDemand.map((row) => (
+                <Row key={row.skill} label={row.skill}>
+                  <Cell suppressed={row.suppressed}>{row.seekerCount} seekers</Cell>
+                </Row>
+              ))}
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Demand by location</CardTitle>
-              <CardDescription>Same skill signal, broken down by candidate region.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {skillDemandByLocation.length === 0 && (
-                <p className="text-sm text-muted-foreground">No signals yet.</p>
-              )}
-              {skillDemandByLocation.map((row, i) =>
-                fullAccess || i < FREE_TEASER_ROW_LIMIT ? (
-                  <div key={`${row.skill}-${row.region}`} className="flex items-center justify-between">
-                    <span className="text-sm">
-                      {row.skill} <span className="text-muted-foreground">· {row.region}</span>
-                    </span>
+          {fullAccess ? (
+            <Card size="sm">
+              <CardHeader>
+                <CardTitle className="text-sm">Skill demand by location</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1.5">
+                {skillDemandByLocation.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No signals yet.</p>
+                )}
+                {skillDemandByLocation.map((row) => (
+                  <Row key={`${row.skill}-${row.region}`} label={`${row.skill} — ${row.region}`}>
                     <Cell suppressed={row.suppressed}>{row.seekerCount} seekers</Cell>
-                  </div>
-                ) : (
-                  <Locked key={`${row.skill}-${row.region}`} />
-                ),
-              )}
-            </CardContent>
-          </Card>
-        </>
+                  </Row>
+                ))}
+              </CardContent>
+            </Card>
+          ) : (
+            <LockedCard title="Skill demand by location" />
+          )}
+        </div>
       ) : (
-        <>
-          <Card>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Card size="sm">
             <CardHeader>
-              <CardTitle>Salary-range trends</CardTitle>
-              <CardDescription>Average minimum base salary expectation by target role.</CardDescription>
+              <CardTitle className="text-sm">Salary-range trends</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-1.5">
               {salaryTrend.length === 0 && (
                 <p className="text-sm text-muted-foreground">No signals yet.</p>
               )}
-              {salaryTrend.map((row, i) =>
-                fullAccess || i < FREE_TEASER_ROW_LIMIT ? (
-                  <div key={row.desiredRole} className="flex items-center justify-between">
-                    <span className="text-sm">{row.desiredRole}</span>
-                    <Cell suppressed={row.suppressed}>
-                      {row.avgMinSalary != null ? `$${Number(row.avgMinSalary).toLocaleString()}+` : ""}
-                    </Cell>
-                  </div>
-                ) : (
-                  <Locked key={row.desiredRole} />
-                ),
-              )}
+              {salaryTrend.map((row) => (
+                <Row key={row.desiredRole} label={row.desiredRole}>
+                  <Cell suppressed={row.suppressed}>
+                    {row.avgMinSalary != null
+                      ? `$${Number(row.avgMinSalary).toLocaleString()}+`
+                      : ""}
+                  </Cell>
+                </Row>
+              ))}
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Salary by seniority</CardTitle>
-              <CardDescription>Same salary signal, broken down by years-of-experience band.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {salaryTrendBySeniority.length === 0 && (
-                <p className="text-sm text-muted-foreground">No signals yet.</p>
-              )}
-              {salaryTrendBySeniority.map((row, i) =>
-                fullAccess || i < FREE_TEASER_ROW_LIMIT ? (
-                  <div
+          {fullAccess ? (
+            <Card size="sm">
+              <CardHeader>
+                <CardTitle className="text-sm">Salary bands by seniority</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1.5">
+                {salaryTrendBySeniority.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No signals yet.</p>
+                )}
+                {salaryTrendBySeniority.map((row) => (
+                  <Row
                     key={`${row.desiredRole}-${row.seniorityBand}`}
-                    className="flex items-center justify-between"
+                    label={`${row.desiredRole} — ${SENIORITY_LABEL[row.seniorityBand] ?? row.seniorityBand}`}
                   >
-                    <span className="text-sm">
-                      {row.desiredRole}{" "}
-                      <span className="text-muted-foreground">
-                        · {SENIORITY_LABEL[row.seniorityBand] ?? row.seniorityBand}
-                      </span>
-                    </span>
                     <Cell suppressed={row.suppressed}>
-                      {row.avgMinSalary != null ? `$${Number(row.avgMinSalary).toLocaleString()}+` : ""}
+                      {row.avgMinSalary != null
+                        ? `$${Number(row.avgMinSalary).toLocaleString()}+`
+                        : ""}
                     </Cell>
-                  </div>
-                ) : (
-                  <Locked key={`${row.desiredRole}-${row.seniorityBand}`} />
-                ),
-              )}
-            </CardContent>
-          </Card>
-        </>
+                  </Row>
+                ))}
+              </CardContent>
+            </Card>
+          ) : (
+            <LockedCard title="Salary bands by seniority" />
+          )}
+        </div>
       )}
 
-      {!fullAccess && (
-        <Card className="border-primary">
-          <CardContent className="flex items-center justify-between py-4">
-            <p className="text-sm">Get the full breakdown — trends by seniority and location.</p>
-            <div className="flex items-center gap-2">
-              <Button size="sm" render={<a href="mailto:sales@jumponboard.example" />}>
-                Get full access
-              </Button>
-              <Badge variant="outline">Contact us</Badge>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <Separator />
-      <p className="text-xs text-muted-foreground">
+      <p className="text-center text-xs text-muted-foreground">
         Aggregated from opted-in profiles, minimum cohort of 20 — no individual data.
       </p>
 

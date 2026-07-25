@@ -107,7 +107,7 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
     <div className="space-y-6">
       <div className="sticky top-0 z-10 -mx-8 flex items-center justify-between gap-6 border-b bg-background px-8 py-4">
         <div className="flex min-w-0 items-center gap-3">
-          <Button variant="ghost" size="sm" render={<Link href="/recruiter" />}>
+          <Button variant="ghost" size="sm" render={<Link href="/recruiter/jobs" />}>
             ← Cancel
           </Button>
           <div className="flex min-w-0 flex-col">
@@ -126,6 +126,17 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
           )}
         </div>
       </div>
+
+      {!job && (
+        <div>
+          <h1 className="mb-1.5 text-[28px] font-semibold leading-tight tracking-tight">
+            Create a job posting
+          </h1>
+          <p className="text-[15px] text-muted-foreground">
+            Fill in the details below. You can save as a draft and finish later.
+          </p>
+        </div>
+      )}
 
       <Card>
         <CardHeader>

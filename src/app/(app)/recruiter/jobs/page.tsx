@@ -40,7 +40,7 @@ export default async function RecruiterJobsPage() {
             {(jobs ?? []).length} posting{(jobs ?? []).length === 1 ? "" : "s"} · {activeCount} active
           </p>
         </div>
-        <Button render={<Link href="/recruiter/jobs/new" />}>Post a job</Button>
+        <Button render={<Link href="/recruiter/jobs/new" />}>New posting</Button>
       </header>
 
       {(jobs ?? []).length === 0 ? (

@@ -176,7 +176,14 @@ export function ProfileFields(props: ProfileFieldsProps) {
   function setVisibility(key: ProfileFieldKey, mode: FieldVisibilityMode) {
     const next = { ...fieldVisibility, [key]: mode };
     setFieldVisibility(next);
-    startTransition(() => updateFieldVisibility(next));
+    setStatus(null);
+    startTransition(async () => {
+      await updateFieldVisibility(next);
+      // Post-await so "Visibility updated." only shows once the write has
+      // actually committed — tests (and users) can rely on it as a settle
+      // signal before publishing.
+      setStatus("Visibility updated.");
+    });
   }
 
   function save() {

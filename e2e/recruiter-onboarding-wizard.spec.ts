@@ -71,7 +71,7 @@ test("recruiter onboarding: account -> company details -> first-job hand-off, sk
   await expect(page.getByText("Step 3 of 3")).toBeVisible();
   await expect(page.getByTestId("recruiter-onboarding-post-job")).toBeVisible();
   await page.getByTestId("recruiter-onboarding-finish-skip").click();
-  await page.waitForURL(/\/recruiter\/jobs$/);
+  await page.waitForURL(/\/recruiter$/);
   await expect(page.getByTestId("points-balance")).toHaveText("100 points");
 
   // Step 2's fields actually persisted, not just rendered mid-wizard.

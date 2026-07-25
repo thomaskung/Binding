@@ -50,7 +50,7 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
 
   return (
     <main className="mx-auto max-w-3xl space-y-8 p-8 pb-24">
-      <Button variant="outline" size="sm" render={<Link href="/seeker" />}>
+      <Button variant="outline" size="sm" render={<Link href="/seeker/matches" />}>
         ← Back to matches
       </Button>
 
@@ -82,12 +82,12 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
           <Badge
             variant={match.status === "interested" ? "default" : match.status === "revealed" ? "secondary" : "outline"}
           >
-            {match.status}
+            {match.status.charAt(0).toUpperCase() + match.status.slice(1)}
           </Badge>
         )}
         {match.status === "revealed" && reveal?.status === "accepted" && thread && (
           <Button size="sm" variant="secondary" render={<Link href={`/thread/${thread.id}`} />}>
-            Open conversation
+            Message recruiter
           </Button>
         )}
       </div>

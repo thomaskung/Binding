@@ -81,7 +81,7 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   await recruiter.getByTestId("recruiter-onboarding-continue").click();
   await expect(recruiter.getByTestId("recruiter-onboarding-finish-skip")).toBeVisible();
   await recruiter.getByTestId("recruiter-onboarding-finish-skip").click();
-  await recruiter.waitForURL(/\/recruiter\/jobs$/);
+  await recruiter.waitForURL(/\/recruiter$/);
   await expect(recruiter.getByTestId("points-balance")).toHaveText("100 points");
 
   // --- Recruiter posts + publishes a job ---

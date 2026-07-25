@@ -40,7 +40,7 @@ test("seeker nav rail: Job and Benefit land on the right screens", async ({ page
 
 test("recruiter nav rail: all five items live, no disabled placeholders", async ({ page }) => {
   await signIn(page, RECRUITER);
-  await page.waitForURL(/\/recruiter\/jobs$/); // /recruiter redirects to the job list until the pipeline dashboard lands
+  await page.waitForURL(/\/recruiter$/); // the aggregate pipeline dashboard
   await expandRail(page);
 
   const nav = page.locator("aside nav");
