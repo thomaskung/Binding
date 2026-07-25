@@ -4,8 +4,9 @@ import { AuthNav } from "@/components/auth-nav";
 import { getSessionProfile } from "@/lib/auth";
 import { activateRecruiter } from "../actions";
 
-/** Recruiter activation: name + company/agency (shown to candidates on jobs
- * and threads — basic trust requirement) + ToS. */
+/** Recruiter activation — step 1 of 3: name + company/agency (shown to
+ * candidates on jobs and threads — basic trust requirement) + ToS. Steps 2-3
+ * (company details, first job post) live at /onboarding/recruiter/profile. */
 export default async function RecruiterOnboardingPage() {
   const session = await getSessionProfile();
   if (!session) redirect("/login");
@@ -17,9 +18,10 @@ export default async function RecruiterOnboardingPage() {
       <main className="flex flex-1 items-center justify-center p-8">
         <Card className="w-full max-w-lg">
         <CardHeader>
-          <CardTitle>Start hiring</CardTitle>
+          <CardTitle className="font-medium">Start hiring</CardTitle>
           <CardDescription>
-            Candidates always see who&apos;s contacting them — company identity is required.
+            Step 1 of 3 — candidates always see who&apos;s contacting them, so company identity is
+            required.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -60,7 +62,7 @@ export default async function RecruiterOnboardingPage() {
               </span>
             </label>
             <Button type="submit" className="w-full" data-testid="recruiter-continue">
-              Start hiring
+              Continue
             </Button>
           </form>
         </CardContent>

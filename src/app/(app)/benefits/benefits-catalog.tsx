@@ -32,7 +32,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 function PartnerCard({ partner, unlocked }: { partner: Partner; unlocked: boolean }) {
   const [revealed, setRevealed] = useState(false);
   return (
-    <Card className="jb-lift" data-testid="benefit-partner-card">
+    <Card data-testid="benefit-partner-card">
       <CardHeader>
         <CardTitle className="text-base">{partner.partner_name}</CardTitle>
         <CardDescription>{partner.discount_description}</CardDescription>
@@ -77,15 +77,15 @@ export function BenefitsCatalog({ tier, lifetimePoints, metricKind, partners }: 
 
   return (
     <>
-      <header className="jb-fade flex flex-col gap-1">
-        <h1 className="font-heading text-2xl font-medium tracking-tight">Benefits</h1>
+      <header className="flex flex-col gap-1">
+        <h1 className="text-2xl font-medium tracking-tight">Benefits</h1>
         <p className="text-sm text-muted-foreground">
           Reached via {lifetimePoints} lifetime points {metricKind} — this is a read-only signal, never
           debits your points balance to reach or keep.
         </p>
       </header>
 
-      <Card className="jb-lift">
+      <Card>
         <CardContent className="flex items-center gap-4 py-6">
           <div
             className="flex size-20 flex-none items-center justify-center rounded-full"
@@ -94,7 +94,7 @@ export function BenefitsCatalog({ tier, lifetimePoints, metricKind, partners }: 
             }}
           >
             <div className="flex size-15 items-center justify-center rounded-full bg-card">
-              <span className="font-heading text-lg font-medium">T{tier}</span>
+              <span className="text-lg font-medium">T{tier}</span>
             </div>
           </div>
           <div className="flex flex-col gap-1">

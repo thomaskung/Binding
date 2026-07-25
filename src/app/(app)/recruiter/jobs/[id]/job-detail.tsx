@@ -23,9 +23,9 @@ export function JobDetail({ job, matchCount }: { job: EditableJob; matchCount: n
 
   return (
     <div className="space-y-6">
-      <header className="jb-fade flex items-start justify-between gap-6">
+      <header className="flex items-start justify-between gap-6">
         <div className="flex flex-col gap-1">
-          <h1 className="font-heading text-2xl font-medium tracking-tight">{job.title}</h1>
+          <h1 className="text-2xl font-medium tracking-tight">{job.title}</h1>
           <p className="text-sm text-muted-foreground">{metaLine || "No details yet"}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -38,7 +38,7 @@ export function JobDetail({ job, matchCount }: { job: EditableJob; matchCount: n
         </div>
       </header>
 
-      <Card className="jb-lift">
+      <Card>
         <CardHeader>
           <CardTitle className="text-sm">Basics</CardTitle>
           <CardAction>
@@ -51,7 +51,7 @@ export function JobDetail({ job, matchCount }: { job: EditableJob; matchCount: n
         </CardContent>
       </Card>
 
-      <Card className="jb-lift">
+      <Card>
         <CardHeader>
           <CardTitle className="text-sm">Salary</CardTitle>
         </CardHeader>
@@ -66,7 +66,7 @@ export function JobDetail({ job, matchCount }: { job: EditableJob; matchCount: n
       </Card>
 
       {job.skills.length > 0 && (
-        <Card className="jb-lift">
+        <Card>
           <CardHeader>
             <CardTitle className="text-sm">Skills</CardTitle>
           </CardHeader>
@@ -80,7 +80,7 @@ export function JobDetail({ job, matchCount }: { job: EditableJob; matchCount: n
         </Card>
       )}
 
-      <Card className="jb-lift">
+      <Card>
         <CardHeader>
           <CardTitle className="text-sm">Description</CardTitle>
         </CardHeader>
@@ -90,7 +90,7 @@ export function JobDetail({ job, matchCount }: { job: EditableJob; matchCount: n
       </Card>
 
       {job.requirements.length > 0 && (
-        <Card className="jb-lift">
+        <Card>
           <CardHeader>
             <CardTitle className="text-sm">Requirements</CardTitle>
           </CardHeader>

@@ -75,9 +75,9 @@ export function RecruiterProfileEditor(props: Props) {
 
   return (
     <main className="mx-auto max-w-4xl space-y-6 p-8">
-      <header className="jb-fade flex items-start justify-between gap-6">
+      <header className="flex items-start justify-between gap-6">
         <div className="flex flex-col gap-1">
-          <h1 className="font-heading text-2xl font-medium tracking-tight">Your profile</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Your profile</h1>
           <p className="text-sm text-muted-foreground">
             {view === "internal"
               ? "How your recruiter profile looks to you"
@@ -100,7 +100,7 @@ export function RecruiterProfileEditor(props: Props) {
 
       <div className="grid grid-cols-[280px_1fr] items-start gap-5">
         <div className="flex flex-col gap-4">
-          <Card className="jb-lift">
+          <Card>
             <CardContent className="flex flex-col items-center gap-3 py-6 text-center">
               <div className="flex h-19 w-19 items-center justify-center rounded-full bg-secondary text-2xl font-semibold text-secondary-foreground">
                 {initialsOf(displayName)}
@@ -131,7 +131,7 @@ export function RecruiterProfileEditor(props: Props) {
           </Card>
 
           {view === "internal" ? (
-            <Card className="jb-lift">
+            <Card>
               <CardContent className="space-y-2 py-4">
                 <p className="text-xs text-muted-foreground">Contact (never shown to candidates)</p>
                 <Label className="text-xs">Email</Label>
@@ -141,7 +141,7 @@ export function RecruiterProfileEditor(props: Props) {
               </CardContent>
             </Card>
           ) : (
-            <Card className="jb-lift">
+            <Card>
               <CardContent className="flex justify-center py-4">
                 <Button variant="outline" size="sm">
                   Message recruiter
@@ -151,7 +151,7 @@ export function RecruiterProfileEditor(props: Props) {
           )}
 
           {view === "internal" && (
-            <Card className="jb-lift">
+            <Card>
               <CardHeader>
                 <CardTitle className="text-sm">Reveal credits</CardTitle>
                 <CardAction>
@@ -171,7 +171,7 @@ export function RecruiterProfileEditor(props: Props) {
         </div>
 
         <div className="flex flex-col gap-4">
-          <Card className="jb-lift">
+          <Card>
             <CardHeader>
               <CardTitle className="text-sm">Company info</CardTitle>
             </CardHeader>
@@ -219,7 +219,7 @@ export function RecruiterProfileEditor(props: Props) {
             </CardContent>
           </Card>
 
-          <Card className="jb-lift">
+          <Card>
             <CardHeader>
               <CardTitle className="text-sm">{view === "internal" ? "Open roles" : "Matched job"}</CardTitle>
             </CardHeader>

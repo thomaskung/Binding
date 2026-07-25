@@ -111,7 +111,7 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
             ← Cancel
           </Button>
           <div className="flex min-w-0 flex-col">
-            <span className="truncate font-heading text-sm font-medium">{title.trim() || "Untitled role"}</span>
+            <span className="truncate text-sm font-medium">{title.trim() || "Untitled role"}</span>
             <span className="text-xs text-muted-foreground">{completion} of 8 fields complete</span>
           </div>
         </div>
@@ -127,7 +127,7 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
         </div>
       </div>
 
-      <Card className="jb-lift">
+      <Card>
         <CardHeader>
           <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Basics</h2>
           <p className="text-sm text-muted-foreground">The essentials candidates see first.</p>
@@ -203,7 +203,7 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
         </CardContent>
       </Card>
 
-      <Card className="jb-lift">
+      <Card>
         <CardHeader>
           <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Compensation</h2>
           <p className="text-sm text-muted-foreground">Set a range and choose whether it&apos;s public.</p>
@@ -252,7 +252,7 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
         </CardContent>
       </Card>
 
-      <Card className="jb-lift">
+      <Card>
         <CardHeader>
           <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Skills</h2>
           <p className="text-sm text-muted-foreground">Used to match candidates to this role.</p>
@@ -281,7 +281,7 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
         </CardContent>
       </Card>
 
-      <Card className="jb-lift">
+      <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
@@ -337,7 +337,7 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
         </CardContent>
       </Card>
 
-      <Card className="jb-lift">
+      <Card>
         <CardHeader>
           <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
             What they&apos;ll do
@@ -354,7 +354,7 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
         </CardContent>
       </Card>
 
-      <Card className="jb-lift">
+      <Card>
         <CardHeader>
           <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Requirements</h2>
           <p className="text-sm text-muted-foreground">One requirement per line.</p>

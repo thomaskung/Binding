@@ -47,9 +47,9 @@ export function TrainingHome({ seekerTier, creditBalance, programs, assignments 
 
   return (
     <>
-      <header className="jb-fade flex items-start justify-between gap-6">
+      <header className="flex items-start justify-between gap-6">
         <div className="flex flex-col gap-1">
-          <h1 className="font-heading text-2xl font-medium tracking-tight">Training</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Training</h1>
           <p className="text-sm text-muted-foreground">
             Career-path and compliance programs. Complete a program to earn credits and points.
           </p>
@@ -61,7 +61,7 @@ export function TrainingHome({ seekerTier, creditBalance, programs, assignments 
       </header>
 
       {assignments.length > 0 && (
-        <Card className="jb-lift" data-testid="assigned-training-card">
+        <Card data-testid="assigned-training-card">
           <CardHeader>
             <CardTitle>Assigned by your employer</CardTitle>
             <CardDescription>Licensed programs, no credits involved.</CardDescription>
@@ -100,7 +100,7 @@ export function TrainingHome({ seekerTier, creditBalance, programs, assignments 
           const cost = seekerTier === "pro" ? 0 : p.creditCost;
           const canAfford = cost === 0 || creditBalance >= cost;
           return (
-            <Card className="jb-lift" key={p.id} data-testid="training-program-card">
+            <Card key={p.id} data-testid="training-program-card">
               <CardHeader>
                 <CardTitle className="text-base">{p.title}</CardTitle>
                 <CardDescription>{p.description}</CardDescription>

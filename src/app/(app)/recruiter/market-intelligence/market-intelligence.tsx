@@ -61,9 +61,9 @@ export function MarketIntelligence({
 
   return (
     <>
-      <header className="jb-fade flex items-start justify-between gap-6">
+      <header className="flex items-start justify-between gap-6">
         <div className="flex flex-col gap-1">
-          <h1 className="font-heading text-2xl font-medium tracking-tight">Market intelligence</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Market intelligence</h1>
           <p className="text-sm text-muted-foreground">
             Aggregate hiring signals from opted-in candidates — never individual data.
           </p>
@@ -82,7 +82,7 @@ export function MarketIntelligence({
 
       {section === "skills" ? (
         <>
-          <Card className="jb-lift">
+          <Card>
             <CardHeader>
               <CardTitle>In-demand skills</CardTitle>
               <CardDescription>Seekers with each skill in their profile, opted into market insights.</CardDescription>
@@ -104,7 +104,7 @@ export function MarketIntelligence({
             </CardContent>
           </Card>
 
-          <Card className="jb-lift">
+          <Card>
             <CardHeader>
               <CardTitle>Demand by location</CardTitle>
               <CardDescription>Same skill signal, broken down by candidate region.</CardDescription>
@@ -130,7 +130,7 @@ export function MarketIntelligence({
         </>
       ) : (
         <>
-          <Card className="jb-lift">
+          <Card>
             <CardHeader>
               <CardTitle>Salary-range trends</CardTitle>
               <CardDescription>Average minimum base salary expectation by target role.</CardDescription>
@@ -154,7 +154,7 @@ export function MarketIntelligence({
             </CardContent>
           </Card>
 
-          <Card className="jb-lift">
+          <Card>
             <CardHeader>
               <CardTitle>Salary by seniority</CardTitle>
               <CardDescription>Same salary signal, broken down by years-of-experience band.</CardDescription>
@@ -189,7 +189,7 @@ export function MarketIntelligence({
       )}
 
       {!fullAccess && (
-        <Card className="border-primary jb-lift">
+        <Card className="border-primary">
           <CardContent className="flex items-center justify-between py-4">
             <p className="text-sm">Get the full breakdown — trends by seniority and location.</p>
             <div className="flex items-center gap-2">

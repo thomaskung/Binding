@@ -46,7 +46,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
     <main className="mx-auto max-w-2xl space-y-6 p-8">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">
+          <h1 className="text-xl font-medium">
             Conversation — {job?.title ?? "role"}
             {recruiterProfile?.company_name ? ` · ${recruiterProfile.company_name}` : ""}
           </h1>

@@ -17,7 +17,7 @@ export function RoleChooserCards({
         data-testid="choose-seeker"
         onClick={() => onPick("seeker")}
       >
-        <span className="text-lg font-semibold">Find a job</span>
+        <span className="text-lg font-medium">Find a job</span>
         <span className="text-xs text-muted-foreground">
           Join the talent pool, pseudonymously
         </span>
@@ -28,7 +28,7 @@ export function RoleChooserCards({
         data-testid="choose-recruiter"
         onClick={() => onPick("recruiter")}
       >
-        <span className="text-lg font-semibold">Hire talent</span>
+        <span className="text-lg font-medium">Hire talent</span>
         <span className="text-xs text-muted-foreground">
           Post roles, reveal matched candidates
         </span>

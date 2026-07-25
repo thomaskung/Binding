@@ -73,8 +73,16 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   await recruiter.getByTestId("recruiter-company").fill("Nimbus Search Group");
   await recruiter.getByTestId("recruiter-tos").check();
   await recruiter.getByTestId("recruiter-continue").click();
-  await recruiter.waitForURL(/\/recruiter$/);
-  await expect(recruiter.getByTestId("points-balance")).toHaveText("100 pts");
+  await recruiter.waitForURL(/onboarding\/recruiter\/profile/);
+
+  // Steps 2-3 of the recruiter wizard: company details, then skip the
+  // first-job-post hand-off (this test posts its own job explicitly below).
+  await recruiter.getByTestId("recruiter-onboarding-industry").fill("Recruiting");
+  await recruiter.getByTestId("recruiter-onboarding-continue").click();
+  await expect(recruiter.getByTestId("recruiter-onboarding-finish-skip")).toBeVisible();
+  await recruiter.getByTestId("recruiter-onboarding-finish-skip").click();
+  await recruiter.waitForURL(/\/recruiter\/jobs$/);
+  await expect(recruiter.getByTestId("points-balance")).toHaveText("100 points");
 
   // --- Recruiter posts + publishes a job ---
   await recruiter.goto("/recruiter/jobs/new");
@@ -119,7 +127,7 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   await seeker.getByRole("button", { name: "Save settings" }).click();
 
   // Seeker sees the match but does NOT opt in.
-  await seeker.goto("/seeker?view=matches");
+  await seeker.goto("/seeker/matches");
   await expect(seeker.getByTestId("seeker-match-card").first()).toBeVisible();
 
   // --- Recruiter override-reveals the non-opted-in candidate ---
@@ -129,8 +137,8 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
     timeout: 15_000,
   });
   await expect(recruiter.getByTestId("override-pending-note")).toBeVisible();
-  await recruiter.goto("/recruiter");
-  await expect(recruiter.getByTestId("points-balance")).toHaveText("75 pts"); // 100 - 25
+  await recruiter.goto("/recruiter/jobs");
+  await expect(recruiter.getByTestId("points-balance")).toHaveText("75 points"); // 100 - 25
 
   // --- Seeker sees the pending override card (earned 5 pts) and declines ---
   await seeker.goto("/seeker");
@@ -140,8 +148,8 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   await expect(seeker.getByTestId("pending-override-card")).toHaveCount(0);
 
   // --- Recruiter refunded the 15-pt premium: 75 + 15 = 90 ---
-  await recruiter.goto("/recruiter");
-  await expect(recruiter.getByTestId("points-balance")).toHaveText("90 pts");
+  await recruiter.goto("/recruiter/jobs");
+  await expect(recruiter.getByTestId("points-balance")).toHaveText("90 points");
 
   await recruiterCtx.close();
   await seekerCtx.close();

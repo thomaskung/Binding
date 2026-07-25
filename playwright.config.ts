@@ -2,7 +2,10 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
-  timeout: 60_000,
+  // 120s: local dev-mode runs pay on-demand Turbopack compiles + slow-machine
+  // variance; the journey specs (smoke, override) legitimately run 50s+ even
+  // when healthy.
+  timeout: 120_000,
   // Specs share one local DB — run serially to keep state deterministic.
   workers: 1,
   fullyParallel: false,

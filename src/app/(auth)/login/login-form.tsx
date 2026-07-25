@@ -82,7 +82,7 @@ export function LoginForm({ intent }: { intent: SignupIntent | null }) {
       {step === "email" && (
         <>
           <CardHeader>
-            <CardTitle>Welcome back</CardTitle>
+            <CardTitle className="font-medium">Welcome back</CardTitle>
             <CardDescription>Sign in to see your job matches</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -126,7 +126,7 @@ export function LoginForm({ intent }: { intent: SignupIntent | null }) {
       {step === "auth" && (
         <>
           <CardHeader>
-            <CardTitle>Enter your password</CardTitle>
+            <CardTitle className="font-medium">Enter your password</CardTitle>
             <CardDescription>{email}</CardDescription>
             <CardAction>
               <Button
@@ -176,7 +176,7 @@ export function LoginForm({ intent }: { intent: SignupIntent | null }) {
       {step === "sent" && (
         <>
           <CardHeader>
-            <CardTitle>Check your inbox</CardTitle>
+            <CardTitle className="font-medium">Check your inbox</CardTitle>
             <CardDescription>
               We sent a one-tap sign-in link to {email}. It expires in 15 minutes.
             </CardDescription>

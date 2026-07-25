@@ -17,7 +17,7 @@ export default async function SeekerOnboardingPage() {
       <main className="flex flex-1 items-center justify-center p-8">
         <Card className="w-full max-w-lg">
         <CardHeader>
-          <CardTitle>Join the talent pool</CardTitle>
+          <CardTitle className="font-medium">Join the talent pool</CardTitle>
           <CardDescription>Step 1 of 3 — your name and consent.</CardDescription>
         </CardHeader>
         <CardContent>

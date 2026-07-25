@@ -52,11 +52,14 @@ test("full reveal slice", async ({ browser }) => {
   });
 
   // --- Seeker: match surfaced, express interest ---
-  await seeker.goto("/seeker?view=matches");
+  await seeker.goto("/seeker/matches");
   const matchCard = seeker.getByTestId("seeker-match-card").first();
   await expect(matchCard).toBeVisible();
   await matchCard.getByTestId("match-interested").click();
-  await expect(matchCard.getByText("interested")).toBeVisible();
+  // exact: true — the status BADGE ("interested"), not the "I'm interested"
+  // button that substring-matching would hit instantly, before the server
+  // write commits (that race let the recruiter see a stale "surfaced" state).
+  await expect(matchCard.getByText("interested", { exact: true })).toBeVisible({ timeout: 15_000 });
 
   // --- Recruiter: reveal (100 -> 90 pts) ---
   await recruiter.getByTestId("view-matches").click();
@@ -65,11 +68,11 @@ test("full reveal slice", async ({ browser }) => {
     timeout: 15_000,
   });
   await expect(recruiter.getByTestId("fit-summary")).toBeVisible();
-  await recruiter.goto("/recruiter");
-  await expect(recruiter.getByTestId("points-balance")).toHaveText("90 pts");
+  await recruiter.goto("/recruiter/jobs");
+  await expect(recruiter.getByTestId("points-balance")).toHaveText("90 points");
 
   // --- Messaging, both directions ---
-  await recruiter.goto("/recruiter");
+  await recruiter.goto("/recruiter/jobs");
   await recruiter.getByRole("link", { name: "Backend Engineer, Payments" }).click();
   await recruiter.getByTestId("view-matches").click();
   await recruiter.getByTestId("open-thread").click();
@@ -77,7 +80,7 @@ test("full reveal slice", async ({ browser }) => {
   await recruiter.getByTestId("message-send").click();
   await expect(recruiter.getByTestId("message-bubble")).toHaveCount(1);
 
-  await seeker.goto("/seeker?view=matches");
+  await seeker.goto("/seeker/matches");
   await seeker.getByRole("button", { name: "Open conversation" }).click();
   await expect(seeker.getByTestId("message-bubble")).toHaveCount(1);
   await seeker.getByTestId("message-input").fill("Sounds interesting — tell me more.");

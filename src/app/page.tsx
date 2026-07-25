@@ -21,7 +21,7 @@ export default async function LandingPage() {
     <div className="flex min-h-screen flex-col">
       <AuthNav context="landing" />
       <main className="mx-auto flex max-w-2xl flex-1 flex-col items-center justify-center gap-6 p-8 text-center">
-        <h1 className="text-4xl font-bold tracking-tight">JumpOnBoard</h1>
+        <h1 className="text-4xl font-medium tracking-tight">JumpOnBoard</h1>
         <p className="text-lg text-muted-foreground">
           Privacy-first hiring for APAC. Match on skills and compensation fit —
           before anyone sees your name.

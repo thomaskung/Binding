@@ -87,5 +87,5 @@ export async function activateRecruiter(formData: FormData) {
   });
   await seedBalance(admin, user.id, "recruiter");
 
-  redirect("/recruiter");
+  redirect("/onboarding/recruiter/profile");
 }

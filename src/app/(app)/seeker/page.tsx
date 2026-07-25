@@ -1,14 +1,11 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Badge, Button, Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@jumponboard/ui";
 import { requireRole } from "@/lib/auth";
-import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
-import { expireStaleOverride, getBalance, OVERRIDE_COMPENSATION } from "@/lib/points";
-import { matchBand, type SeekerTier } from "@/lib/matching";
-import { isStale } from "@/lib/profile";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getLifetimeEarnedPoints, benefitTierProgress } from "@/lib/benefits";
 import { getTrainingCreditBalance } from "@/lib/training";
-import { OverrideResponseButtons } from "./override-response";
-import { MatchList, type SeekerMatchCard } from "./match-list";
+import { loadSeekerContext, SeekerBanners } from "./seeker-data";
 
 const BAND_LABEL = { high: "High match", normal: "Normal match", low: "Low match" } as const;
 const BAND_VARIANT = { high: "default", normal: "secondary", low: "outline" } as const;
@@ -18,154 +15,16 @@ export default async function SeekerDashboard({
 }: {
   searchParams: Promise<{ view?: string }>;
 }) {
+  // Legacy URL: the matches list lived at ?view=matches before it became a
+  // path route (founder's no-query-param routing rule).
   const { view } = await searchParams;
+  if (view === "matches") redirect("/seeker/matches");
+
   const session = await requireRole("seeker");
+  const context = await loadSeekerContext(session.userId);
+  const { profile, cards } = context;
+
   const supabase = await createSupabaseServerClient();
-
-  const [{ data: profile }, { data: matches }, { data: reveals }, balance] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("display_name, published_text, visibility, seeker_tier, last_profile_activity_at")
-      .eq("id", session.userId)
-      .single(),
-    supabase
-      .from("matches")
-      .select(
-        "id, status, score, created_at, job_postings(id, title, salary_min, salary_max, work_setups, profiles!job_postings_recruiter_id_fkey(company_name))",
-      )
-      .eq("profile_id", session.userId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("reveal_requests")
-      .select(
-        "id, match_id, path, status, refunded, created_at, recruiter_id, job_postings(title), profiles!reveal_requests_recruiter_id_fkey(company_name, display_name), message_threads(id)",
-      )
-      .eq("profile_id", session.userId),
-    getBalance(supabase, session.userId),
-  ]);
-
-  // Lazy expiry pass on any stale pending overrides (7-day window, no cron).
-  // Each check is independent (short-circuits with zero DB calls unless the
-  // reveal is actually a pending override past the window) — run in
-  // parallel rather than serializing one round-trip per reveal.
-  const admin = createSupabaseAdminClient();
-  const expiryResults = await Promise.all(
-    (reveals ?? []).map((r) =>
-      expireStaleOverride(admin, {
-        id: r.id,
-        path: r.path,
-        status: r.status,
-        recruiter_id: r.recruiter_id,
-        created_at: r.created_at,
-        refunded: r.refunded,
-      }),
-    ),
-  );
-  const activeReveals = (reveals ?? []).map((r, i) =>
-    expiryResults[i] ? { ...r, status: "declined" as const } : r,
-  );
-
-  const threadByMatch = new Map(
-    activeReveals.map((r) => {
-      const thread = Array.isArray(r.message_threads) ? r.message_threads[0] : r.message_threads;
-      return [r.match_id, thread?.id ?? null] as const;
-    }),
-  );
-  const pendingOverrides = activeReveals.filter(
-    (r) => r.path === "override" && r.status === "pending",
-  );
-  const pendingByMatch = new Set(pendingOverrides.map((r) => r.match_id));
-
-  // Rank (ordinal by true score desc) stands in for the raw score on the
-  // client — "best match" sort works without ever exposing exact cosine
-  // similarity to the seeker (matches.score is recruiter-only, migration 0001).
-  const seekerTier: SeekerTier = profile?.seeker_tier === "pro" ? "pro" : "free";
-  const byScoreDesc = [...(matches ?? [])].sort((a, b) => b.score - a.score);
-  const rankByMatch = new Map(byScoreDesc.map((m, i) => [m.id, i + 1]));
-
-  const cards: SeekerMatchCard[] = (matches ?? []).map((match) => {
-    const job = Array.isArray(match.job_postings) ? match.job_postings[0] : match.job_postings;
-    const company = job
-      ? (Array.isArray(job.profiles) ? job.profiles[0] : job.profiles)?.company_name
-      : null;
-    return {
-      id: match.id,
-      title: job?.title ?? "Role",
-      company: company ?? null,
-      salaryMin: job?.salary_min ?? null,
-      salaryMax: job?.salary_max ?? null,
-      workSetups: job?.work_setups ?? [],
-      status: match.status,
-      band: matchBand(match.score, seekerTier),
-      rank: rankByMatch.get(match.id) ?? Number.MAX_SAFE_INTEGER,
-      pendingOverride: pendingByMatch.has(match.id),
-      threadId: threadByMatch.get(match.id) ?? null,
-    };
-  });
-
-  const finishProfileBanner = !profile?.published_text && (
-    <Card className="border-dashed">
-      <CardContent className="flex items-center justify-between py-4">
-        <p className="text-sm">Finish your profile to enter the matching pool — it takes two minutes.</p>
-        <Button size="sm" render={<Link href="/seeker/profile" />}>
-          Finish profile
-        </Button>
-      </CardContent>
-    </Card>
-  );
-
-  const staleNudgeBanner = profile?.published_text && isStale(profile.last_profile_activity_at) && (
-    <Card className="border-primary" data-testid="stale-nudge-card">
-      <CardContent className="flex items-center justify-between py-4">
-        <p className="text-sm">
-          Your profile hasn&apos;t changed in a while — a quick update keeps your matches sharp.
-        </p>
-        <Button size="sm" render={<Link href="/seeker/nudge" />}>
-          Draft update
-        </Button>
-      </CardContent>
-    </Card>
-  );
-
-  const overrideBanners = pendingOverrides.map((reveal) => {
-    const job = Array.isArray(reveal.job_postings) ? reveal.job_postings[0] : reveal.job_postings;
-    const recruiter = Array.isArray(reveal.profiles) ? reveal.profiles[0] : reveal.profiles;
-    return (
-      <Card key={reveal.id} className="border-primary" data-testid="pending-override-card">
-        <CardHeader>
-          <CardTitle className="text-lg">
-            {recruiter?.company_name ?? recruiter?.display_name ?? "A recruiter"} revealed your profile
-          </CardTitle>
-          <CardDescription>
-            For the role: {job?.title ?? "a job"}. You earned {OVERRIDE_COMPENSATION} pts for the
-            reveal — accept to open the conversation, or decline (they cannot override you again for
-            30 days). Expires 7 days after the reveal.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <OverrideResponseButtons revealId={reveal.id} />
-        </CardContent>
-      </Card>
-    );
-  });
-
-  if (view === "matches") {
-    return (
-      <main className="mx-auto max-w-3xl space-y-6 p-8">
-        <header className="jb-fade flex flex-col gap-1">
-          <h1 className="font-heading text-2xl font-medium tracking-tight">Job matches</h1>
-          <p className="text-sm text-muted-foreground">
-            {cards.length} role{cards.length === 1 ? "" : "s"} matched to your profile
-          </p>
-        </header>
-        {finishProfileBanner}
-        {staleNudgeBanner}
-        {overrideBanners}
-        <MatchList cards={cards} />
-      </main>
-    );
-  }
-
   const firstName = (profile?.display_name || "there").split(" ")[0];
   const [trainingBalance, lifetimeEarned] = await Promise.all([
     getTrainingCreditBalance(supabase, session.userId),
@@ -180,8 +39,8 @@ export default async function SeekerDashboard({
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-8">
-      <header className="jb-fade flex flex-col gap-1">
-        <h1 className="font-heading text-2xl font-medium tracking-tight">Good to see you, {firstName}</h1>
+      <header className="flex flex-col gap-1">
+        <h1 className="text-2xl font-medium tracking-tight">Good to see you, {firstName}</h1>
         <p className="text-sm text-muted-foreground">
           {profile?.published_text
             ? "Your profile is live and pseudonymized. Here's what's moving."
@@ -189,12 +48,10 @@ export default async function SeekerDashboard({
         </p>
       </header>
 
-      {finishProfileBanner}
-      {staleNudgeBanner}
-      {overrideBanners}
+      <SeekerBanners context={context} />
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Card className="jb-lift">
+        <Card>
           <CardHeader>
             <CardTitle>New matches</CardTitle>
             <CardDescription>Filtered by your dealbreakers</CardDescription>
@@ -224,13 +81,13 @@ export default async function SeekerDashboard({
             )}
           </CardContent>
           <CardContent className="pt-0">
-            <Button variant="outline" size="sm" render={<Link href="/seeker?view=matches" />}>
+            <Button variant="outline" size="sm" render={<Link href="/seeker/matches" />}>
               View all matches
             </Button>
           </CardContent>
         </Card>
 
-        <Card className="jb-lift">
+        <Card>
           <CardHeader>
             <CardTitle>Benefits</CardTitle>
             <CardDescription>Loyalty tier, from lifetime points earned</CardDescription>
@@ -243,7 +100,7 @@ export default async function SeekerDashboard({
               }}
             >
               <div className="flex size-12 items-center justify-center rounded-full bg-card">
-                <span className="font-heading text-sm font-medium">T{tier}</span>
+                <span className="text-sm font-medium">T{tier}</span>
               </div>
             </div>
             <div className="flex flex-col gap-1">
@@ -256,14 +113,14 @@ export default async function SeekerDashboard({
         </Card>
       </div>
 
-      <Card className="jb-lift">
+      <Card>
         <CardHeader>
           <CardTitle>Training</CardTitle>
           <CardDescription>Reskill toward your target role</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-between">
           <div className="flex flex-col">
-            <span className="font-heading text-3xl font-medium">{trainingBalance}</span>
+            <span className="text-3xl font-medium">{trainingBalance}</span>
             <span className="text-xs text-muted-foreground">training credits</span>
           </div>
           <Button variant="outline" size="sm" render={<Link href="/training" />}>

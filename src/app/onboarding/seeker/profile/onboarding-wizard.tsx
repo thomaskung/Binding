@@ -193,7 +193,7 @@ export function OnboardingWizard(props: Props) {
     return (
       <Card className="mx-auto max-w-lg">
         <CardHeader>
-          <CardTitle>Dealbreakers</CardTitle>
+          <CardTitle className="font-medium">Dealbreakers</CardTitle>
           <CardDescription>Step 3 of 3 — matches that don&apos;t clear these never surface.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -248,7 +248,7 @@ export function OnboardingWizard(props: Props) {
   return (
     <Card className="mx-auto max-w-2xl">
       <CardHeader>
-        <CardTitle>Your resume</CardTitle>
+        <CardTitle className="font-medium">Your resume</CardTitle>
         <CardDescription>
           Step 2 of 3 — upload or paste your resume. Recruiters only ever see a redacted,
           skills-based profile; we only file what your resume says, we never invent experience.

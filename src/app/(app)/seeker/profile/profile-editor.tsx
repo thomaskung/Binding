@@ -339,7 +339,7 @@ export function ProfileEditor(props: Props) {
     <main className="mx-auto max-w-5xl space-y-6 p-8">
       <header className="flex items-start justify-between gap-6">
         <div className="flex flex-col gap-1">
-          <h1 className="font-heading text-2xl font-medium tracking-tight">Your profile</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Your profile</h1>
           <p className="text-sm text-muted-foreground">
             {view === "canvas"
               ? "Write and refine the resume text that gets redacted, embedded, and matched."
