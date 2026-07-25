@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Badge, Button, Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle, Separator, Tabs, TabsList, TabsTrigger } from "@jumponboard/ui";
+import { useTransition } from "react";
+import { Badge, Button, Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from "@jumponboard/ui";
 import { completeAssignedTraining, completeTrainingProgram } from "./actions";
 
 export interface TrainingProgramView {
@@ -30,13 +30,14 @@ interface Props {
   assignments: AssignedProgramView[];
 }
 
-const TRACK_LABEL = { career_path: "Career path", compliance: "Compliance" } as const;
-
+/** Training hub (TrainingHome template): the two tracks side by side —
+ * individual career path and corporate compliance — with per-program credit
+ * cost in each card footer. The template's "Sponsored" contextual-ad slot is
+ * not built: no ad inventory exists, and a fake sponsor card would be
+ * dishonest chrome. Completion mechanics (affordability gating, employer
+ * assignments) are the real ones, not the template's inert Start buttons. */
 export function TrainingHome({ seekerTier, creditBalance, programs, assignments }: Props) {
-  const [track, setTrack] = useState<"career_path" | "compliance">("career_path");
   const [pending, startTransition] = useTransition();
-
-  const visible = programs.filter((p) => p.track === track);
 
   function complete(programId: string) {
     startTransition(() => completeTrainingProgram(programId));
@@ -45,13 +46,57 @@ export function TrainingHome({ seekerTier, creditBalance, programs, assignments 
     startTransition(() => completeAssignedTraining(assignmentId));
   }
 
+  function ProgramCard({ p }: { p: TrainingProgramView }) {
+    const cost = seekerTier === "pro" ? 0 : p.creditCost;
+    const canAfford = cost === 0 || creditBalance >= cost;
+    return (
+      <Card size="sm" data-testid="training-program-card">
+        <CardHeader>
+          <CardTitle className="text-[15px]">{p.title}</CardTitle>
+          <CardDescription>
+            {p.type === "guided"
+              ? `Guided course · ${p.moduleCount} module${p.moduleCount === 1 ? "" : "s"}`
+              : "AI quiz · adapts to your answers"}
+          </CardDescription>
+          <CardAction>
+            <Badge variant={p.type === "guided" ? "outline" : "default"}>
+              {p.type === "guided" ? "Guided" : "AI quiz"}
+            </Badge>
+          </CardAction>
+        </CardHeader>
+        <CardFooter>
+          <div className="flex w-full items-center justify-between gap-2">
+            <span className="text-[13px] text-muted-foreground">
+              {cost === 0 ? "Free" : `${cost} credits`}
+            </span>
+            {p.completed ? (
+              <Badge>Completed</Badge>
+            ) : (
+              <Button
+                size="sm"
+                disabled={pending || !canAfford}
+                onClick={() => complete(p.id)}
+                data-testid="complete-program"
+              >
+                {canAfford ? "Complete program" : "Need more credits"}
+              </Button>
+            )}
+          </div>
+        </CardFooter>
+      </Card>
+    );
+  }
+
+  const careerPrograms = programs.filter((p) => p.track === "career_path");
+  const compliancePrograms = programs.filter((p) => p.track === "compliance");
+
   return (
     <>
-      <header className="flex items-start justify-between gap-6">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-medium tracking-tight">Training</h1>
+      <header className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-[28px] font-semibold tracking-tight">Training</h1>
           <p className="text-sm text-muted-foreground">
-            Career-path and compliance programs. Complete a program to earn credits and points.
+            Guided courses and AI quizzes — spend credits, build your profile
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
@@ -60,86 +105,63 @@ export function TrainingHome({ seekerTier, creditBalance, programs, assignments 
         </div>
       </header>
 
-      {assignments.length > 0 && (
-        <Card data-testid="assigned-training-card">
-          <CardHeader>
-            <CardTitle>Assigned by your employer</CardTitle>
-            <CardDescription>Licensed programs, no credits involved.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {assignments.map((a) => (
-              <div key={a.id} className="flex items-center justify-between gap-4 rounded-md border p-3">
-                <div>
-                  <p className="text-sm font-medium">{a.title}</p>
-                  <p className="text-xs text-muted-foreground">{a.moduleCount} modules</p>
-                </div>
-                {a.completed ? (
-                  <Badge>Completed</Badge>
-                ) : (
-                  <Button size="sm" disabled={pending} onClick={() => completeAssigned(a.id)}>
-                    Mark complete
-                  </Button>
-                )}
-              </div>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div>
+          <h3 className="mb-1 text-[15px] font-semibold tracking-tight">Career path</h3>
+          <p className="mb-3.5 text-[13px] text-muted-foreground">
+            Individual growth — skills, offers, and interview readiness
+          </p>
+          <div className="flex flex-col gap-3.5">
+            {careerPrograms.map((p) => (
+              <ProgramCard key={p.id} p={p} />
             ))}
-          </CardContent>
-        </Card>
-      )}
+            {careerPrograms.length === 0 && (
+              <p className="text-sm text-muted-foreground">No career-path programs yet.</p>
+            )}
+          </div>
+        </div>
 
-      <Separator />
-
-      <Tabs value={track} onValueChange={(v) => setTrack(v as "career_path" | "compliance")}>
-        <TabsList variant="line">
-          <TabsTrigger value="career_path">Career path</TabsTrigger>
-          <TabsTrigger value="compliance">Compliance</TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      <div className="space-y-4">
-        {visible.map((p) => {
-          const cost = seekerTier === "pro" ? 0 : p.creditCost;
-          const canAfford = cost === 0 || creditBalance >= cost;
-          return (
-            <Card key={p.id} data-testid="training-program-card">
-              <CardHeader>
-                <CardTitle className="text-base">{p.title}</CardTitle>
-                <CardDescription>{p.description}</CardDescription>
-                <CardAction>
-                  <Badge variant="outline">{TRACK_LABEL[p.track]}</Badge>
-                </CardAction>
-              </CardHeader>
-              <CardContent className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">{p.moduleCount} modules</span>
-                <div className="flex items-center gap-2">
-                  {p.completed ? (
-                    <Badge>Completed</Badge>
-                  ) : (
-                    <>
-                      <span className="text-sm text-muted-foreground">
-                        {cost === 0 ? "Free" : `${cost} credits`}
-                      </span>
-                      <Button
-                        size="sm"
-                        disabled={pending || !canAfford}
-                        onClick={() => complete(p.id)}
-                        data-testid="complete-program"
-                      >
-                        {canAfford ? "Complete program" : "Need more credits"}
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-        {visible.length === 0 && (
-          <Card>
-            <CardContent className="py-10 text-center text-muted-foreground">
-              No {TRACK_LABEL[track].toLowerCase()} programs yet.
-            </CardContent>
-          </Card>
-        )}
+        <div>
+          <h3 className="mb-1 text-[15px] font-semibold tracking-tight">Compliance training</h3>
+          <p className="mb-3.5 text-[13px] text-muted-foreground">
+            Corporate — AML and security modules assigned by your organization
+          </p>
+          <div className="flex flex-col gap-3.5">
+            {assignments.length > 0 && (
+              <Card size="sm" data-testid="assigned-training-card">
+                <CardHeader>
+                  <CardTitle className="text-[15px]">Assigned by your employer</CardTitle>
+                  <CardDescription>Licensed programs, no credits involved.</CardDescription>
+                </CardHeader>
+                <CardFooter className="flex-col items-stretch gap-2">
+                  {assignments.map((a) => (
+                    <div key={a.id} className="flex items-center justify-between gap-3">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">{a.title}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {a.moduleCount} module{a.moduleCount === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      {a.completed ? (
+                        <Badge>Completed</Badge>
+                      ) : (
+                        <Button size="sm" disabled={pending} onClick={() => completeAssigned(a.id)}>
+                          Mark complete
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </CardFooter>
+              </Card>
+            )}
+            {compliancePrograms.map((p) => (
+              <ProgramCard key={p.id} p={p} />
+            ))}
+            {compliancePrograms.length === 0 && assignments.length === 0 && (
+              <p className="text-sm text-muted-foreground">No compliance programs yet.</p>
+            )}
+          </div>
+        </div>
       </div>
     </>
   );

@@ -27,12 +27,20 @@ export default async function MaintenanceNudgePage() {
       .maybeSingle(),
   ]);
 
+  const year = (d: string | null) => (d ? new Date(d).getFullYear() : null);
+  const latestExperienceLine = latestRole
+    ? `${latestRole.role}, ${latestRole.company} (${year(latestRole.start_date) ?? "—"}–${
+        year(latestRole.end_date) ?? "present"
+      })`
+    : null;
+
   return (
-    <main className="mx-auto max-w-lg p-8">
+    <main className="mx-auto w-full max-w-[460px] px-5 py-14">
       <MaintenanceNudge
         stale={isStale(profile?.last_profile_activity_at ?? null)}
         latestRole={latestRole?.role ?? null}
         latestCompany={latestRole?.company ?? null}
+        latestExperienceLine={latestExperienceLine}
       />
     </main>
   );

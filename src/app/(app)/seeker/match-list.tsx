@@ -10,6 +10,7 @@ export interface SeekerMatchCard {
   id: string;
   title: string;
   company: string | null;
+  location: string | null;
   salaryMin: number | null;
   salaryMax: number | null;
   workSetups: string[];
@@ -105,11 +106,11 @@ export function MatchList({ cards }: { cards: SeekerMatchCard[] }) {
                 <Link href={`/seeker/matches/${card.id}`} className="hover:underline">
                   {card.title}
                 </Link>
-                {card.company ? (
-                  <span className="text-muted-foreground font-normal"> · {card.company}</span>
-                ) : null}
               </CardTitle>
-              <CardDescription>{card.workSetups.join(" / ")}</CardDescription>
+              <CardDescription>
+                {[card.company, card.location].filter(Boolean).join(" · ") ||
+                  card.workSetups.join(" / ")}
+              </CardDescription>
               <CardAction>
                 <Badge variant={BAND_VARIANT[card.band]}>{BAND_LABEL[card.band]}</Badge>
               </CardAction>
@@ -126,24 +127,29 @@ export function MatchList({ cards }: { cards: SeekerMatchCard[] }) {
                 </div>
                 <Badge
                   variant={
-                    card.status === "interested"
+                    card.status === "revealed"
                       ? "default"
-                      : card.status === "revealed"
+                      : card.status === "interested"
                         ? "secondary"
                         : "outline"
                   }
                 >
                   {card.pendingOverride
-                    ? "revealed — respond above"
-                    : card.status}
+                    ? "Revealed — respond above"
+                    : card.status.charAt(0).toUpperCase() + card.status.slice(1)}
                 </Badge>
               </div>
             </CardContent>
             <CardFooter>
               {card.status === "surfaced" && <MatchResponseButtons matchId={card.id} />}
+              {card.status === "interested" && (
+                <Button size="sm" variant="outline" render={<Link href={`/seeker/matches/${card.id}`} />}>
+                  View details
+                </Button>
+              )}
               {card.status === "revealed" && !card.pendingOverride && card.threadId && (
-                <Button size="sm" variant="secondary" render={<Link href={`/thread/${card.threadId}`} />}>
-                  Open conversation
+                <Button size="sm" render={<Link href={`/thread/${card.threadId}`} />}>
+                  Message recruiter
                 </Button>
               )}
             </CardFooter>

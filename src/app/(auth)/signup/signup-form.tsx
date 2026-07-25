@@ -19,7 +19,7 @@ export function SignupForm({ intent }: { intent: SignupIntent | null }) {
 
   if (!intent) {
     return (
-      <Card className="w-full max-w-lg">
+      <Card className="w-full">
         <CardHeader>
           <CardTitle className="font-medium">Create your JumpOnBoard account</CardTitle>
           <CardDescription>
@@ -49,7 +49,7 @@ export function SignupForm({ intent }: { intent: SignupIntent | null }) {
   }
 
   return (
-    <Card className="w-full max-w-md">
+    <Card className="w-full">
       <CardHeader>
         <CardTitle className="font-medium">Create your JumpOnBoard account</CardTitle>
         <CardDescription>

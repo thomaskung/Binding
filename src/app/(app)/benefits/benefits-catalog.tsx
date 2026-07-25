@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Badge, Button, Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@jumponboard/ui";
+import { useState } from "react";
+import { Badge, Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Separator } from "@jumponboard/ui";
 import { benefitTierProgress } from "@/lib/benefits";
 
 interface Partner {
@@ -32,106 +32,83 @@ const CATEGORY_LABEL: Record<string, string> = {
 function PartnerCard({ partner, unlocked }: { partner: Partner; unlocked: boolean }) {
   const [revealed, setRevealed] = useState(false);
   return (
-    <Card data-testid="benefit-partner-card">
+    <Card size="sm" data-testid="benefit-partner-card">
       <CardHeader>
-        <CardTitle className="text-base">{partner.partner_name}</CardTitle>
-        <CardDescription>{partner.discount_description}</CardDescription>
-        <CardAction>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-[15px]">{partner.partner_name}</CardTitle>
           <Badge variant="outline">{CATEGORY_LABEL[partner.category] ?? partner.category}</Badge>
-        </CardAction>
+        </div>
+        <CardDescription>{partner.discount_description}</CardDescription>
       </CardHeader>
+      <Separator />
       <CardContent>
         {!unlocked ? (
-          <p className="text-sm text-muted-foreground">Reach Tier {partner.tier_required} to unlock.</p>
+          <span className="text-xs text-muted-foreground">
+            Reach Tier {partner.tier_required} to unlock.
+          </span>
         ) : revealed ? (
-          <div className="space-y-2">
-            <p className="rounded-md border px-3 py-2 font-mono text-sm" data-testid="benefit-code">
+          <div className="flex flex-col gap-2">
+            <span
+              className="inline-block w-fit rounded-md bg-muted px-2.5 py-1.5 font-mono text-[15px] tracking-wide"
+              data-testid="benefit-code"
+            >
               {partner.code}
-            </p>
-            <p className="text-xs text-muted-foreground">
+            </span>
+            <span className="text-xs leading-normal text-muted-foreground">
               You&apos;ll pay {partner.partner_name} directly on their site — JumpOnBoard never
               processes this payment.
-            </p>
+            </span>
           </div>
         ) : (
-          <Button size="sm" data-testid="get-code" onClick={() => setRevealed(true)}>
-            Get code
-          </Button>
+          <span className="text-xs text-muted-foreground">
+            Same code for everyone at your tier — no personal tracking
+          </span>
         )}
       </CardContent>
+      <CardFooter>
+        <Button
+          variant={revealed || !unlocked ? "outline" : "default"}
+          size="sm"
+          className="w-full"
+          disabled={!unlocked || revealed}
+          data-testid={unlocked && !revealed ? "get-code" : undefined}
+          onClick={() => setRevealed(true)}
+        >
+          {!unlocked ? `Unlocks at Tier ${partner.tier_required}` : revealed ? "Code revealed" : "Get code"}
+        </Button>
+      </CardFooter>
     </Card>
   );
 }
 
+/** Benefits & loyalty catalog (BenefitsCatalog template): tenure-based tier
+ * header card — never purchased, no currency — and a partner-discount grid
+ * where every card ends at a redirect-out code reveal, never a checkout
+ * (LEGAL_REVIEW Q8). Tier-locked cards are real (benefit_partners.min_tier),
+ * an app mechanic the template's demo data doesn't show. */
 export function BenefitsCatalog({ tier, lifetimePoints, metricKind, partners }: Props) {
-  const [category, setCategory] = useState<string>("all");
-  const { fraction, nextThreshold } = benefitTierProgress(lifetimePoints);
-  const ringDeg = Math.round(fraction * 360);
-
-  const categories = useMemo(
-    () => Array.from(new Set(partners.map((p) => p.category))),
-    [partners],
-  );
-  const visiblePartners =
-    category === "all" ? partners : partners.filter((p) => p.category === category);
+  const { nextThreshold } = benefitTierProgress(lifetimePoints);
 
   return (
     <>
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-medium tracking-tight">Benefits</h1>
-        <p className="text-sm text-muted-foreground">
-          Reached via {lifetimePoints} lifetime points {metricKind} — this is a read-only signal, never
-          debits your points balance to reach or keep.
-        </p>
-      </header>
-
       <Card>
-        <CardContent className="flex items-center gap-4 py-6">
-          <div
-            className="flex size-20 flex-none items-center justify-center rounded-full"
-            style={{
-              background: `conic-gradient(var(--primary) ${ringDeg}deg, var(--muted) 0deg)`,
-            }}
-          >
-            <div className="flex size-15 items-center justify-center rounded-full bg-card">
-              <span className="text-lg font-medium">T{tier}</span>
-            </div>
+        <CardHeader>
+          <div className="mb-1 flex items-center gap-2.5">
+            <CardTitle className="text-xl">Benefits &amp; discounts</CardTitle>
+            <Badge data-testid="benefit-tier-badge">Tier {tier}</Badge>
           </div>
-          <div className="flex flex-col gap-1">
-            <Badge data-testid="benefit-tier-badge" className="w-fit">
-              Tier {tier}
-            </Badge>
-            <span className="text-sm text-muted-foreground">
-              {nextThreshold === null
-                ? "Highest tier reached"
-                : `${lifetimePoints} / ${nextThreshold} points ${metricKind} to next tier`}
-            </span>
-          </div>
-        </CardContent>
+          <CardDescription>
+            Reached via {lifetimePoints} lifetime points {metricKind} — tiers reflect activity, not
+            purchases.{" "}
+            {nextThreshold === null
+              ? "Highest tier reached."
+              : `${lifetimePoints} / ${nextThreshold} points ${metricKind} to next tier.`}
+          </CardDescription>
+        </CardHeader>
       </Card>
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          variant={category === "all" ? "default" : "outline"}
-          onClick={() => setCategory("all")}
-        >
-          All
-        </Button>
-        {categories.map((c) => (
-          <Button
-            key={c}
-            size="sm"
-            variant={category === c ? "default" : "outline"}
-            onClick={() => setCategory(c)}
-          >
-            {CATEGORY_LABEL[c] ?? c}
-          </Button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        {visiblePartners.map((p) => (
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+        {partners.map((p) => (
           <PartnerCard key={p.id} partner={p} unlocked={tier >= p.tier_required} />
         ))}
       </div>

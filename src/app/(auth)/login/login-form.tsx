@@ -78,7 +78,7 @@ export function LoginForm({ intent }: { intent: SignupIntent | null }) {
   }
 
   return (
-    <Card className="w-full max-w-md">
+    <Card className="w-full">
       {step === "email" && (
         <>
           <CardHeader>
@@ -117,7 +117,7 @@ export function LoginForm({ intent }: { intent: SignupIntent | null }) {
           </CardContent>
           <CardFooter>
             <p className="w-full text-center text-sm text-muted-foreground">
-              New to JumpOnBoard? <a href="/signup">Create an account</a>
+              New to JumpOnBoard? <a href="/signup" data-testid="nav-signup">Create an account</a>
             </p>
           </CardFooter>
         </>
@@ -144,7 +144,16 @@ export function LoginForm({ intent }: { intent: SignupIntent | null }) {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <button
+                  type="button"
+                  className="text-[13px] text-muted-foreground hover:underline"
+                  onClick={sendMagicLink}
+                >
+                  Forgot?
+                </button>
+              </div>
               <Input
                 id="password"
                 type="password"
@@ -176,6 +185,9 @@ export function LoginForm({ intent }: { intent: SignupIntent | null }) {
       {step === "sent" && (
         <>
           <CardHeader>
+            <div className="mb-1.5 flex size-11 items-center justify-center rounded-full bg-secondary text-xl">
+              ✦
+            </div>
             <CardTitle className="font-medium">Check your inbox</CardTitle>
             <CardDescription>
               We sent a one-tap sign-in link to {email}. It expires in 15 minutes.

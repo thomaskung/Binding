@@ -66,17 +66,20 @@ test("hidden and matching_only fields are excluded from what recruiters see; vis
   await page.waitForURL(/\/seeker$/);
 
   await page.goto("/seeker/profile");
-  await page.getByRole("tab", { name: "Profile" }).click();
+  await page.getByRole("button", { name: "Edit profile" }).click();
 
   await page.locator("#skills").fill("Rust, Go");
-  await page.getByLabel("Skills visibility").selectOption("hidden");
   await page.locator("#industries").fill("Fintech");
-  await page.getByLabel("Target industries visibility").selectOption("matching_only");
   await page.locator("#desired_roles").fill("Backend Engineer");
-  await page.getByRole("button", { name: "Save fields" }).click();
+  await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByText("Profile fields saved.")).toBeVisible();
 
-  await page.getByRole("tab", { name: "Résumé canvas" }).click();
+  // Per-field visibility lives in the Privacy card (always active, not
+  // gated behind edit mode — each change persists immediately).
+  await page.getByLabel("Skills visibility").selectOption("hidden");
+  await page.getByLabel("Target industries visibility").selectOption("matching_only");
+
+  await page.goto("/seeker/profile/resume");
   await page.getByTestId("profile-draft").fill(
     "Experienced software engineer focused on distributed systems and cloud infrastructure.",
   );

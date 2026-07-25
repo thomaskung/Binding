@@ -51,6 +51,20 @@ export async function saveDraft(formData: FormData) {
   revalidatePath("/seeker/profile");
 }
 
+/** Narrow draft-text-only save for the resume canvas — saveDraft() above is
+ * a whole-form replace (missing FormData fields wipe columns), which the
+ * canvas must never trigger since it edits only the draft. */
+export async function saveDraftText(draftText: string) {
+  const session = await requireRole("seeker");
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({ draft_text: draftText })
+    .eq("id", session.userId);
+  if (error) throw new Error(`draft save failed: ${error.message}`);
+  revalidatePath("/seeker/profile");
+}
+
 export interface ExperienceRowInput {
   role: string;
   company: string;

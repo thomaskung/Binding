@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
-import { AuthNav } from "@/components/auth-nav";
 import { getSessionProfile } from "@/lib/auth";
 import { resolveIntent, resolveOnboardingRedirect } from "@/lib/signup-intent";
 import { LoginForm } from "./login-form";
 
 /** Returning-user sign-in. Signed-in visitors are routed away by the same
- * intent-wins rule /signup and /onboarding use. */
+ * intent-wins rule /signup and /onboarding use. Chrome (logo, terms line)
+ * comes from the (auth) layout per the LoginFlow template. */
 export default async function LoginPage({
   searchParams,
 }: {
@@ -19,12 +19,5 @@ export default async function LoginPage({
     redirect(resolveOnboardingRedirect(session, intent) ?? "/onboarding");
   }
 
-  return (
-    <div className="flex min-h-screen flex-col">
-      <AuthNav context="login" />
-      <main className="flex flex-1 items-center justify-center p-8">
-        <LoginForm intent={intent} />
-      </main>
-    </div>
-  );
+  return <LoginForm intent={intent} />;
 }

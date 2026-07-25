@@ -285,12 +285,22 @@ export function AppShell({
                 {aiSuggestion}
               </span>
             )}
-            <span
-              className="rounded-full bg-muted px-3 py-1.5 text-[12.5px] font-semibold text-foreground"
-              data-testid="points-balance"
-            >
-              {points.toLocaleString()} points
-            </span>
+            {role === "seeker" ? (
+              <Link
+                href="/seeker/points"
+                className="rounded-full bg-muted px-3 py-1.5 text-[12.5px] font-semibold text-foreground hover:bg-accent"
+                data-testid="points-balance"
+              >
+                {points.toLocaleString()} points
+              </Link>
+            ) : (
+              <span
+                className="rounded-full bg-muted px-3 py-1.5 text-[12.5px] font-semibold text-foreground"
+                data-testid="points-balance"
+              >
+                {points.toLocaleString()} points
+              </span>
+            )}
           </div>
         </header>
 

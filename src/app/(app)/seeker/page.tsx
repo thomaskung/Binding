@@ -1,15 +1,38 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Button, Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@jumponboard/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  Progress,
+  cn,
+} from "@jumponboard/ui";
 import { requireRole } from "@/lib/auth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getLifetimeEarnedPoints, benefitTierProgress } from "@/lib/benefits";
-import { getTrainingCreditBalance } from "@/lib/training";
-import { loadSeekerContext, SeekerBanners } from "./seeker-data";
+import { isStale } from "@/lib/profile";
+import { loadSeekerContext, OverrideBanners } from "./seeker-data";
+import { MatchResponseButtons } from "./match-response";
 
 const BAND_LABEL = { high: "High match", normal: "Normal match", low: "Low match" } as const;
 const BAND_VARIANT = { high: "default", normal: "secondary", low: "outline" } as const;
 
+function salaryLine(min: number | null, max: number | null): string {
+  if (min == null && max == null) return "Salary on request";
+  const fmt = (n: number) => `$${n.toLocaleString()}`;
+  if (min != null && max != null) return `${fmt(min)} – ${fmt(max)}`;
+  return `${fmt((min ?? max)!)}+`;
+}
+
+/** Adaptive seeker dashboard (SeekerDashboard template): a leading module
+ * that changes by profile state — A incomplete (progress + upload CTA),
+ * C published-but-stale (refresh nudge, paused matches dimmed), B published
+ * & active (match list with express-interest actions; B2 Pro uncapped is
+ * the same frame — band uncapping already happens server-side). */
 export default async function SeekerDashboard({
   searchParams,
 }: {
@@ -22,112 +45,156 @@ export default async function SeekerDashboard({
 
   const session = await requireRole("seeker");
   const context = await loadSeekerContext(session.userId);
-  const { profile, cards } = context;
+  const { profile, cards, seekerTier } = context;
 
-  const supabase = await createSupabaseServerClient();
-  const firstName = (profile?.display_name || "there").split(" ")[0];
-  const [trainingBalance, lifetimeEarned] = await Promise.all([
-    getTrainingCreditBalance(supabase, session.userId),
-    getLifetimeEarnedPoints(supabase, session.userId),
-  ]);
-  const { tier, fraction } = benefitTierProgress(lifetimeEarned);
-  const ringDeg = Math.round(fraction * 360);
-  const topMatches = [...cards]
-    .filter((c) => c.status === "surfaced")
-    .sort((a, b) => a.rank - b.rank)
-    .slice(0, 3);
+  const published = !!profile?.published_text;
+  const stale = published && isStale(profile?.last_profile_activity_at ?? null);
+  const paused = profile?.visibility === "paused";
+
+  // Frame A onboarding progress — real step completion, not the template's
+  // placeholder numbers. Step 1 (name + consent) is done by construction:
+  // requireRole("seeker") means activation completed.
+  const dealbreakers = (profile?.dealbreaker_matrix ?? {}) as {
+    min_salary?: number | null;
+    work_setups?: string[];
+  };
+  const steps: Array<[label: string, done: boolean]> = [
+    ["consent", true],
+    ["resume", !!profile?.draft_text],
+    ["skills", (profile?.skills ?? []).length > 0],
+    ["dealbreakers", dealbreakers.min_salary != null || (dealbreakers.work_setups ?? []).length > 0],
+    ["publish", published],
+  ];
+  const doneCount = steps.filter(([, done]) => done).length;
+  const nextStep = steps.find(([, done]) => !done)?.[0];
+
+  const staleSinceMonth = profile?.last_profile_activity_at
+    ? new Date(profile.last_profile_activity_at).toLocaleString("en", { month: "long" })
+    : null;
+
+  const visibleCards = cards.filter((c) => c.status !== "declined").sort((a, b) => a.rank - b.rank);
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 p-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-medium tracking-tight">Good to see you, {firstName}</h1>
-        <p className="text-sm text-muted-foreground">
-          {profile?.published_text
-            ? "Your profile is live and pseudonymized. Here's what's moving."
-            : "Publish your profile to enter the matching pool."}
-        </p>
+    <div className="mx-auto max-w-2xl space-y-5 px-5 py-8">
+      <header className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h1 className="text-[26px] font-semibold tracking-tight">Dashboard</h1>
+          {seekerTier === "pro" && <Badge variant="outline">Pro</Badge>}
+        </div>
+        <Button variant="ghost" size="sm" render={<Link href="/seeker/points" />}>
+          Points →
+        </Button>
       </header>
+      <p className="-mt-4 text-sm text-muted-foreground">Your matches and profile at a glance.</p>
 
-      <SeekerBanners context={context} />
+      <OverrideBanners context={context} />
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>New matches</CardTitle>
-            <CardDescription>Filtered by your dealbreakers</CardDescription>
-            <CardAction>
-              <Badge variant="secondary">{topMatches.length}</Badge>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {topMatches.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No new matches yet.</p>
-            ) : (
-              topMatches.map((m) => (
-                <Link
-                  key={m.id}
-                  href={`/seeker/matches/${m.id}`}
-                  className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
-                >
-                  <span className="truncate">
-                    {m.title}
-                    {m.company ? <span className="text-muted-foreground"> · {m.company}</span> : null}
-                  </span>
-                  <Badge variant={BAND_VARIANT[m.band]} className="flex-none">
-                    {BAND_LABEL[m.band]}
-                  </Badge>
-                </Link>
-              ))
-            )}
-          </CardContent>
-          <CardContent className="pt-0">
-            <Button variant="outline" size="sm" render={<Link href="/seeker/matches" />}>
-              View all matches
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Benefits</CardTitle>
-            <CardDescription>Loyalty tier, from lifetime points earned</CardDescription>
-          </CardHeader>
-          <CardContent className="flex items-center gap-4">
-            <div
-              className="flex size-16 flex-none items-center justify-center rounded-full"
-              style={{
-                background: `conic-gradient(var(--primary) ${ringDeg}deg, var(--muted) 0deg)`,
-              }}
-            >
-              <div className="flex size-12 items-center justify-center rounded-full bg-card">
-                <span className="text-sm font-medium">T{tier}</span>
-              </div>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-sm text-muted-foreground">{lifetimeEarned} lifetime points earned</span>
-              <Button variant="outline" size="sm" render={<Link href="/benefits" />}>
-                View benefits
+      {!published && (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Finish your profile</CardTitle>
+              <CardDescription>Add your resume so we can start matching you to roles</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              <Progress value={(doneCount / steps.length) * 100} />
+              <span className="text-xs text-muted-foreground">
+                {doneCount} of {steps.length} steps complete
+                {nextStep ? ` — ${nextStep} pending` : ""}
+              </span>
+            </CardContent>
+            <CardFooter>
+              <Button className="w-full" render={<Link href="/onboarding/seeker/profile" />}>
+                Upload your resume
               </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </CardFooter>
+          </Card>
+          <p className="text-center text-[13px] text-muted-foreground">
+            Matches unlock once your profile is published.
+          </p>
+        </>
+      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Training</CardTitle>
-          <CardDescription>Reskill toward your target role</CardDescription>
-        </CardHeader>
-        <CardContent className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-3xl font-medium">{trainingBalance}</span>
-            <span className="text-xs text-muted-foreground">training credits</span>
+      {stale && (
+        <Card data-testid="stale-nudge-card">
+          <CardHeader>
+            <CardTitle>
+              Your profile hasn&apos;t moved{staleSinceMonth ? ` since ${staleSinceMonth}` : " in a while"}
+            </CardTitle>
+            <CardDescription>
+              Roles and pay bands shift fast — a quick refresh keeps your matches accurate
+            </CardDescription>
+          </CardHeader>
+          {paused && (
+            <CardContent>
+              <span className="text-[13px] text-muted-foreground">
+                You&apos;ve paused active looking — matches below are on hold
+              </span>
+            </CardContent>
+          )}
+          <CardFooter>
+            <Button className="w-full" render={<Link href="/seeker/nudge" />}>
+              Draft update
+            </Button>
+          </CardFooter>
+        </Card>
+      )}
+
+      {published && (
+        <>
+          {paused && (
+            <span className="block text-xs uppercase tracking-wider text-muted-foreground">
+              Matches (paused)
+            </span>
+          )}
+          <div className={cn("flex flex-col gap-3.5", paused && "opacity-60")}>
+            {visibleCards.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                No matches yet — new roles are matched against your profile as they&apos;re published.
+              </p>
+            )}
+            {visibleCards.map((m) => (
+              <Card key={m.id} size="sm" data-testid="dashboard-match-card">
+                <CardHeader>
+                  <CardTitle>
+                    <Link href={`/seeker/matches/${m.id}`} className="hover:underline">
+                      {m.title}
+                    </Link>
+                  </CardTitle>
+                  <CardDescription>
+                    {[m.company, m.location].filter(Boolean).join(" · ") || "—"}
+                  </CardDescription>
+                  <CardAction>
+                    <Badge variant={BAND_VARIANT[m.band]}>{BAND_LABEL[m.band]}</Badge>
+                  </CardAction>
+                </CardHeader>
+                <CardContent>
+                  <span className="text-sm text-muted-foreground">
+                    {salaryLine(m.salaryMin, m.salaryMax)}
+                  </span>
+                </CardContent>
+                {!paused && m.status === "surfaced" && (
+                  <CardFooter>
+                    <MatchResponseButtons matchId={m.id} />
+                  </CardFooter>
+                )}
+                {!paused && m.status !== "surfaced" && (
+                  <CardFooter className="flex items-center gap-2">
+                    <Badge variant="outline">
+                      {m.status.charAt(0).toUpperCase() + m.status.slice(1)}
+                    </Badge>
+                    {m.status === "revealed" && m.threadId && (
+                      <Button size="sm" variant="outline" render={<Link href={`/thread/${m.threadId}`} />}>
+                        Open conversation
+                      </Button>
+                    )}
+                  </CardFooter>
+                )}
+              </Card>
+            ))}
           </div>
-          <Button variant="outline" size="sm" render={<Link href="/training" />}>
-            Go to training
-          </Button>
-        </CardContent>
-      </Card>
-    </main>
+        </>
+      )}
+    </div>
   );
 }

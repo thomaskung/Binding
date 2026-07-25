@@ -14,7 +14,7 @@ export function MatchResponseButtons({ matchId }: { matchId: string }) {
         data-testid="match-interested"
         onClick={() => startTransition(() => respondToMatch(matchId, "interested"))}
       >
-        I&apos;m interested
+        Express interest
       </Button>
       <Button
         size="sm"

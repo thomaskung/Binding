@@ -1,9 +1,7 @@
-import Link from "next/link";
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@jumponboard/ui";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@jumponboard/ui";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { expireStaleOverride, getBalance, OVERRIDE_COMPENSATION } from "@/lib/points";
 import { matchBand, type SeekerTier } from "@/lib/matching";
-import { isStale } from "@/lib/profile";
 import { OverrideResponseButtons } from "./override-response";
 import type { SeekerMatchCard } from "./match-list";
 
@@ -16,13 +14,15 @@ export async function loadSeekerContext(userId: string) {
   const [{ data: profile }, { data: matches }, { data: reveals }, balance] = await Promise.all([
     supabase
       .from("profiles")
-      .select("display_name, published_text, visibility, seeker_tier, last_profile_activity_at")
+      .select(
+        "display_name, published_text, draft_text, skills, dealbreaker_matrix, visibility, seeker_tier, last_profile_activity_at",
+      )
       .eq("id", userId)
       .single(),
     supabase
       .from("matches")
       .select(
-        "id, status, score, created_at, job_postings(id, title, salary_min, salary_max, work_setups, profiles!job_postings_recruiter_id_fkey(company_name))",
+        "id, status, score, created_at, job_postings(id, title, location, salary_min, salary_max, work_setups, profiles!job_postings_recruiter_id_fkey(company_name))",
       )
       .eq("profile_id", userId)
       .order("created_at", { ascending: false }),
@@ -80,6 +80,7 @@ export async function loadSeekerContext(userId: string) {
       id: match.id,
       title: job?.title ?? "Role",
       company: company ?? null,
+      location: job?.location ?? null,
       salaryMin: job?.salary_min ?? null,
       salaryMax: job?.salary_max ?? null,
       workSetups: job?.work_setups ?? [],
@@ -96,38 +97,13 @@ export async function loadSeekerContext(userId: string) {
 
 type SeekerContext = Awaited<ReturnType<typeof loadSeekerContext>>;
 
-/** Conditional banners shared by the dashboard and matches routes:
- * finish-profile, stale-nudge, pending paid-reveal overrides. */
-export function SeekerBanners({ context }: { context: SeekerContext }) {
-  const { profile, pendingOverrides } = context;
+/** Pending paid-reveal override banners — rendered on both the dashboard
+ * and the matches route (economics-bound: the accept/decline choice must be
+ * unmissable wherever the seeker lands). */
+export function OverrideBanners({ context }: { context: SeekerContext }) {
+  const { pendingOverrides } = context;
   return (
     <>
-      {!profile?.published_text && (
-        <Card className="border-dashed">
-          <CardContent className="flex items-center justify-between py-4">
-            <p className="text-sm">
-              Finish your profile to enter the matching pool — it takes two minutes.
-            </p>
-            <Button size="sm" render={<Link href="/seeker/profile" />}>
-              Finish profile
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {profile?.published_text && isStale(profile.last_profile_activity_at) && (
-        <Card className="border-primary" data-testid="stale-nudge-card">
-          <CardContent className="flex items-center justify-between py-4">
-            <p className="text-sm">
-              Your profile hasn&apos;t changed in a while — a quick update keeps your matches sharp.
-            </p>
-            <Button size="sm" render={<Link href="/seeker/nudge" />}>
-              Draft update
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
       {pendingOverrides.map((reveal) => {
         const job = Array.isArray(reveal.job_postings) ? reveal.job_postings[0] : reveal.job_postings;
         const recruiter = Array.isArray(reveal.profiles) ? reveal.profiles[0] : reveal.profiles;

@@ -28,7 +28,7 @@ test("full reveal slice", async ({ browser }) => {
 
   // --- Seeker: publish profile (paste-text path) ---
   await signIn(seeker, SEEKER);
-  await seeker.goto("/seeker/profile");
+  await seeker.goto("/seeker/profile/resume");
   await seeker.getByTestId("profile-draft").fill(
     "Senior backend engineer: distributed systems, Postgres, event-driven pipelines, Kubernetes. Led payments platform.",
   );
@@ -59,7 +59,7 @@ test("full reveal slice", async ({ browser }) => {
   // exact: true — the status BADGE ("interested"), not the "I'm interested"
   // button that substring-matching would hit instantly, before the server
   // write commits (that race let the recruiter see a stale "surfaced" state).
-  await expect(matchCard.getByText("interested", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(matchCard.getByText("Interested", { exact: true })).toBeVisible({ timeout: 15_000 });
 
   // --- Recruiter: reveal (100 -> 90 pts) ---
   await recruiter.getByTestId("view-matches").click();
@@ -81,7 +81,7 @@ test("full reveal slice", async ({ browser }) => {
   await expect(recruiter.getByTestId("message-bubble")).toHaveCount(1);
 
   await seeker.goto("/seeker/matches");
-  await seeker.getByRole("button", { name: "Open conversation" }).click();
+  await seeker.getByRole("button", { name: "Message recruiter" }).click();
   await expect(seeker.getByTestId("message-bubble")).toHaveCount(1);
   await seeker.getByTestId("message-input").fill("Sounds interesting — tell me more.");
   await seeker.getByTestId("message-send").click();

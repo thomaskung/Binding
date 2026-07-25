@@ -118,11 +118,11 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   await seeker.getByTestId("onboarding-finish").click();
   await seeker.waitForURL(/\/seeker$/);
 
-  await seeker.goto("/seeker/profile");
+  await seeker.goto("/seeker/profile/resume");
   await expect(seeker.getByTestId("redacted-preview")).toBeVisible({ timeout: 15_000 });
 
-  // Ensure override is allowed (toggle on) — set via settings on the Profile tab.
-  await seeker.getByRole("tab", { name: "Profile" }).click();
+  // Ensure override is allowed (toggle on) — Privacy card on the profile page.
+  await seeker.goto("/seeker/profile");
   await seeker.locator('input[name="reveal_override_enabled"]').check();
   await seeker.getByRole("button", { name: "Save settings" }).click();
 
