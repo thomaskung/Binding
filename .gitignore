@@ -1,0 +1,44 @@
+# dependencies
+node_modules/
+
+# next.js / opennext
+.next/
+.open-next/
+out/
+
+# env
+.env
+.env.local
+.env*.local
+
+# testing
+coverage/
+playwright-report/
+test-results/
+
+# supabase local
+supabase/.branches/
+supabase/.temp/
+
+# misc
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+
+# python (modal_app)
+__pycache__/
+*.pyc
+.venv/
+
+# wrangler
+.wrangler/
+recordings/
+
+# design-sync (claude.ai/design) — staged scripts, build output, machine state.
+# Durable/committed: .design-sync/config.json, NOTES.md, conventions.md, previews/, overrides/
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+packages/ui/.ds-tailwind-cache.css

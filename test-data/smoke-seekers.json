@@ -1,0 +1,82 @@
+[
+  {
+    "id": "10000000-0000-0000-0000-000000000001",
+    "email": "backend.smoke@smoke.local",
+    "displayName": "Priya Backend",
+    "text": "Senior backend engineer: distributed systems, Postgres, Kubernetes, event-driven microservices in Go. Built payment rails and ledger systems for a payments platform at scale.",
+    "minSalary": 110000,
+    "workSetups": ["remote", "hybrid"]
+  },
+  {
+    "id": "10000000-0000-0000-0000-000000000002",
+    "email": "data.smoke@smoke.local",
+    "displayName": "Daniel Data",
+    "text": "Senior data engineer: streaming and batch pipelines with Spark, Kafka, Airflow orchestration. Python and SQL, warehouse modeling, data quality frameworks for analytics platforms.",
+    "minSalary": 105000,
+    "workSetups": ["remote", "onsite"]
+  },
+  {
+    "id": "10000000-0000-0000-0000-000000000003",
+    "email": "frontend.smoke@smoke.local",
+    "displayName": "Emma Frontend",
+    "text": "Frontend engineer: React, TypeScript, Next.js, design systems, accessibility, performance optimization. Built polished product interfaces and component libraries for a web platform.",
+    "minSalary": 95000,
+    "workSetups": ["remote", "hybrid"]
+  },
+  {
+    "id": "10000000-0000-0000-0000-000000000004",
+    "email": "mobile.smoke@smoke.local",
+    "displayName": "Marcus Mobile",
+    "text": "Senior mobile engineer: iOS Swift and Android Kotlin, React Native, offline-first sync, app performance profiling, CI/CD for mobile release pipelines.",
+    "minSalary": 100000,
+    "workSetups": ["hybrid", "onsite"]
+  },
+  {
+    "id": "10000000-0000-0000-0000-000000000005",
+    "email": "ml.smoke@smoke.local",
+    "displayName": "Sofia ML",
+    "text": "Machine learning engineer: PyTorch, LLM fine-tuning, MLOps pipelines, model serving and monitoring, feature stores, experimentation platforms for production ML systems.",
+    "minSalary": 130000,
+    "workSetups": ["remote"]
+  },
+  {
+    "id": "10000000-0000-0000-0000-000000000006",
+    "email": "devops.smoke@smoke.local",
+    "displayName": "Rohan DevOps",
+    "text": "DevOps and site reliability engineer: Kubernetes, Terraform, CI/CD pipelines, observability with Prometheus and Grafana, incident response and on-call for distributed infrastructure.",
+    "minSalary": 115000,
+    "workSetups": ["remote", "hybrid"]
+  },
+  {
+    "id": "10000000-0000-0000-0000-000000000007",
+    "email": "security.smoke@smoke.local",
+    "displayName": "Yuki Security",
+    "text": "Application security engineer: penetration testing, threat modeling, secure code review, SOC2 and compliance audits, vulnerability management for cloud-native platforms.",
+    "minSalary": 120000,
+    "workSetups": ["hybrid", "onsite"]
+  },
+  {
+    "id": "10000000-0000-0000-0000-000000000008",
+    "email": "qa.smoke@smoke.local",
+    "displayName": "Nathan QA",
+    "text": "QA automation engineer: Playwright and Selenium test suites, CI pipeline integration, performance and load testing, test strategy for web and mobile platforms.",
+    "minSalary": 90000,
+    "workSetups": ["remote", "hybrid"]
+  },
+  {
+    "id": "10000000-0000-0000-0000-000000000009",
+    "email": "product.smoke@smoke.local",
+    "displayName": "Isabelle Product",
+    "text": "Senior product manager: roadmap strategy, cross-functional leadership with engineering and design, user research, metrics-driven prioritization for consumer and B2B products.",
+    "minSalary": 125000,
+    "workSetups": ["hybrid"]
+  },
+  {
+    "id": "10000000-0000-0000-0000-000000000010",
+    "email": "design.smoke@smoke.local",
+    "displayName": "Leo Design",
+    "text": "Product designer: Figma, design systems, UX research, prototyping, accessibility, close collaboration with engineering to ship polished product interfaces.",
+    "minSalary": 95000,
+    "workSetups": ["remote", "hybrid"]
+  }
+]

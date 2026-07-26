@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jumponboard",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  // Secrets (set via `wrangler secret put`): SUPABASE_SERVICE_ROLE_KEY,
+  // MODAL_API_TOKEN. Public vars can go under "vars".
+  "vars": {
+    "AI_PROVIDER": "stub",
+    // Password login is a demo/e2e-only shortcut — never enabled in deploys.
+    "NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN": "false"
+  }
+}

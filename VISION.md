@@ -1,10 +1,18 @@
 # VISION.md — JumpOnBoard (J.O.B.) Goals & Evaluation
 
+**Version 1.3** · Last updated 2026-07-21 · Revision history at the end of this document.
+
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [DESIGN.md](./DESIGN.md) (architecture). This document defines what success looks like and how we'll measure it, so decisions have a shared reference point instead of being re-litigated each time.
 
 ## Mission
 
 Build a privacy-first, AI-driven hiring ecosystem for APAC (HK/SG) that lets professionals and companies match on skills and compensation fit before identities are revealed — replacing salary-anchoring and cold-outbound recruiting with consent-first, trust-minimizing matching.
+
+**The mission stays hiring-core.** Everything below is measured against hiring/matching outcomes first.
+
+## Long-Horizon Adjacency (explicitly gated behind hiring PMF — not the near-term plan)
+
+The continuous-AI-resume-maintenance loop (DESIGN.md §2c) makes J.O.B. the user's lifelong career-record keeper, which enables a longer-term "career super-app" horizon: aggregate market-intelligence signals (§2e), AI-driven Training/reskilling (§7a), and a discount-code-based Benefits/loyalty programme (§7b). These are documented so the direction is on record, but they are **strictly gated behind hiring-side product-market fit** — the data moat that powers them only exists once the hiring loop works. Do not let them pull focus or headcount before the hiring KRs below are met. As of 2026-07-21, none of these carry a hard legal blocker — Training, Benefits/Loyalty, and the AI-Credit Marketplace (repositioned as a scoped AI career-assistant allowance, DESIGN.md §7) are all confirmation-only questions for counsel (LEGAL_REVIEW.md), falling back to the same private-beta-plus-parallel-review sequencing as the rest of the points system.
 
 ## North Star Metric
 
@@ -29,6 +37,10 @@ Build a privacy-first, AI-driven hiring ecosystem for APAC (HK/SG) that lets pro
 - Objective: prove candidates will maintain a pseudonymized profile without the AI-Credit Marketplace live yet.
 - KR: reach 200 active, matchable candidate profiles by Month 3 (provisional hypothesis, not a validated benchmark — revisit and reset once the first cohort's real signup/activation data exists).
 - KR: ≥50% of active profiles complete at least one AI-verified action (skill assessment or work-history verification) per month (provisional target — same caveat).
+- KR (roadmap metric, once continuous-maintenance ships — DESIGN.md §2c): **profile freshness** — % of active profiles updated (via the AI-maintenance loop or manual edit) within the last N months, and maintenance-nudge acceptance rate. This is the metric the whole resume-first/continuous-maintenance pivot exists to move; a passive dark pool only has value if its data stays current. Provisional target set once the first maintenance-loop cohort exists.
+- Caveat on data-monetization revenue (§2e signal product): the aggregate-signal line is **gated on reaching k-anonymous cohort density** (opt-in profiles in cohorts ≥ k), which the ~50-profile launch gate does not yet supply — so signal revenue is a late-stage line, not a Phase-1 target. Track opt-in rate and cohort density as leading indicators only.
+- KR: ATS-feed discovery→consent conversion rate (DESIGN.md §2b — Greenhouse/Lever + schema.org discovery, consent-gated promotion). Honest caveat: this tooling makes concierge outreach dramatically more efficient (auto-discovered leads with real current openings, one-click consent), but does **not** remove the need for a pre-launch outreach sprint — someone still has to ask and someone still has to say yes.
+- **Launch-readiness gate** (precondition, distinct from the Oct 2026 build/ship date): public signups do not open until both ~50 real candidate profiles AND ~15 consented/claimed ATS-sourced job postings exist in the target vertical (starting targets, adjustable). This makes "a solid match from Day 1" literally true for the first real public users instead of aspirational.
 
 **Phase 2 — Headhunter Empowerment (Months 4-9)**
 - Objective: convert free headhunters to Pro via genuine reveal-to-reply experience.
@@ -57,3 +69,14 @@ Monthly review of:
 - If candidate-side liquidity (active, matchable profiles) is not on track toward the Phase 1 threshold by Month 4, reassess the supply-side acquisition strategy before investing further in headhunter-side GTM — research consistently shows two-sided marketplaces fail on the supply side, not demand, so this is the metric to protect first.
 - If reveal-to-engagement conversion does not meaningfully beat cold-outbound baselines by end of Phase 2, the core value proposition (privacy-first matching beats cold messaging) needs re-examination before scaling spend.
 - If AI-Credit Marketplace actual cost-per-user consistently exceeds the modeled $-cap by a wide margin after the first full billing cycle, pause new allowance grants and re-tune caps before continuing rollout — don't let a subsidized perk quietly become an uncapped liability.
+
+---
+
+## Revision History
+
+| Version | Date | Changes |
+|---|---|---|
+| 1.0 | 2026-07-17 | Initial: mission, north star, dual shipping/breakeven timelines, phased OKRs, cadence, kill-criteria. |
+| 1.1 | 2026-07-18 | Phase 1 gains the ATS-feed discovery→consent KR and an explicit launch-readiness gate (DESIGN.md §2b), distinct from the shipping-timeline date. |
+| 1.2 | 2026-07-20 | Mission reaffirmed hiring-core; added gated long-horizon "career super-app" adjacency note (Training/Benefits/loyalty/signals, behind hiring PMF); Phase-1 profile-freshness / maintenance-loop KR and a caveat that aggregate-signal revenue is gated on k-anonymous cohort density. |
+| 1.3 | 2026-07-21 | Updated the career-super-app adjacency note: Benefits/loyalty is now discount-code-based (not credit-based), and none of Training/Benefits/AI-Credit Marketplace carry a hard legal blocker anymore — all confirmation-only (see LEGAL_REVIEW.md, DESIGN.md §7/§7a/§7b). |

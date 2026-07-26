@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      # Builds the app (all routes are dynamic/server-rendered, so this needs
+      # no live Supabase) — catches breakage in the packages/ui workspace
+      # boundary (transpilePackages, Tailwind @source scoping) that
+      # lint/typecheck/test alone wouldn't surface.
+      - run: pnpm build
+      # E2E (needs local Supabase) is a follow-up: supabase/setup-cli action +
+      # `supabase start` + `pnpm e2e`. Kept out of the required path for now to
+      # keep CI fast while the skeleton stabilizes.
