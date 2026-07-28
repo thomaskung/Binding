@@ -6,6 +6,7 @@ Endpoints (POST, JSON, Bearer auth via MODAL_API_TOKEN secret):
   /redact       {"text": ...}                          -> {"redactedText": ...}
   /fit-summary  {"candidate": ..., "job": ...}         -> {"summary": ...}
   /refine       {"text": ..., "kind": "profile"|"job_description"} -> {"refined": ...}
+  /extract      {"text": ...}                          -> {"skills":[], "roles":[], "industries":[], "experience":[]}
 
 Deploy: modal deploy modal_app/llm.py
 Budget: scale-to-zero; a single L4 handles Qwen3-8B AWQ. At MVP volume
@@ -44,6 +45,25 @@ REFINE_PROFILE_SYSTEM = """You improve a candidate's pseudonymized profile text
 for semantic matching against job descriptions: clearer skill statements,
 concrete achievements, standard terminology. Do NOT add facts. Do NOT add
 identifying details. Output only the improved text. /no_think"""
+
+EXTRACT_SYSTEM = """You extract structured fields from a resume. Return ONLY
+valid JSON matching this schema, no commentary, no markdown:
+{
+  "skills": ["skill1", "skill2"],
+  "roles": ["most recent title", "previous title"],
+  "industries": ["industry1"],
+  "experience": [
+    {
+      "role": "title",
+      "company": "company name",
+      "industry": "industry or null",
+      "startDate": "YYYY-MM",
+      "endDate": "YYYY-MM or null for present"
+    }
+  ]
+}
+Extract skills, job titles, industries, and work history exactly as written.
+Never fabricate. Use null for missing dates or industry. /no_think"""
 
 REFINE_JD_SYSTEM = """You improve a job description for semantic matching
 against candidate profiles: clear responsibilities, concrete required skills,
@@ -91,6 +111,16 @@ class Qwen:
         _auth(authorization)
         system = REFINE_JD_SYSTEM if body.get("kind") == "job_description" else REFINE_PROFILE_SYSTEM
         return {"refined": self._generate(system, body["text"])}
+
+    @modal.fastapi_endpoint(method="POST")
+    def extract(self, body: dict, authorization: str = ""):
+        _auth(authorization)
+        import json
+        raw = self._generate(EXTRACT_SYSTEM, body["text"])
+        # The model may wrap JSON in markdown fences or extra text.
+        start = raw.index("{")
+        end = raw.rindex("}") + 1
+        return json.loads(raw[start:end])
 
 
 def _auth(authorization: str) -> None:

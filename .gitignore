@@ -1,9 +1,8 @@
 # dependencies
 node_modules/
 
-# next.js / opennext
+# next.js
 .next/
-.open-next/
 out/
 
 # env
@@ -30,8 +29,6 @@ __pycache__/
 *.pyc
 .venv/
 
-# wrangler
-.wrangler/
 recordings/
 
 # design-sync (claude.ai/design) — staged scripts, build output, machine state.
@@ -42,3 +39,5 @@ ds-bundle/
 .design-sync/learnings/
 .design-sync/node_modules
 packages/ui/.ds-tailwind-cache.css
+.vercel
+.env*

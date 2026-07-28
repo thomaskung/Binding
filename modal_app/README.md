@@ -26,7 +26,7 @@ modal deploy modal_app/llm.py
 ```
 
 Copy the printed endpoint URLs plus the token into the Next.js env
-(`.env.local` / Cloudflare secrets):
+(`.env.local` / Vercel environment variables):
 
 ```
 AI_PROVIDER=modal

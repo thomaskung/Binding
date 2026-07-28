@@ -46,8 +46,8 @@ export default async function middleware(request: NextRequest) {
   return response;
 }
 
-// Legacy middleware convention (not proxy.ts): @opennextjs/cloudflare requires
-// edge runtime, and Next 16 proxy.ts is Node-only. middleware.ts defaults to edge.
+// Middleware runs on Edge Runtime (default for middleware.ts), which is required
+// for the Supabase SSR client to run before the request reaches the server.
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
