@@ -2,7 +2,11 @@
 
 import { redirect } from "next/navigation";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
-import { CONSENT_VERSION } from "@/lib/consent";
+import {
+  CONSENT_VERSION,
+  MAINTENANCE_CONSENT_VERSION,
+  validateSeekerConsent,
+} from "@/lib/consent";
 import { seedBalance } from "@/lib/points";
 
 async function requireUser() {
@@ -14,19 +18,23 @@ async function requireUser() {
   return { supabase, user };
 }
 
-/** Activate the seeker role: display name + ToS + explicit AI-processing
- * consent (PDPA/PDPO — DESIGN.md §5). Seeds +10 pts once. */
+/** Activate the seeker role: display name + ToS + the two REQUIRED consents
+ * (AI processing/redaction + automated profiling for matching — they are
+ * the service) plus the OPTIONAL continuous-maintenance consent
+ * (PDPA/PDPO — DESIGN.md §5/§2c, LEGAL_REVIEW.md Q14). Seeds +10 pts once. */
 export async function activateSeeker(formData: FormData) {
   const { user } = await requireUser();
   const admin = createSupabaseAdminClient();
 
   const displayName = String(formData.get("display_name") ?? "").trim();
-  const tos = formData.get("tos") === "on";
-  const processing = formData.get("processing_consent") === "on";
+  const consentError = validateSeekerConsent({
+    tos: formData.get("tos") === "on",
+    processing: formData.get("processing_consent") === "on",
+    profiling: formData.get("profiling_consent") === "on",
+  });
+  const maintenance = formData.get("maintenance_consent") === "on";
   if (!displayName) throw new Error("display name required");
-  if (!tos || !processing) {
-    throw new Error("both the terms and the AI-processing consent are required to continue");
-  }
+  if (consentError) throw new Error(consentError);
 
   const { error } = await admin.from("profiles").upsert(
     {
@@ -43,7 +51,10 @@ export async function activateSeeker(formData: FormData) {
     profile_id: user.id,
     tos_accepted_at: now,
     processing_consent_at: now,
+    profiling_consent_at: now,
     consent_version: CONSENT_VERSION,
+    maintenance_consent_at: maintenance ? now : null,
+    maintenance_consent_version: maintenance ? MAINTENANCE_CONSENT_VERSION : null,
   });
   await seedBalance(admin, user.id, "seeker");
 

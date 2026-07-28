@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getAiProvider } from "@/lib/ai";
 import { AI_REFINE_CHAT_DAILY_CAP, countRefineChatCallsToday, logRefineChatCall } from "@/lib/ai-usage";
 import { requireRole } from "@/lib/auth";
-import { MARKET_SIGNALS_CONSENT_VERSION } from "@/lib/consent";
+import { MAINTENANCE_CONSENT_VERSION, MARKET_SIGNALS_CONSENT_VERSION } from "@/lib/consent";
 import { computeExperienceStats, experienceFactsSentence, seniorityBand } from "@/lib/experience";
 import { filterFieldsForSurface, type FieldVisibilityMap } from "@/lib/field-visibility";
 import { parseCommaList } from "@/lib/jobs";
@@ -248,12 +248,29 @@ export async function extractOnboardingFields(resumeText: string) {
   return ai.extractProfileFields(resumeText);
 }
 
+/** Consent gate for the continuous-maintenance loop (DESIGN.md §2c,
+ * LEGAL_REVIEW.md Q14): maintenance consent is OPTIONAL at onboarding and
+ * withdrawable, so both halves of the loop must refuse to run without it —
+ * the nudge surface shows a just-in-time consent prompt instead. */
+async function requireMaintenanceConsent(userId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase
+    .from("consent_flags")
+    .select("maintenance_consent_at")
+    .eq("profile_id", userId)
+    .maybeSingle();
+  if (!data?.maintenance_consent_at) {
+    throw new Error("continuous AI maintenance requires your consent — enable it to continue");
+  }
+}
+
 /** Maintenance nudge (DESIGN.md §2c continuous-maintenance loop), draft
  * half: turns the seeker's free-text answer to "anything new?" into a
  * suggested addition. Suggest-and-approve — returns the suggestion only,
  * never writes anything (see acceptMaintenanceUpdate for the write path). */
 export async function requestMaintenanceDraft(userAnswer: string): Promise<string> {
   const session = await requireRole("seeker");
+  await requireMaintenanceConsent(session.userId);
   const supabase = await createSupabaseServerClient();
   const ai = getAiProvider();
 
@@ -274,6 +291,7 @@ export async function requestMaintenanceDraft(userAnswer: string): Promise<strin
  * — see src/lib/points.ts), a silent no-op if still within the cooldown. */
 export async function acceptMaintenanceUpdate(addition: string): Promise<void> {
   const session = await requireRole("seeker");
+  await requireMaintenanceConsent(session.userId);
   const supabase = await createSupabaseServerClient();
   const admin = createSupabaseAdminClient();
 
@@ -347,6 +365,24 @@ export async function updateMarketSignalsConsent(optIn: boolean) {
   });
   if (error) throw new Error(`market-signals consent update failed: ${error.message}`);
   revalidatePath("/seeker/profile");
+}
+
+/** Continuous-maintenance consent toggle (DESIGN.md §2c, LEGAL_REVIEW.md
+ * Q14) — same shape as updateMarketSignalsConsent: independently revocable,
+ * clearing the timestamp entirely on withdrawal so the maintenance loop's
+ * gate drops immediately. Also the JIT enable path from the nudge surface. */
+export async function updateMaintenanceConsent(optIn: boolean) {
+  const session = await requireRole("seeker");
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase.from("consent_flags").upsert({
+    profile_id: session.userId,
+    maintenance_consent_at: optIn ? new Date().toISOString() : null,
+    maintenance_consent_version: optIn ? MAINTENANCE_CONSENT_VERSION : null,
+  });
+  if (error) throw new Error(`maintenance consent update failed: ${error.message}`);
+  revalidatePath("/seeker/profile");
+  revalidatePath("/seeker/nudge");
 }
 
 /** Candidate responds to a pending override reveal. Identity was already

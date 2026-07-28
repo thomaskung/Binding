@@ -1,3 +1,5 @@
+> **Disposition note (2026-07-28)** — every problem below was verified against the actual codebase, strategy docs, and (for Problem 5) an adversarial deep-research pass before acting. Per-problem dispositions are annotated inline; fixes landed in DESIGN.md 2.0, BUSINESS.md 1.8, LEGAL_REVIEW.md 1.5 and the accompanying code changes (migrations 0016/0017, Layer-0 controls, reveal daily cap, Modal region pin). This document is kept as the research input that prompted the pass.
+
 Based on an analysis of your system design and business plan, your core concept of a privacy-preserving talent marketplace is highly compelling. However, bridging your current technical architecture (Supabase, serverless LLMs, and centralized vector databases) with your strategic roadmap (securing non-dilutive Hong Kong government grants and expanding into Singapore's enterprise B2B market) reveals **five critical technical, legal, and operational vulnerabilities**.
 
 Below is an analysis of these problems along with actionable, low-dilution engineering fixes.
@@ -5,6 +7,8 @@ Below is an analysis of these problems along with actionable, low-dilution engin
 ---
 
 ### Problem 1: The Cryptographic Blindspot (Embedding Inversion Attacks)
+
+> **Disposition: partially valid — threat real, premises stale.** Redaction-before-embedding was already enforced (`publishProfile` redacts, then embeds), `skill_vectors` SELECT is owner-only, and no endpoint ever returns raw embedding vectors — so inversion recovers already-redacted text, not raw PII. Real gap: the threat was undocumented and no perturbation hardening existed. Fixed: DESIGN.md §5 embedding-inversion threat model (redact-first named as a load-bearing invariant); DP-noise = deferred-with-trigger roadmap hardening, plus a new standard-reveal daily cap closing the "rate-limited reveals" overclaim.
 
 * **The Vulnerability:** Your system relies on storing candidate resume embeddings in a centralized Supabase database using `pgvector` to run similarity match queries.
 
@@ -20,6 +24,8 @@ Below is an analysis of these problems along with actionable, low-dilution engin
 
 ### Problem 2: Geographic R&D Violations under Hong Kong ESS Grant Rules
 
+> **Disposition: false premise, true conclusion-adjacent.** No ESS capitalization plan existed in BUSINESS.md — but the founder confirmed (2026-07-28) grants ARE planned, so the geography rules matter. ESS is 1:1 matching (HK$10M grant needs HK$10M own capital), so the adopted plan is a ladder: Cyberport CCMF / HKSTP Ideation → incubation → ESS at Series-A (BUSINESS.md §9a); the HK edge layer (DESIGN.md §2f) is the grant-scoped R&D. Real adjacent gap found: Modal had NO region config (implicit US) — now pinned `region="ap"`. RTH and locality rules recorded as directional/unverified; grant consultant before applying.
+
 * **The Vulnerability:** Your strategic capitalization plan relies on securing up to HK$10 million from Hong Kong's Enterprise Support Scheme (ESS) on a 1:1 matching basis. However, your system design specifies using US-hosted serverless GPU platforms (Modal, Baseten)  and potentially remote developers.
 
 
@@ -33,6 +39,8 @@ Below is an analysis of these problems along with actionable, low-dilution engin
 ---
 
 ### Problem 3: Regulated Stored Value Facility (SVF) Compliance in Hong Kong
+
+> **Disposition: mostly already addressed; one premise wrong.** Fix 1 (non-convertibility ToS guardrails) was already BUSINESS.md §3/§11 policy. Fix 2's premise is wrong: the free AI resume rewrite is already a free action, not a ledger redemption (`refineProfileText` performs no points debit). The real residual — planned fiat top-ups + cross-party compensation flow — was already flagged to counsel (LEGAL_REVIEW.md Q3/Q11); a cross-reference note was added, no mechanism change.
 
 * **The Vulnerability:** Your system design outlines a "closed-loop, non-monetary points ledger" featuring shared balances, earning (for onboarding, trials, and freshness updates), and spending/refunds (the reveal economy).
 
@@ -48,6 +56,8 @@ Below is an analysis of these problems along with actionable, low-dilution engin
 
 ### Problem 4: Automated Profiling and Accuracy Violations under Singapore’s PDPA
 
+> **Disposition: half built, half real gap — fixed.** Fix 2 (HITL) already existed in full: suggest-and-approve + AI-never-fabricates (DESIGN.md §2c). Fix 1 was a real gap: consent was two versioned grants, with no separate automated-profiling notice. Fixed (migration 0016): three-way split — processing + profiling required, continuous maintenance optional/withdrawable with a JIT prompt and settings toggle; PDPA Accuracy Obligation named in DESIGN.md §2c; counsel questions Q14/Q15.
+
 * **The Vulnerability:** Your system features a "continuous resume maintenance agent" acting as a lifelong editor , and an automated "candidate-paste reverse-match" fit score.
 
 
@@ -61,6 +71,8 @@ Below is an analysis of these problems along with actionable, low-dilution engin
 ---
 
 ### Problem 5: Centralization Bottleneck vs. Zero-Trust Marketing
+
+> **Disposition: concern valid, proposed fix rejected.** Adversarial deep-research (2026-07-28) refuted the ZK-FL specifics: the 99.97%/77%/"eliminates gradient leakage" numbers appear in no paper; no ZK-FL-vs-HE benchmark exists; implementations are experimental (~20× overhead, zero production deployments); AI Verify and Project Moonshot are LLM-governance/safety toolkits, not cryptographic certifications — ZK-FL would not help "pass" them; PDPA mandates comparable protection, not residency. Adopted instead: the Edge/Core layered architecture with a customer-VPC edge for enterprise B2B (DESIGN.md §2f) — raw data stays in the client environment, only pseudonymized vectors flow to the core under DPA. ZK-FL: far-future-watch.
 
 * **The Vulnerability:** You are marketing your platform as a "privacy-first" dark pool, yet your technical architecture is highly centralized. Raw data is processed on centralized serverless instances, and vectors are stored in a centralized database.
 

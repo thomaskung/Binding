@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { expect, test, type Page } from "@playwright/test";
+import { completeSeekerOnboarding } from "./seeker-onboarding";
 
 /**
  * Training home (DESIGN.md §7a) + Benefits catalog (DESIGN.md §7b), fully
@@ -56,16 +57,7 @@ test("complete a training program, then see the Benefits signal move", async ({ 
   await ensureUser(SEEKER.email);
 
   await signIn(page, SEEKER);
-  await page.waitForURL(/onboarding/);
-  await page.getByTestId("choose-seeker").click();
-  await page.waitForURL(/onboarding\/seeker/);
-  await page.getByTestId("onboard-name").fill("Tara Trainee");
-  await page.getByTestId("onboard-tos").check();
-  await page.getByTestId("onboard-consent").check();
-  await page.getByTestId("onboard-continue").click();
-  await page.waitForURL(/onboarding\/seeker\/profile/);
-  await page.getByTestId("wizard-skip").click();
-  await page.waitForURL(/\/seeker$/);
+  await completeSeekerOnboarding(page, { name: "Tara Trainee" });
 
   const admin = adminClient();
   const {
