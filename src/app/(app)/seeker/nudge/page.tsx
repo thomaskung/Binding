@@ -11,7 +11,7 @@ export default async function MaintenanceNudgePage() {
   const session = await requireRole("seeker");
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: profile }, { data: latestRole }] = await Promise.all([
+  const [{ data: profile }, { data: latestRole }, { data: consent }] = await Promise.all([
     supabase
       .from("profiles")
       .select("published_text, last_profile_activity_at")
@@ -24,6 +24,11 @@ export default async function MaintenanceNudgePage() {
       .order("end_date", { ascending: false, nullsFirst: true })
       .order("start_date", { ascending: false })
       .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("consent_flags")
+      .select("maintenance_consent_at")
+      .eq("profile_id", session.userId)
       .maybeSingle(),
   ]);
 
@@ -41,6 +46,7 @@ export default async function MaintenanceNudgePage() {
         latestRole={latestRole?.role ?? null}
         latestCompany={latestRole?.company ?? null}
         latestExperienceLine={latestExperienceLine}
+        maintenanceConsented={consent?.maintenance_consent_at != null}
       />
     </main>
   );

@@ -25,6 +25,9 @@ image = (
     image=image,
     gpu="T4",
     scaledown_window=120,
+    # APAC region pin — same rationale as llm.py's Qwen class (embedding
+    # input is redacted-but-candidate-derived text; keep it in-region).
+    region="ap",
     secrets=[modal.Secret.from_name("jumponboard-api-token")],
 )
 class Embedder:

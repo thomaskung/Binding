@@ -4,25 +4,41 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, Button, Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Separator, Textarea } from "@jumponboard/ui";
-import { acceptMaintenanceUpdate, requestMaintenanceDraft } from "@/app/(app)/seeker/actions";
+import {
+  acceptMaintenanceUpdate,
+  requestMaintenanceDraft,
+  updateMaintenanceConsent,
+} from "@/app/(app)/seeker/actions";
 
 interface Props {
   stale: boolean;
   latestRole: string | null;
   latestCompany: string | null;
   latestExperienceLine: string | null;
+  maintenanceConsented: boolean;
 }
 
 /** Stale-profile nudge (MaintenanceNudge template): ask a quick question,
  * review an AI-drafted suggest-and-approve addition (editable before
  * approval), then an up-to-date confirmation state. Approving republishes
- * (redact → embed → match) and earns the freshness confirmation. */
-export function MaintenanceNudge({ stale, latestRole, latestCompany, latestExperienceLine }: Props) {
+ * (redact → embed → match) and earns the freshness confirmation.
+ *
+ * Maintenance consent is optional at onboarding (LEGAL_REVIEW.md Q14), so a
+ * seeker without it gets a just-in-time consent prompt here — enable and
+ * continue in one step, never silent processing. */
+export function MaintenanceNudge({
+  stale,
+  latestRole,
+  latestCompany,
+  latestExperienceLine,
+  maintenanceConsented,
+}: Props) {
   const router = useRouter();
   const [answer, setAnswer] = useState("");
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [consented, setConsented] = useState(maintenanceConsented);
   const [pending, startTransition] = useTransition();
 
   const prompt =
@@ -46,6 +62,39 @@ export function MaintenanceNudge({ stale, latestRole, latestCompany, latestExper
       await acceptMaintenanceUpdate(suggestion);
       router.push("/seeker");
     });
+  }
+
+  if (!consented) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Turn on AI profile maintenance?</CardTitle>
+          <CardDescription>
+            This feature drafts profile updates from your answers for you to approve. It runs only
+            with your consent — nothing is ever changed without your explicit approval, and you can
+            withdraw any time in settings.
+          </CardDescription>
+        </CardHeader>
+        <CardFooter className="flex-col gap-2.5">
+          <Button
+            className="w-full"
+            data-testid="nudge-enable-maintenance"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                await updateMaintenanceConsent(true);
+                setConsented(true);
+              })
+            }
+          >
+            Enable and continue
+          </Button>
+          <Link href="/seeker" className="text-[13px] text-muted-foreground hover:underline">
+            Not now
+          </Link>
+        </CardFooter>
+      </Card>
+    );
   }
 
   if (!stale && suggestion === null) {

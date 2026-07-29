@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { expect, test, type Page } from "@playwright/test";
+import { completeSeekerOnboarding } from "./seeker-onboarding";
 
 /**
  * Seeker Profile tab's per-field visibility (Phase 2B, src/lib/field-visibility.ts):
@@ -54,16 +55,7 @@ test("hidden and matching_only fields are excluded from what recruiters see; vis
   await ensureUser(SEEKER.email);
 
   await signIn(page, SEEKER);
-  await page.waitForURL(/onboarding/);
-  await page.getByTestId("choose-seeker").click();
-  await page.waitForURL(/onboarding\/seeker/);
-  await page.getByTestId("onboard-name").fill("Vic Visibility");
-  await page.getByTestId("onboard-tos").check();
-  await page.getByTestId("onboard-consent").check();
-  await page.getByTestId("onboard-continue").click();
-  await page.waitForURL(/onboarding\/seeker\/profile/);
-  await page.getByTestId("wizard-skip").click();
-  await page.waitForURL(/\/seeker$/);
+  await completeSeekerOnboarding(page, { name: "Vic Visibility" });
 
   await page.goto("/seeker/profile");
   await page.getByRole("button", { name: "Edit profile" }).click();
