@@ -1,0 +1,49 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  vercel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_API_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: --prod
+
+  modal:
+    runs-on: ubuntu-latest
+    if: contains(join(github.event.commits.*.modified, ','), 'modal_app/') || contains(join(github.event.commits.*.added, ','), 'modal_app/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install modal
+
+      - name: Deploy Modal apps
+        run: |
+          modal token set --token-id "${{ secrets.MODAL_TOKEN_ID }}" --token-secret "${{ secrets.MODAL_TOKEN_SECRET }}"
+          modal deploy modal_app/embeddings.py
+          modal deploy modal_app/llm.py
+        working-directory: modal_app

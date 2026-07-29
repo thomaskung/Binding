@@ -34,13 +34,11 @@ land in Inbucket: http://127.0.0.1:54324
 | `pnpm test` | Vitest unit tests (stub AI, matching filter, privacy guardrail) |
 | `pnpm e2e` | Playwright smoke: the full reveal slice (needs `pnpm db:reset` first) |
 | `pnpm db:start` / `pnpm db:reset` | Local Supabase up / migrate+seed from zero |
-| `pnpm cf:build` / `pnpm cf:deploy` | OpenNext build / deploy to Cloudflare Workers |
 
 ## Stack (why: free-tier + solo-founder constraints — see DESIGN.md §12)
 
 - **Next.js 16** (App Router, TS strict, Tailwind 4 + shadcn/ui), hosted on
-  **Cloudflare Workers** via `@opennextjs/cloudflare` (Vercel Hobby prohibits
-  commercial use; Workers free tier doesn't)
+  **Vercel** (Hobby tier) for staging frontend
 - **Supabase** free tier: Postgres + pgvector (HNSW), Auth (magic link), Storage,
   RLS as the privacy enforcement layer. GitHub Actions cron pings `/api/health`
   every 3 days to dodge the 7-day free-tier pause

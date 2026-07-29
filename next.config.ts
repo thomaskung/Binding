@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   // survive (a bundled dist wouldn't preserve them reliably).
   transpilePackages: ["@jumponboard/ui"],
   // unpdf ships its own serverless-friendly PDF.js build; keep it external so
-  // the Workers bundle doesn't try to inline its dynamic requires.
+  // the serverless bundle doesn't try to inline its dynamic requires.
   serverExternalPackages: ["unpdf"],
   // Dev server is often opened via 127.0.0.1 (matches Supabase's local URLs).
   // Without this, Next blocks the cross-origin HMR websocket and falls back

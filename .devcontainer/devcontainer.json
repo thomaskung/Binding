@@ -1,0 +1,28 @@
+{
+  "name": "JumpOnBoard",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "forwardPorts": [3000, 54321, 54323, 54324],
+  "portsAttributes": {
+    "3000": { "label": "Next.js dev server", "onAutoForward": "notify" },
+    "54321": { "label": "Supabase API", "onAutoForward": "silent" },
+    "54323": { "label": "Supabase Studio", "onAutoForward": "silent" },
+    "54324": { "label": "Inbucket (email)", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": ".devcontainer/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "bradlc.vscode-tailwindcss",
+        "ms-playwright.playwright",
+        "esbenp.prettier-vscode"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "typescript.enablePromptUseWorkspaceTsdk": true,
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+      }
+    }
+  }
+}

@@ -8,7 +8,7 @@ import { Button, Card, CardAction, CardContent, CardDescription, CardFooter, Car
 import type { SignupIntent } from "@/lib/signup-intent";
 
 // Password auth is a demo/e2e-only shortcut — enabled via env in dev/e2e,
-// explicitly "false" in deploy config (wrangler.jsonc). When off, continuing
+// explicitly "false" in deploy config (Vercel env). When off, continuing
 // past the email step always sends a magic link, no password step exists.
 const PASSWORD_LOGIN_ENABLED = process.env.NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN === "true";
 
