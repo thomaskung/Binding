@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { expect, test, type Page } from "@playwright/test";
+import { completeSeekerOnboarding } from "./seeker-onboarding";
 
 /**
  * Adaptive dashboard's stale frame (DESIGN.md §2d) + the maintenance-nudge
@@ -54,23 +55,15 @@ async function signIn(page: Page, user: { email: string; password: string }) {
 test("stale profile nudges, and approving the draft clears staleness", async ({ page }) => {
   await ensureUser(SEEKER.email);
 
+  // Opts IN to maintenance consent at onboarding — this spec exercises the
+  // consented nudge loop; the JIT-consent prompt path is covered separately.
   await signIn(page, SEEKER);
-  await page.waitForURL(/onboarding/);
-  await page.getByTestId("choose-seeker").click();
-  await page.waitForURL(/onboarding\/seeker/);
-  await page.getByTestId("onboard-name").fill("Nadia Nudge");
-  await page.getByTestId("onboard-tos").check();
-  await page.getByTestId("onboard-consent").check();
-  await page.getByTestId("onboard-continue").click();
-  await page.waitForURL(/onboarding\/seeker\/profile/);
-  await page.getByTestId("onboarding-resume-paste").fill(
-    "Senior Backend Engineer, Acme Pay (2021 - 2024)\nBuilt payment pipelines with PostgreSQL and Kubernetes.",
-  );
-  await page.getByTestId("onboarding-extract").click();
-  await expect(page.getByTestId("onboarding-continue-dealbreakers")).toBeEnabled({ timeout: 15_000 });
-  await page.getByTestId("onboarding-continue-dealbreakers").click();
-  await page.getByTestId("onboarding-finish").click();
-  await page.waitForURL(/\/seeker$/);
+  await completeSeekerOnboarding(page, {
+    name: "Nadia Nudge",
+    resumeText:
+      "Senior Backend Engineer, Acme Pay (2021 - 2024)\nBuilt payment pipelines with PostgreSQL and Kubernetes.",
+    maintenanceConsent: true,
+  });
 
   // No product surface can fast-forward 90 days — backdate directly.
   const admin = adminClient();

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { expect, test, type Page } from "@playwright/test";
+import { completeSeekerOnboarding } from "./seeker-onboarding";
 
 /**
  * Registration wizard + override-reveal flow, fully self-contained: fresh
@@ -101,37 +102,40 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
 
   // --- Seeker registration: chooser -> consent -> resume-first wizard publish ---
   await signIn(seeker, SEEKER);
-  await seeker.waitForURL(/onboarding/);
-  await seeker.getByTestId("choose-seeker").click();
-  await seeker.waitForURL(/onboarding\/seeker/);
-  await seeker.getByTestId("onboard-name").fill("Sam Seeker");
-  await seeker.getByTestId("onboard-tos").check();
-  await seeker.getByTestId("onboard-consent").check();
-  await seeker.getByTestId("onboard-continue").click();
-  await seeker.waitForURL(/onboarding\/seeker\/profile/);
-  await seeker.getByTestId("onboarding-resume-paste").fill(
-    "Rust systems engineer: async runtimes, tokio, low-latency networking, observability tooling, performance profiling.",
-  );
-  await seeker.getByTestId("onboarding-extract").click();
-  await expect(seeker.getByTestId("onboarding-continue-dealbreakers")).toBeEnabled({ timeout: 15_000 });
-  await seeker.getByTestId("onboarding-continue-dealbreakers").click();
-  await seeker.getByTestId("onboarding-finish").click();
-  await seeker.waitForURL(/\/seeker$/);
+  await completeSeekerOnboarding(seeker, {
+    name: "Sam Seeker",
+    resumeText:
+      "Rust systems engineer: async runtimes, tokio, low-latency networking, observability tooling, performance profiling.",
+  });
 
   await seeker.goto("/seeker/profile/resume");
   await expect(seeker.getByTestId("redacted-preview")).toBeVisible({ timeout: 15_000 });
 
-  // Ensure override is allowed (toggle on) — Privacy card on the profile page.
+  // Paused-profile shield first (DESIGN §4 guardrail, net-new e2e coverage):
+  // override toggle ON but visibility paused — recruiter must see the
+  // unavailable state, never an override button.
   await seeker.goto("/seeker/profile");
+  await seeker.locator('select[name="visibility"]').selectOption("paused");
   await seeker.locator('input[name="reveal_override_enabled"]').check();
   await seeker.getByRole("button", { name: "Save settings" }).click();
+  await expect(seeker.getByText("Settings saved.")).toBeVisible();
+
+  await recruiter.getByTestId("view-matches").click();
+  await expect(recruiter.getByText(/Override unavailable: candidate currently unavailable/)).toBeVisible();
+  await expect(recruiter.getByTestId("override-candidate")).toHaveCount(0);
+
+  // Unpause (override stays allowed) — Privacy card on the profile page.
+  await seeker.goto("/seeker/profile");
+  await seeker.locator('select[name="visibility"]').selectOption("active");
+  await seeker.getByRole("button", { name: "Save settings" }).click();
+  await expect(seeker.getByText("Settings saved.")).toBeVisible();
 
   // Seeker sees the match but does NOT opt in.
   await seeker.goto("/seeker/matches");
   await expect(seeker.getByTestId("seeker-match-card").first()).toBeVisible();
 
   // --- Recruiter override-reveals the non-opted-in candidate ---
-  await recruiter.getByTestId("view-matches").click();
+  await recruiter.reload();
   await recruiter.getByTestId("override-candidate").click();
   await expect(recruiter.getByTestId("revealed-name")).toHaveText("Sam Seeker", {
     timeout: 15_000,

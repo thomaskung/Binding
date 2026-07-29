@@ -75,6 +75,12 @@ Output only the improved text. /no_think"""
     image=image,
     gpu="L4",
     scaledown_window=120,  # scale to zero quickly — credit guardrail
+    # APAC region pin (DESIGN.md §5/§12, 2026-07-28): raw resume text is
+    # redacted here, so processing runs in-region rather than Modal's
+    # implicit US default (~1.5x broad-region price multiplier accepted).
+    # Interim posture until the HK edge-layer migration (DESIGN.md §2f);
+    # cross-border safeguards (DPA) still apply — LEGAL_REVIEW.md Q16.
+    region="ap",
     secrets=[modal.Secret.from_name("jumponboard-api-token")],
 )
 class Qwen:

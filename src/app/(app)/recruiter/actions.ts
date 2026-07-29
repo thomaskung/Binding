@@ -6,9 +6,11 @@ import { assertJDTextOnly, getAiProvider } from "@/lib/ai";
 import { requireRole } from "@/lib/auth";
 import { parseCommaList, parseLineList } from "@/lib/jobs";
 import { refreshMatchesForJob } from "@/lib/matching";
+import { logPiiAccess } from "@/lib/pii-audit";
 import {
   appendLedger,
   countOverridesToday,
+  countStandardRevealsToday,
   getBalance,
   isOverrideBlocked,
   OVERRIDE_COMPENSATION,
@@ -16,6 +18,8 @@ import {
   OVERRIDE_DAILY_CAP,
   REVEAL_COMPENSATION,
   REVEAL_COST,
+  REVEAL_DAILY_CAP,
+  revealSpendGuard,
 } from "@/lib/points";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -146,8 +150,21 @@ export async function revealCandidate(matchId: string) {
     throw new Error("candidate has not expressed interest yet (override path ships post-MVP)");
   }
 
-  const balance = await getBalance(admin, session.userId);
-  if (balance < REVEAL_COST) throw new Error(`insufficient points (${balance}/${REVEAL_COST})`);
+  // Cap before balance — deterministic error ordering (revealSpendGuard
+  // contract). The daily cap is the DESIGN.md §5 anti-enumeration control;
+  // the points cost alone only rate-limits until top-ups ship.
+  const [usedToday, balance] = await Promise.all([
+    countStandardRevealsToday(admin, session.userId),
+    getBalance(admin, session.userId),
+  ]);
+  const guardError = revealSpendGuard({
+    usedToday,
+    dailyCap: REVEAL_DAILY_CAP,
+    balance,
+    cost: REVEAL_COST,
+    kind: "reveal",
+  });
+  if (guardError) throw new Error(guardError);
 
   // Fit summary from redacted text + JD — private AI path only.
   const { data: vector } = await admin
@@ -194,6 +211,16 @@ export async function revealCandidate(matchId: string) {
   await admin.from("matches").update({ status: "revealed" }).eq("id", match.id);
   await admin.from("message_threads").insert({ reveal_request_id: reveal.id });
 
+  // Cross-party identity disclosure — audit it (migration 0017; owner
+  // self-access is deliberately not logged, see src/lib/pii-audit.ts).
+  await logPiiAccess(admin, {
+    accessorId: session.userId,
+    accessorRole: "recruiter",
+    subjectId: match.profile_id,
+    resource: "candidate_identity",
+    action: "standard_reveal",
+  });
+
   revalidatePath(`/recruiter/jobs/${match.job_posting_id}`);
   revalidatePath(`/recruiter/jobs/${match.job_posting_id}/matches`);
 }
@@ -237,17 +264,19 @@ export async function overrideRevealCandidate(matchId: string) {
   if (await isOverrideBlocked(admin, session.userId, match.profile_id)) {
     throw new Error("this candidate declined a recent override — try again later");
   }
-  const usedToday = await countOverridesToday(admin, session.userId);
-  if (usedToday >= OVERRIDE_DAILY_CAP) {
-    throw new Error(`daily override limit reached (${OVERRIDE_DAILY_CAP}/day)`);
-  }
-
-  const balance = await getBalance(admin, session.userId);
-  if (balance < OVERRIDE_COST) {
-    throw new Error(
-      `insufficient points (${balance}/${OVERRIDE_COST}) — point top-ups are coming soon`,
-    );
-  }
+  // Cap before balance — same deterministic ordering as the standard path.
+  const [usedToday, balance] = await Promise.all([
+    countOverridesToday(admin, session.userId),
+    getBalance(admin, session.userId),
+  ]);
+  const guardError = revealSpendGuard({
+    usedToday,
+    dailyCap: OVERRIDE_DAILY_CAP,
+    balance,
+    cost: OVERRIDE_COST,
+    kind: "override",
+  });
+  if (guardError) throw new Error(guardError);
 
   const { data: vector } = await admin
     .from("skill_vectors")
@@ -292,6 +321,16 @@ export async function overrideRevealCandidate(matchId: string) {
 
   await admin.from("matches").update({ status: "revealed" }).eq("id", match.id);
   await admin.from("message_threads").insert({ reveal_request_id: reveal.id });
+
+  // Cross-party identity disclosure (pre-opt-in — the higher-privacy-cost
+  // path) — audit it (migration 0017).
+  await logPiiAccess(admin, {
+    accessorId: session.userId,
+    accessorRole: "recruiter",
+    subjectId: match.profile_id,
+    resource: "candidate_identity",
+    action: "override_reveal",
+  });
 
   revalidatePath(`/recruiter/jobs/${match.job_posting_id}`);
   revalidatePath(`/recruiter/jobs/${match.job_posting_id}/matches`);

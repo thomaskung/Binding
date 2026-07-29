@@ -55,8 +55,35 @@ export default async function SeekerOnboardingPage() {
               />
               <span>
                 I consent to AI processing of my resume data: redaction of identifying details and
-                conversion into an anonymized matching profile. Redaction reduces but cannot
+                conversion into a pseudonymized matching profile. Redaction reduces but cannot
                 eliminate re-identification risk.
+              </span>
+            </label>
+            <label className="flex items-start gap-2.5 text-sm leading-snug">
+              <input
+                type="checkbox"
+                name="profiling_consent"
+                data-testid="onboard-profiling"
+                className="mt-0.5"
+                required
+              />
+              <span>
+                I understand and consent that AI performs automated matching (profiling) between my
+                pseudonymized profile and job postings — this is how JumpOnBoard surfaces matches.
+                No match is disclosed to a recruiter without the reveal flow I control.
+              </span>
+            </label>
+            <label className="flex items-start gap-2.5 text-sm leading-snug">
+              <input
+                type="checkbox"
+                name="maintenance_consent"
+                data-testid="onboard-maintenance"
+                className="mt-0.5"
+              />
+              <span>
+                Optional: I consent to continuous AI resume maintenance — periodic check-ins that
+                draft profile updates for my approval. Nothing is ever changed without my explicit
+                approval, and I can withdraw this any time in settings.
               </span>
             </label>
             <Separator />

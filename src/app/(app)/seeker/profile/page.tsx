@@ -19,7 +19,7 @@ export default async function SeekerProfilePage() {
         .single(),
       supabase
         .from("consent_flags")
-        .select("reveal_override_enabled, market_signals_opt_in_at")
+        .select("reveal_override_enabled, market_signals_opt_in_at, maintenance_consent_at")
         .eq("profile_id", session.userId)
         .maybeSingle(),
       supabase
@@ -51,6 +51,7 @@ export default async function SeekerProfilePage() {
       visibility={(profile?.visibility ?? "active") as "active" | "paused"}
       overrideEnabled={consent?.reveal_override_enabled ?? false}
       marketSignalsOptedIn={consent?.market_signals_opt_in_at != null}
+      maintenanceConsented={consent?.maintenance_consent_at != null}
       minSalary={dealbreakers.min_salary ?? null}
       workSetups={dealbreakers.work_setups ?? []}
       headline={profile?.headline ?? ""}

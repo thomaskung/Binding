@@ -37,6 +37,7 @@ import {
   saveDraft,
   saveExperience,
   updateFieldVisibility,
+  updateMaintenanceConsent,
   updateMarketSignalsConsent,
   updateSettings,
 } from "../actions";
@@ -72,6 +73,7 @@ export interface ProfileFieldsProps {
   visibility: "active" | "paused";
   overrideEnabled: boolean;
   marketSignalsOptedIn: boolean;
+  maintenanceConsented: boolean;
   minSalary: number | null;
   workSetups: string[];
   headline: string;
@@ -168,6 +170,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
     props.fieldVisibility ?? {},
   );
   const [marketSignalsOptedIn, setMarketSignalsOptedIn] = useState(props.marketSignalsOptedIn);
+  const [maintenanceConsented, setMaintenanceConsented] = useState(props.maintenanceConsented);
   const [status, setStatus] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -814,6 +817,49 @@ export function ProfileFields(props: ProfileFieldsProps) {
                     Save settings
                   </Button>
                 </form>
+
+                <Separator />
+
+                <div data-testid="maintenance-consent-card" className="space-y-3.5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm font-semibold">Continuous AI resume maintenance</span>
+                      <span className="text-[13px] leading-normal text-muted-foreground">
+                        Optional and separate from your processing consent: periodic check-ins that
+                        draft profile updates for your approval. Nothing changes without your
+                        explicit approval. Withdraw any time — the maintenance loop stops
+                        immediately.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={maintenanceConsented}
+                      aria-label="Continuous AI resume maintenance"
+                      disabled={pending}
+                      data-testid="maintenance-consent-toggle"
+                      onClick={() => {
+                        const next = !maintenanceConsented;
+                        setMaintenanceConsented(next);
+                        startTransition(() => updateMaintenanceConsent(next));
+                      }}
+                      className={
+                        "relative h-6 w-10 flex-none rounded-full transition-colors " +
+                        (maintenanceConsented ? "bg-primary" : "bg-secondary")
+                      }
+                    >
+                      <span
+                        className={
+                          "absolute top-0.5 size-5 rounded-full bg-white shadow transition-[left] " +
+                          (maintenanceConsented ? "left-[18px]" : "left-0.5")
+                        }
+                      />
+                    </button>
+                  </div>
+                  <Badge variant={maintenanceConsented ? "default" : "secondary"}>
+                    {maintenanceConsented ? "On" : "Off"}
+                  </Badge>
+                </div>
 
                 <Separator />
 

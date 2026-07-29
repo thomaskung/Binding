@@ -27,6 +27,7 @@ import {
   saveDraft,
   saveExperience,
 } from "@/app/(app)/seeker/actions";
+import { describePiiCategories, stripPiiPatterns, type PiiCategory } from "@/lib/pii-patterns";
 import { OnboardingChrome } from "../onboarding-chrome";
 
 const WORK_SETUPS = ["onsite", "hybrid", "remote"] as const;
@@ -175,37 +176,43 @@ export function OnboardingWizard(props: Props) {
   const [sourceName, setSourceName] = useState<string | null>(
     props.draftText.trim() ? "Saved draft" : null,
   );
-  const nextId = useRef(1);
-  const [items, setItems] = useState<TextItem[]>(() => {
+  // Seed both item lists (and the id counter's starting point) in ONE lazy
+  // initializer using a local counter — mutating a ref inside useState
+  // initializers reads/writes the ref during render (react-hooks/refs).
+  const [initialSeed] = useState(() => {
+    let id = 1;
     const seed = (values: string[], category: Category): TextItem[] =>
       values.map((text) => ({
-        id: nextId.current++,
+        id: id++,
         category,
         text,
         status: "approved" as const,
         editing: false,
         draft: text,
       }));
-    return [
+    const items = [
       ...seed(props.skills, "Skills"),
       ...seed(props.desiredRoles, "Roles"),
       ...seed(props.industries, "Industries"),
     ];
-  });
-  const [expItems, setExpItems] = useState<ExperienceItem[]>(
-    props.experience.map((row) => ({
-      id: nextId.current++,
+    const expItems: ExperienceItem[] = props.experience.map((row) => ({
+      id: id++,
       row,
       status: "approved" as const,
       editing: false,
-    })),
-  );
+    }));
+    return { items, expItems, nextId: id };
+  });
+  const nextId = useRef(initialSeed.nextId);
+  const [items, setItems] = useState<TextItem[]>(initialSeed.items);
+  const [expItems, setExpItems] = useState<ExperienceItem[]>(initialSeed.expItems);
   const [extracted, setExtracted] = useState(props.draftText.trim().length > 0);
   const [newCategory, setNewCategory] = useState<Category | "Experience">("Skills");
   const [newText, setNewText] = useState("");
   const [minSalary, setMinSalary] = useState(props.minSalary?.toString() ?? "");
   const [workSetups, setWorkSetups] = useState<string[]>(props.workSetups);
   const [status, setStatus] = useState<string | null>(null);
+  const [piiNote, setPiiNote] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -218,9 +225,31 @@ export function OnboardingWizard(props: Props) {
       setStatus(`Upload failed: ${(await res.json().catch(() => null))?.error ?? res.status}`);
       return;
     }
-    const { text } = (await res.json()) as { text: string };
+    const { text, piiFound } = (await res.json()) as { text: string; piiFound?: PiiCategory[] };
+    // PDF path (DESIGN.md §2f Layer 0): identifiers were stripped at our
+    // edge AFTER upload — honest copy, never a "never left your device"
+    // claim (the raw file is stored owner-only, metadata-stripped).
+    setPiiNote(
+      piiFound && piiFound.length > 0
+        ? `We removed ${describePiiCategories(piiFound)} from your draft after upload. Your original file stays private to you.`
+        : null,
+    );
     setRawText(text);
     await runExtraction(text, file.name);
+  }
+
+  /** Paste path (DESIGN.md §2f Layer 0): deterministic contact-identifier
+   * strip runs HERE, in the browser, before the text is sent anywhere —
+   * for this path "removed before leaving your device" is literally true. */
+  function extractFromPaste() {
+    const { text, found } = stripPiiPatterns(rawText);
+    setPiiNote(
+      found.length > 0
+        ? `We removed ${describePiiCategories(found)} before your text left this device.`
+        : null,
+    );
+    setRawText(text);
+    void runExtraction(text, "Pasted text");
   }
 
   function runExtraction(text: string, source: string) {
@@ -446,7 +475,7 @@ export function OnboardingWizard(props: Props) {
                 className="w-full"
                 data-testid="onboarding-extract"
                 disabled={pending || !rawText.trim()}
-                onClick={() => runExtraction(rawText, "Pasted text")}
+                onClick={extractFromPaste}
               >
                 Extract from text
               </Button>
@@ -606,6 +635,11 @@ export function OnboardingWizard(props: Props) {
             </>
           )}
 
+          {piiNote && (
+            <p className="text-[13px] leading-normal text-muted-foreground" data-testid="pii-preview-note">
+              {piiNote}
+            </p>
+          )}
           {status && <p className="text-sm text-muted-foreground">{status}</p>}
         </CardContent>
         <CardFooter className="flex gap-2.5">

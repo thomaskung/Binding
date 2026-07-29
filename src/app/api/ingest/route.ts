@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { extractText, getDocumentProxy } from "unpdf";
 import { getSessionProfile } from "@/lib/auth";
+import { stripPdfMetadata } from "@/lib/pdf-metadata";
+import { stripPiiPatterns } from "@/lib/pii-patterns";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 
 const MAX_PDF_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -44,15 +46,19 @@ export async function POST(request: Request) {
   }
 
   // Store the raw file + text owner-only (RLS: resumes table is owner-only;
-  // storage bucket is private).
+  // storage bucket is private). The stored file has its document metadata
+  // stripped (Info dict + XMP — author/org fields no redaction pass sees);
+  // raw_text stays the FAITHFUL extraction (owner-only DSAR access copy) —
+  // pattern-stripping applies only to the returned draft text below.
   const admin = createSupabaseAdminClient();
   const storagePath = `${session.userId}/${Date.now()}.pdf`;
   await admin.storage.createBucket("resumes", { public: false }).catch(() => {
     /* bucket exists */
   });
+  const stripped = await stripPdfMetadata(buffer);
   const { error: uploadError } = await admin.storage
     .from("resumes")
-    .upload(storagePath, buffer, { contentType: "application/pdf" });
+    .upload(storagePath, stripped, { contentType: "application/pdf" });
   if (!uploadError) {
     await admin.from("resumes").insert({
       profile_id: session.userId,
@@ -61,5 +67,9 @@ export async function POST(request: Request) {
     });
   }
 
-  return NextResponse.json({ text });
+  // Layer-0 defense-in-depth on the PDF path (DESIGN.md §2f): deterministic
+  // contact-identifier strip on the draft text handed back to the client —
+  // ahead of the LLM redaction that runs at publish.
+  const { text: draftText, found } = stripPiiPatterns(text);
+  return NextResponse.json({ text: draftText, piiFound: found });
 }

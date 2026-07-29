@@ -16,6 +16,12 @@ export const SEEKER_SEED_POINTS = 10;
 export const RECRUITER_SEED_POINTS = 100;
 export const REVEAL_COST = 10;
 export const REVEAL_COMPENSATION = 3;
+// Standard-reveal daily cap (DESIGN.md §5 rate-limited-reveals mitigation —
+// previously only overrides were capped, so "rate-limited reveals" was
+// half-true). 10/day binds at the affordable burst under seed economics
+// (100 pts / 10 per reveal); it becomes fully load-bearing once top-ups
+// ship. Checked BEFORE the balance check for deterministic error ordering.
+export const REVEAL_DAILY_CAP = Number(process.env.REVEAL_DAILY_CAP ?? 10);
 
 // Override path (paid pre-opt-in reveal — DESIGN.md §4):
 // 25 total = 10 base (the look, kept on decline) + 15 engagement premium
@@ -155,6 +161,44 @@ export async function seedBalance(
 // ---------------------------------------------------------------------------
 // Override guards (DESIGN.md §4 guardrails)
 // ---------------------------------------------------------------------------
+
+/** Pure guard for a reveal-shaped spend: cap first, then balance — the
+ * ordering is part of the contract (a capped recruiter must see the cap
+ * error even when also broke, so the message doesn't flap with balance).
+ * Returns the error message to throw, or null if the spend may proceed. */
+export function revealSpendGuard(input: {
+  usedToday: number;
+  dailyCap: number;
+  balance: number;
+  cost: number;
+  kind: "reveal" | "override";
+}): string | null {
+  if (input.usedToday >= input.dailyCap) {
+    return `daily ${input.kind} limit reached (${input.dailyCap}/day)`;
+  }
+  if (input.balance < input.cost) {
+    return input.kind === "override"
+      ? `insufficient points (${input.balance}/${input.cost}) — point top-ups are coming soon`
+      : `insufficient points (${input.balance}/${input.cost})`;
+  }
+  return null;
+}
+
+/** Standard reveals used by this recruiter in the last 24h (daily cap). */
+export async function countStandardRevealsToday(
+  admin: SupabaseClient,
+  recruiterId: string,
+): Promise<number> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { count, error } = await admin
+    .from("points_ledger")
+    .select("id", { count: "exact", head: true })
+    .eq("profile_id", recruiterId)
+    .eq("event", "reveal_spend")
+    .gte("created_at", since);
+  if (error) throw new Error(`reveal count failed: ${error.message}`);
+  return count ?? 0;
+}
 
 /** Overrides used by this recruiter in the last 24h (daily cap check). */
 export async function countOverridesToday(
