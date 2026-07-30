@@ -1,0 +1,128 @@
+name: Staging E2E
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  wait-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for Vercel deploy
+        run: |
+          echo "Checking Vercel deployment status..."
+          DEPLOYED=$(curl -s "https://api.vercel.com/v1/deployments?teamId=${{ secrets.VERCEL_ORG_ID }}&projectId=${{ secrets.VERCEL_PROJECT_ID }}&limit=1&target=production" \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_API_TOKEN }}" 2>/dev/null)
+          STATE=$(echo "$DEPLOYED" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['deployments'][0]['state'] if d.get('deployments') else '')" 2>/dev/null || echo "")
+          if [ "$STATE" = "BUILDING" ] || [ "$STATE" = "QUEUED" ]; then
+            echo "Deployment in progress — waiting..."
+            for i in $(seq 1 30); do
+              sleep 20
+              STATE=$(curl -s "https://api.vercel.com/v1/deployments?teamId=${{ secrets.VERCEL_ORG_ID }}&projectId=${{ secrets.VERCEL_PROJECT_ID }}&limit=1&target=production" \
+                -H "Authorization: Bearer ${{ secrets.VERCEL_API_TOKEN }}" 2>/dev/null | \
+                python3 -c "import sys,json; d=json.load(sys.stdin); print(d['deployments'][0]['state'] if d.get('deployments') else '')" 2>/dev/null || echo "")
+              if [ "$STATE" = "READY" ]; then echo "Deploy ready"; exit 0; fi
+            done
+            echo "Timeout waiting for deploy"; exit 1
+          fi
+          echo "Latest deploy state: $STATE"
+
+  functional:
+    needs: wait-deploy
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '11.5.2' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'pnpm' }
+      - run: pnpm install
+      - name: Modal warm-up
+        run: |
+          curl -X POST https://thomaskung--jumponboard-embeddings-embedder-embed.modal.run \
+            -H "Authorization: Bearer ${{ secrets.MODAL_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"text":"warmup"}' || echo "Warm-up done (cold start accepted)"
+      - run: npx playwright install chromium
+      - name: Run functional tests
+        run: npx playwright test e2e/staging-functional.spec.ts --retries=1
+        env:
+          E2E_BASE_URL: https://jumponboard-staging.vercel.app
+          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          E2E_SERVICE_ROLE_KEY: ${{ secrets.E2E_SERVICE_ROLE_KEY }}
+          E2E_STAGING_SECRET: ${{ secrets.E2E_STAGING_SECRET }}
+          E2E_STAGING_BASIC_USER: staging
+          E2E_STAGING_BASIC_PW: ${{ secrets.E2E_STAGING_BASIC_PW }}
+      - name: Create issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: 'thomaskung',
+              repo: 'JumpOnBoard',
+              title: 'Staging E2E — functional tests failed',
+              body: `Nightly staging functional tests failed.\nWorkflow run: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}\n\nCheck the staging environment: https://jumponboard-staging.vercel.app`
+            });
+
+  uat-evidence:
+    needs: functional
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '11.5.2' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'pnpm' }
+      - run: pnpm install
+      - run: npx playwright install chromium
+      - name: Run UAT evidence tests
+        run: npx playwright test e2e/staging-uat.spec.ts --retries=1
+        env:
+          E2E_BASE_URL: https://jumponboard-staging.vercel.app
+          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          E2E_SERVICE_ROLE_KEY: ${{ secrets.E2E_SERVICE_ROLE_KEY }}
+          E2E_STAGING_SECRET: ${{ secrets.E2E_STAGING_SECRET }}
+          E2E_STAGING_BASIC_USER: staging
+          E2E_STAGING_BASIC_PW: ${{ secrets.E2E_STAGING_BASIC_PW }}
+
+  score-uat:
+    needs: uat-evidence
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+        with: { persist-credentials: false }
+      - uses: anomalyco/opencode/github@latest
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_UAT_READONLY_KEY }}
+        with:
+          model: opencode/deepseek-v4-pro
+          prompt: |
+            You are the UAT scorer for JumpOnBoard staging. Complete these steps:
+
+            1. Read BUSINESS.md and e2e/uat-rubric.json from the repo.
+            2. Fetch the latest test evidence from Supabase bucket staging-test-evidence.
+               Use the SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY from environment variables.
+            3. For each of the 7 UAT scenarios, use the Task tool to spawn TWO subagents
+               (configured with mode: subagent, from .opencode/agent/uat-scorer.md).
+               Each subagent independently reads the scenario evidence and relevant
+               BUSINESS.md section, then returns a JSON score.
+            4. Compare the two agents' scores. If any dimension delta > 1 on any scenario,
+               flag for human review. If scores are close (delta ≤ 1), average them.
+            5. Fetch the previous baseline from staging-test-scores/latest.json.
+               If any score dropped from baseline, flag as regression with specific detail.
+            6. Output the complete scored report as JSON.
+            7. Store the report to Supabase bucket staging-test-scores/{runId}.json
+               and update staging-test-scores/latest.json.
+            8. If any score < 3 OR any regression detected, create a GitHub issue
+               with the failure summary and a link to the evidence bucket.
+            9. Purge evidence runs older than 3 from the staging-test-evidence bucket.

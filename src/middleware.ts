@@ -1,9 +1,38 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+/** Staging auth gate — basic auth + shared-secret bypass.
+ * Only active when STAGING_BASIC_AUTH is set (Vercel staging only, not local dev). */
+function stagingGate(request: NextRequest): NextResponse | null {
+  const basicAuth = process.env.STAGING_BASIC_AUTH;
+  const sharedSecret = process.env.STAGING_SHARED_SECRET;
+  if (!basicAuth && !sharedSecret) return null;
+
+  const path = request.nextUrl.pathname;
+  if (path === "/api/health") return null;
+
+  if (sharedSecret && request.headers.get("x-staging-auth") === sharedSecret) return null;
+
+  if (basicAuth) {
+    const auth = request.headers.get("authorization") ?? "";
+    const [scheme, encoded] = auth.split(" ");
+    if (scheme === "Basic" && encoded && atob(encoded) === basicAuth) return null;
+    return new NextResponse("Unauthorized", {
+      status: 401,
+      headers: { "WWW-Authenticate": 'Basic realm="Staging"' },
+    });
+  }
+
+  // sharedSecret set but not matched — block without basic auth prompt
+  return new NextResponse("Unauthorized", { status: 401 });
+}
+
 /** Session refresh + auth gating. Public: landing, login, auth callback,
  * health. Everything else requires a session. */
 export default async function middleware(request: NextRequest) {
+  const gate = stagingGate(request);
+  if (gate) return gate;
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

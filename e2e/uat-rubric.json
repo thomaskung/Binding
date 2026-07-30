@@ -1,0 +1,24 @@
+{
+  "calibration": {
+    "5": "Exactly matches spec text. All described behaviors, constraints, and rules are present and working.",
+    "4": "Working as described but with minor UI/UX gaps or edge cases.",
+    "3": "Core functionality works but has notable gaps (missing sub-feature, rough UI).",
+    "2": "Partially implemented. Significant divergence from spec.",
+    "1": "Missing or broken. Spec-described behavior does not exist or fails."
+  },
+  "passing": 3,
+  "dimensions": {
+    "completeness": "Are all described features present?",
+    "fidelity": "Do business rules and constraints hold?",
+    "ux": "Does the experience match the pitch (Hurdles Not Blockers, Dark Pool, Closed-Loop Economy, Privacy-First, Consent-First Reveal)?"
+  },
+  "scenarios": {
+    "1_privacy_first": { "name": "Privacy-first promise", "business_section": "§1, §3 pillar 1" },
+    "2_dealbreaker_matrix": { "name": "Dealbreaker matrix", "business_section": "§3 pillar 2" },
+    "3_consent_first_reveal": { "name": "Consent-first reveal", "business_section": "§3 pillar 3, §4" },
+    "4_closed_loop_points": { "name": "Closed-loop points economy", "business_section": "§3, §7, §11" },
+    "5_retention_moat": { "name": "Retention moat (hurdles not blockers)", "business_section": "§3 pillar 4" },
+    "6_free_vs_pro": { "name": "Free vs Pro differentiation", "business_section": "§7" },
+    "7_dark_pool": { "name": "Dark pool value (profile freshness)", "business_section": "§6, §3 pillar 6" }
+  }
+}
