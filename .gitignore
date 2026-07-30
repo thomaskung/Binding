@@ -41,3 +41,6 @@ ds-bundle/
 packages/ui/.ds-tailwind-cache.css
 .vercel
 .env*
+
+# stale build output of the removed Cloudflare/OpenNext toolchain
+.open-next/

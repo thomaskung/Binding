@@ -73,7 +73,7 @@ export default function PrivacyNoticePage() {
               <td className="py-1.5">Asia-Pacific (region-pinned)</td>
             </tr>
             <tr className="border-b">
-              <td className="py-1.5 pr-3">Cloudflare</td>
+              <td className="py-1.5 pr-3">Vercel</td>
               <td className="py-1.5 pr-3">Application hosting &amp; CDN</td>
               <td className="py-1.5">Global edge network</td>
             </tr>
