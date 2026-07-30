@@ -1,0 +1,59 @@
+name: Staging Cleanup
+on:
+  schedule:
+    - cron: '0 4 * * 0'
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '11.5.2' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - name: Delete stale test users
+        run: |
+          cat << 'SCRIPT' > /tmp/cleanup.mjs
+          import { createClient } from "@supabase/supabase-js";
+
+          const url = process.env.SUPABASE_URL;
+          const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+          if (!url || !key) { console.error("Missing env vars"); process.exit(1); }
+
+          const admin = createClient(url, key, { auth: { persistSession: false } });
+
+          // Find stale test users (older than 24h)
+          const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          const { data: users, error } = await admin.auth.admin.listUsers();
+          if (error) { console.error("listUsers failed:", error.message); process.exit(1); }
+
+          const stale = users.users.filter((u) =>
+            u.email?.endsWith("@staging.local") && new Date(u.created_at) < new Date(cutoff)
+          );
+
+          console.log(`Found ${stale.length} stale test users to clean up`);
+
+          for (const user of stale) {
+            // Sanitize points_ledger before cascade delete
+            await admin
+              .from("points_ledger")
+              .update({ profile_id: null, event: "account_closed", note: null })
+              .eq("profile_id", user.id);
+
+            const { error: delError } = await admin.auth.admin.deleteUser(user.id, true);
+            if (delError) {
+              console.error(`Failed to delete ${user.email}: ${delError.message}`);
+            } else {
+              console.log(`Deleted ${user.email}`);
+            }
+          }
+
+          console.log("Cleanup complete");
+          SCRIPT
+
+          node /tmp/cleanup.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_SERVICE_ROLE_KEY }}

@@ -1,5 +1,13 @@
 # AGENTS.md
 
+## Secrets Policy
+
+- **All secrets live in `.env.local` only** — never in code, config files, documentation, or commit history.
+- `.env.local` is gitignored and must never be staged. If a secret is detected in a tracked file, rotate it immediately.
+- Repo-wide secrets are stored as GitHub Actions encrypted secrets (`gh secret set`), referenced via `${{ secrets.SECRET_NAME }}`.
+- When documenting commands that require secrets, use placeholder names like `<supabase-role-key>`, never paste real values.
+- The staging E2E command below is an example; real secrets come from `.env.local` or GH Actions secrets.
+
 ## Dev Setup
 
 - `pnpm install` (pnpm 11.5.2 — `corepack enable` first if missing)
@@ -13,6 +21,17 @@
 - Unit tests: `pnpm test` (vitest, `tests/*.test.ts`, Node env)
 - Single file: `pnpm test -- tests/matching.test.ts`
 - E2E: `pnpm e2e` — must `pnpm db:reset` first, needs `NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN=true` in `.env.local`, runs serially (1 worker)
+- Staging E2E (password login + basic auth required, secrets from `.env.local`):
+  ```
+  E2E_BASE_URL=https://jumponboard-staging.vercel.app \
+  E2E_SUPABASE_URL=https://qjqaeuzpsefawqwlfwlf.supabase.co \
+  E2E_SERVICE_ROLE_KEY="<supabase-role-key>" \
+  E2E_STAGING_SECRET="<shared-secret>" \
+  E2E_STAGING_BASIC_USER=staging \
+  E2E_STAGING_BASIC_PW="<basic-auth-pw>" \
+  npx playwright test e2e/staging-functional.spec.ts
+  ```
+- Nightly cron at 3am UTC runs full staging suite + UAT scoring via OpenCode GitHub action
 - Full verify: `pnpm lint && pnpm typecheck && pnpm test`
 
 ## Infrastructure CLI
@@ -56,3 +75,8 @@
 - TS pinned to 5.x, ESLint pinned to 9 — upgrading breaks eslint-config-next
 - Strategy docs (BUSINESS/DESIGN/VISION/LEGAL_REVIEW) are versioned — bump version, update date, add history row on material edits
 - Staging: `main` branch = Vercel deploy, Supabase hosted, Modal AI. Codespace for dev.
+- Staging is gated by HTTP Basic Auth + `x-staging-auth` shared secret header (defense-in-depth).
+  Set `STAGING_BASIC_AUTH` + `STAGING_SHARED_SECRET` env vars on Vercel to activate.
+  No gate in local dev — middleware checks for these env vars before applying.
+- Account deletion implemented at `/account` — cascading delete with points ledger sanitization
+  (DESIGN.md §11). Tested nightly as functional test #15.
