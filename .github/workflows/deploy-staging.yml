@@ -21,13 +21,15 @@ jobs:
 
       - run: pnpm install
 
+      # Direct CLI instead of amondnet/vercel-action@v25: that action pins
+      # Vercel CLI 25.1.0, which Vercel's API now rejects ("requires version
+      # 47.2.2 or later") — it broke every deploy since the workflow landed.
       - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_API_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: --prod
+        run: npx vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
   modal:
     runs-on: ubuntu-latest
@@ -41,9 +43,11 @@ jobs:
 
       - run: pip install modal
 
+      # No working-directory: paths are repo-relative — combining
+      # working-directory: modal_app with modal_app/… paths resolved to
+      # modal_app/modal_app/… and would fail whenever this job triggered.
       - name: Deploy Modal apps
         run: |
           modal token set --token-id "${{ secrets.MODAL_TOKEN_ID }}" --token-secret "${{ secrets.MODAL_TOKEN_SECRET }}"
           modal deploy modal_app/embeddings.py
           modal deploy modal_app/llm.py
-        working-directory: modal_app
