@@ -10,6 +10,9 @@ function stagingGate(request: NextRequest): NextResponse | null {
 
   const path = request.nextUrl.pathname;
   if (path === "/api/health") return null;
+  // Public marketing landing page — reviewers can view it without credentials.
+  // Login/signup and app routes stay gated.
+  if (path === "/" || path === "/landing") return null;
 
   if (sharedSecret && request.headers.get("x-staging-auth") === sharedSecret) return null;
 

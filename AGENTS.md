@@ -34,6 +34,12 @@
 - Nightly cron at 3am UTC runs full staging suite + UAT scoring via OpenCode GitHub action
 - Full verify: `pnpm lint && pnpm typecheck && pnpm test`
 
+## PDF Reading
+
+- Public brand is **Binding**; "JumpOnBoard" was the internal code name (retired for branding).
+- To read a PDF: `node scripts/pdf2md.mjs "<file.pdf>" /tmp/out.md` (uses `@firecrawl/pdf-inspector`), then Read the markdown. See the `pdf-reader` skill.
+- Scanned/image PDFs with no text layer can't be read this way — flag for OCR.
+
 ## Infrastructure CLI
 
 **GitHub (`gh`)**

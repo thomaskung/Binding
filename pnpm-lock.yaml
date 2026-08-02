@@ -39,6 +39,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@firecrawl/pdf-inspector':
+        specifier: ^1.11.2
+        version: 1.11.2
       '@playwright/test':
         specifier: ^1.61.1
         version: 1.61.1
@@ -508,6 +511,29 @@ packages:
   '@eslint/plugin-kit@0.4.1':
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@firecrawl/pdf-inspector-darwin-arm64@1.11.2':
+    resolution: {integrity: sha512-L2Ict3j2V51cBxiCg4Q8AWXwKhMO46It/o1NdHgBwYeHf8tCBxhrts4YGHq9tYmMxFYo3g5E5jAk7pkjMmzlJg==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@firecrawl/pdf-inspector-linux-x64-gnu@1.11.2':
+    resolution: {integrity: sha512-nTeFUvZODi0aDZHhDv1B3U6k9J9hHvRYLuzbh1CMl9PR9h5muxlUpQLHVslhQXsRdVwdA32TZTPE+Ziuw39ttA==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@firecrawl/pdf-inspector-win32-x64-msvc@1.11.2':
+    resolution: {integrity: sha512-Kl9/i814dpygPbC8/seiJyANO6440QC2ZLAsPVn2TsvXwaGe2IZQFnWaQn4o1qGiCX7cQOsinZSlWp2tvAuOyQ==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [win32]
+
+  '@firecrawl/pdf-inspector@1.11.2':
+    resolution: {integrity: sha512-Sqb071LRCj/AffWHWgXNt49nQHVrEooAfglniV3PbJ1/AplNJaTqjYZ7HN6jAyzrPGCdZ4+/CQOuVu+fO9NGIQ==}
+    hasBin: true
 
   '@floating-ui/core@1.8.0':
     resolution: {integrity: sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ==}
@@ -4020,6 +4046,21 @@ snapshots:
     dependencies:
       '@eslint/core': 0.17.0
       levn: 0.4.1
+
+  '@firecrawl/pdf-inspector-darwin-arm64@1.11.2':
+    optional: true
+
+  '@firecrawl/pdf-inspector-linux-x64-gnu@1.11.2':
+    optional: true
+
+  '@firecrawl/pdf-inspector-win32-x64-msvc@1.11.2':
+    optional: true
+
+  '@firecrawl/pdf-inspector@1.11.2':
+    optionalDependencies:
+      '@firecrawl/pdf-inspector-darwin-arm64': 1.11.2
+      '@firecrawl/pdf-inspector-linux-x64-gnu': 1.11.2
+      '@firecrawl/pdf-inspector-win32-x64-msvc': 1.11.2
 
   '@floating-ui/core@1.8.0':
     dependencies:
