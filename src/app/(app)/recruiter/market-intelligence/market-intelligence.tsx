@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Tabs, TabsList, TabsTrigger } from "@jumponboard/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Tabs, TabsList, TabsTrigger } from "@binding/ui";
 import type {
   SalaryTrendBySeniorityRow,
   SalaryTrendRow,

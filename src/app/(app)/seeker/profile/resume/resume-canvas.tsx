@@ -12,7 +12,7 @@ import {
   CardTitle,
   Input,
   Textarea,
-} from "@jumponboard/ui";
+} from "@binding/ui";
 import { PROFILE_QUICK_ACTIONS } from "@/lib/profile";
 import { publishProfile, refineProfileText, saveDraftText } from "../../actions";
 

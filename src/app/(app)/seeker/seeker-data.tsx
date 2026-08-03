@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@jumponboard/ui";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@binding/ui";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { expireStaleOverride, getBalance, OVERRIDE_COMPENSATION } from "@/lib/points";
 import { matchBand, type SeekerTier } from "@/lib/matching";

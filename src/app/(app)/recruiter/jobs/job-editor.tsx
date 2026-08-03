@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { Badge, Button, Card, CardContent, CardHeader, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea } from "@jumponboard/ui";
+import { Badge, Button, Card, CardContent, CardHeader, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea } from "@binding/ui";
 import { EMPLOYMENT_TYPE_LABEL, EMPLOYMENT_TYPES, type EmploymentType, type SalaryVisibility } from "@/lib/jobs";
 import { closeJob, publishJob, refineJobText, saveJob } from "../actions";
 

@@ -23,7 +23,7 @@ import {
   TabsList,
   TabsTrigger,
   Textarea,
-} from "@jumponboard/ui";
+} from "@binding/ui";
 import {
   availableModesFor,
   fieldMode,

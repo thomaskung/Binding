@@ -1,4 +1,4 @@
-import { Slider, Label } from "@jumponboard/ui";
+import { Slider, Label } from "@binding/ui";
 
 export function Default() {
   return (

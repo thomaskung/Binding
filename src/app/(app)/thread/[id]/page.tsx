@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@jumponboard/ui";
+import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@binding/ui";
 import { getSessionProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { MessageComposer } from "./composer";
