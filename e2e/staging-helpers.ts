@@ -64,7 +64,18 @@ export async function ensureStagingUser(role: "seeker" | "recruiter"): Promise<{
 export async function signIn(page: Page, email: string) {
   await page.goto("/login");
   await page.getByLabel("Work email").fill(email);
-  await page.getByRole("button", { name: "Continue with email" }).click();
+  const continueBtn = page.getByRole("button", { name: "Continue with email" });
+  // React hydration can reset a controlled input right after fill (value snaps
+  // back to "" and the submit button stays disabled). Re-apply the email if the
+  // button hasn't enabled — cold staging instances hydrate slower than the
+  // first sign-in on a warm function.
+  try {
+    await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  } catch {
+    await page.getByLabel("Work email").fill(email);
+    await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  }
+  await continueBtn.click();
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL(/\/(seeker|recruiter|onboarding)/);
@@ -76,7 +87,14 @@ export async function signIn(page: Page, email: string) {
 export async function signInExpectFailure(page: Page, email: string) {
   await page.goto("/login");
   await page.getByLabel("Work email").fill(email);
-  await page.getByRole("button", { name: "Continue with email" }).click();
+  const continueBtn = page.getByRole("button", { name: "Continue with email" });
+  try {
+    await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  } catch {
+    await page.getByLabel("Work email").fill(email);
+    await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  }
+  await continueBtn.click();
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByText(/invalid login credentials/i)).toBeVisible();

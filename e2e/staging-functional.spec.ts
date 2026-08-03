@@ -290,14 +290,14 @@ test.describe("Staging functional — routing & UIUX", () => {
     await page.waitForURL(/onboarding\/recruiter/);
     await completeRecruiterOnboarding(page, { name: "Switchy Recruiter", company: "Dual Mode Ltd" });
 
-    // Dual-role now: the switcher toggles between real dashboards.
+    // Dual-role now: the switcher toggles between real dashboards. The account
+    // panel stays open across tab switches (AppShell persists in the layout),
+    // so we only open it once and then flip tabs directly.
     await page.getByTestId("account-menu-toggle").click();
     await page.getByRole("tab", { name: "Seeker" }).click();
     await page.waitForURL(/\/seeker$/);
-    await page.getByTestId("account-menu-toggle").click();
     await page.getByRole("tab", { name: "Recruiter" }).click();
     await page.waitForURL(/\/recruiter$/);
-    await page.getByTestId("account-menu-toggle").click();
     await page.getByRole("tab", { name: "Seeker" }).click();
     await page.waitForURL(/\/seeker$/);
 
