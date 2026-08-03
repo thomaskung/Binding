@@ -1,4 +1,4 @@
-# Binding (formerly JumpOnBoard)
+# Binding
 
 Privacy-first, AI-driven hiring platform for APAC (Hong Kong & Singapore) — pseudonymized-by-default candidate matching, consent-first reveals, and a closed-loop points economy in place of ads/cold-outbound recruiting.
 
