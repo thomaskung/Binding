@@ -20,7 +20,7 @@ import modal
 
 MODEL_ID = "Qwen/Qwen3-8B-AWQ"
 
-app = modal.App("jumponboard-llm")
+app = modal.App("binding-llm")
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -81,7 +81,7 @@ Output only the improved text. /no_think"""
     # Interim posture until the HK edge-layer migration (DESIGN.md §2f);
     # cross-border safeguards (DPA) still apply — LEGAL_REVIEW.md Q16.
     region="ap",
-    secrets=[modal.Secret.from_name("jumponboard-api-token")],
+    secrets=[modal.Secret.from_name("binding-api-token")],
 )
 class Qwen:
     @modal.enter()

@@ -56,7 +56,7 @@
 
 **Modal**
 - Auth: `modal token set --token-id <ID> --token-secret <SECRET>` (values from `.env.local` comment; profile `thomaskung`)
-- API secret: `modal secret create jumponboard-api-token MODAL_API_TOKEN=<value>`
+- API secret: `modal secret create binding-api-token MODAL_API_TOKEN=<value>`
 - Deploy: `modal deploy modal_app/embeddings.py` + `modal deploy modal_app/llm.py`
 - Endpoint URLs printed on deploy; set as Vercel env vars for `AI_PROVIDER=modal`
 

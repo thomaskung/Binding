@@ -13,7 +13,7 @@ import modal
 
 MODEL_ID = "Qwen/Qwen3-Embedding-0.6B"
 
-app = modal.App("jumponboard-embeddings")
+app = modal.App("binding-embeddings")
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -28,7 +28,7 @@ image = (
     # APAC region pin — same rationale as llm.py's Qwen class (embedding
     # input is redacted-but-candidate-derived text; keep it in-region).
     region="ap",
-    secrets=[modal.Secret.from_name("jumponboard-api-token")],
+    secrets=[modal.Secret.from_name("binding-api-token")],
 )
 class Embedder:
     @modal.enter()

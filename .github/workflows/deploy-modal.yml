@@ -23,14 +23,19 @@ jobs:
         run: |
           set -euo pipefail
           modal token set --token-id "${{ secrets.MODAL_TOKEN_ID }}" --token-secret "${{ secrets.MODAL_TOKEN_SECRET }}"
-          # The Modal apps reference Secret.from_name("jumponboard-api-token"),
+          # The Modal apps reference Secret.from_name("binding-api-token"),
           # which holds MODAL_API_TOKEN (the bearer the endpoints' _auth checks).
           # Create/refresh it from the GH secret so deploy resolves it and the
           # app's bearer matches the endpoint's expected token. Idempotent.
-          modal secret create jumponboard-api-token MODAL_API_TOKEN="${{ secrets.MODAL_API_TOKEN }}" --force
+          modal secret create binding-api-token MODAL_API_TOKEN="${{ secrets.MODAL_API_TOKEN }}" --force
           # tee deploy output so we can pull the printed web-endpoint URLs
           modal deploy modal_app/embeddings.py 2>&1 | tee embed.log
           modal deploy modal_app/llm.py 2>&1 | tee llm.log
+
+          # One-time cleanup of the pre-rename apps (jumponboard-* → binding-*).
+          # Idempotent — harmless once they're already gone.
+          modal app stop jumponboard-embeddings 2>/dev/null || true
+          modal app stop jumponboard-llm 2>/dev/null || true
 
           echo "## Modal endpoints" >> "$GITHUB_STEP_SUMMARY"
           echo "Wire these into the Vercel staging env (plus AI_PROVIDER=modal and MODAL_API_TOKEN):" >> "$GITHUB_STEP_SUMMARY"
