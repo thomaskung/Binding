@@ -1,4 +1,4 @@
-import { Badge } from "@jumponboard/ui";
+import { Badge } from "@binding/ui";
 
 export function Default() {
   return <Badge>New</Badge>;

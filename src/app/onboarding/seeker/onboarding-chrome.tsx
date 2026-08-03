@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { cn } from "@jumponboard/ui";
+import { cn } from "@binding/ui";
 
 const STEPS = ["Consent", "Resume", "Dealbreakers"] as const;
 

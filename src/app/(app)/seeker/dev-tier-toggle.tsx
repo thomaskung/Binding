@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { Button } from "@jumponboard/ui";
+import { Button } from "@binding/ui";
 import type { SeekerTier } from "@/lib/matching";
 import { toggleSeekerTier } from "./actions";
 

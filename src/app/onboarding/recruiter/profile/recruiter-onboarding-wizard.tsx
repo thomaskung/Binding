@@ -17,7 +17,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@jumponboard/ui";
+} from "@binding/ui";
 import { saveRecruiterProfile } from "@/app/(app)/recruiter/actions";
 
 const COMPANY_SIZE_LABEL: Record<string, string> = {

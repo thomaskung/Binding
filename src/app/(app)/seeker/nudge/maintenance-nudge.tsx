@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Badge, Button, Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Separator, Textarea } from "@jumponboard/ui";
+import { Badge, Button, Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Separator, Textarea } from "@binding/ui";
 import {
   acceptMaintenanceUpdate,
   requestMaintenanceDraft,

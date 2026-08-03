@@ -1,7 +1,7 @@
 {
   "projectId": "dc871eb6-6c3c-48a1-bcff-c841313b456e",
   "shape": "package",
-  "pkg": "@jumponboard/ui",
+  "pkg": "@binding/ui",
   "globalName": "JumpOnBoardUI",
   "srcDir": "packages/ui/src",
   "tsconfig": "../../tsconfig.json",

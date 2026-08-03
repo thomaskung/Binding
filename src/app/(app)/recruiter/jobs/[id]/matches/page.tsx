@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Badge, Button } from "@jumponboard/ui";
+import { Badge, Button } from "@binding/ui";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { expireStaleOverride, getBalance, OVERRIDE_COST } from "@/lib/points";

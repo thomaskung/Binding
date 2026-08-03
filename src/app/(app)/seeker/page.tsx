@@ -12,7 +12,7 @@ import {
   CardTitle,
   Progress,
   cn,
-} from "@jumponboard/ui";
+} from "@binding/ui";
 import { requireRole } from "@/lib/auth";
 import { isStale } from "@/lib/profile";
 import { loadSeekerContext, OverrideBanners } from "./seeker-data";

@@ -1,4 +1,4 @@
-import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@jumponboard/ui";
+import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@binding/ui";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getBalance } from "@/lib/points";

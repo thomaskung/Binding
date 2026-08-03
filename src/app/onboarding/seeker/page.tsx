@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Input, Label, Separator } from "@jumponboard/ui";
+import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Input, Label, Separator } from "@binding/ui";
 import { getSessionProfile } from "@/lib/auth";
 import { activateSeeker } from "../actions";
 import { OnboardingChrome } from "./onboarding-chrome";

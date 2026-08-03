@@ -4,7 +4,7 @@ import { useEffect } from "react";
 // toast() call shares Toaster's bundled sonner module instance/store rather
 // than a second copy from the preview's own esbuild pass.
 import { toast } from "sonner";
-import { Toaster } from "@jumponboard/ui";
+import { Toaster } from "@binding/ui";
 
 export function Default() {
   useEffect(() => {

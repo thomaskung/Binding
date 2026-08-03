@@ -1,4 +1,4 @@
-import { Textarea } from "@jumponboard/ui";
+import { Textarea } from "@binding/ui";
 
 export function Default() {
   return (

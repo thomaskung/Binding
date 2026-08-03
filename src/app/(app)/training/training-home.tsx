@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { Badge, Button, Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from "@jumponboard/ui";
+import { Badge, Button, Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from "@binding/ui";
 import { completeAssignedTraining, completeTrainingProgram } from "./actions";
 
 export interface TrainingProgramView {

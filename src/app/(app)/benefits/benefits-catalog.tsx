@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Separator } from "@jumponboard/ui";
+import { Badge, Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Separator } from "@binding/ui";
 import { benefitTierProgress } from "@/lib/benefits";
 
 interface Partner {

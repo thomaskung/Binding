@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Badge, Button, Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@jumponboard/ui";
+import { Badge, Button, Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@binding/ui";
 import { requireRole } from "@/lib/auth";
 import { EMPLOYMENT_TYPE_LABEL, salaryDisplay, type EmploymentType, type SalaryVisibility } from "@/lib/jobs";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
