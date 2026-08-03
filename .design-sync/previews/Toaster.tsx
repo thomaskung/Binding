@@ -1,10 +1,10 @@
 import { useEffect } from "react";
-// Imported from "sonner" (not "jumponboard") but still shimmed onto the same
-// window.JumpOnBoardUI namespace via cfg.extraEntries — required so this
+// Imported from "sonner" (not "binding") but still shimmed onto the same
+// window.BindingUI namespace via cfg.extraEntries — required so this
 // toast() call shares Toaster's bundled sonner module instance/store rather
 // than a second copy from the preview's own esbuild pass.
 import { toast } from "sonner";
-import { Toaster } from "@jumponboard/ui";
+import { Toaster } from "@binding/ui";
 
 export function Default() {
   useEffect(() => {

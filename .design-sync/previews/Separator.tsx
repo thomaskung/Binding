@@ -1,4 +1,4 @@
-import { Separator } from "@jumponboard/ui";
+import { Separator } from "@binding/ui";
 
 export function Horizontal() {
   return (

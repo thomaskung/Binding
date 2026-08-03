@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { cn } from "@jumponboard/ui";
+import { cn } from "@binding/ui";
 
 const STEPS = ["Consent", "Resume", "Dealbreakers"] as const;
 
@@ -21,7 +21,7 @@ export function OnboardingChrome({
         <div className="flex items-center justify-between gap-3">
           <Link href="/" className="flex items-center gap-2">
             <span className="inline-block size-5 rounded-md bg-primary" />
-            <span className="text-sm font-semibold tracking-tight">JumpOnBoard</span>
+            <span className="text-sm font-semibold tracking-tight">Binding</span>
           </Link>
           {skipHref && (
             <Link

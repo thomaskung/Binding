@@ -1,4 +1,4 @@
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@jumponboard/ui";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@binding/ui";
 
 export function Default() {
   return (

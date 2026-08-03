@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { Button, Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Input, Label } from "@jumponboard/ui";
+import { Button, Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Input, Label } from "@binding/ui";
 import type { SignupIntent } from "@/lib/signup-intent";
 
 // Password auth is a demo/e2e-only shortcut — enabled via env in dev/e2e,
@@ -117,7 +117,7 @@ export function LoginForm({ intent }: { intent: SignupIntent | null }) {
           </CardContent>
           <CardFooter>
             <p className="w-full text-center text-sm text-muted-foreground">
-              New to JumpOnBoard? <a href="/signup" data-testid="nav-signup">Create an account</a>
+              New to Binding? <a href="/signup" data-testid="nav-signup">Create an account</a>
             </p>
           </CardFooter>
         </>

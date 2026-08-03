@@ -20,7 +20,7 @@ import {
   SelectValue,
   Separator,
   Textarea,
-} from "@jumponboard/ui";
+} from "@binding/ui";
 import {
   extractOnboardingFields,
   publishProfile,

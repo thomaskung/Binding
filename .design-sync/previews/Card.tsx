@@ -8,7 +8,7 @@ import {
   CardFooter,
   Button,
   Badge,
-} from "@jumponboard/ui";
+} from "@binding/ui";
 
 export function Default() {
   return (

@@ -1,4 +1,4 @@
--- Market intelligence depth (Phase 3B of the JumpOnBoard.dc.html
+-- Market intelligence depth (Phase 3B of the Binding.dc.html
 -- implementation): two new breakdown dimensions — skill demand by region,
 -- salary trend by seniority band — same k-anonymity posture as
 -- 0012_market_signals.sql (per-cell min-cohort suppression, security

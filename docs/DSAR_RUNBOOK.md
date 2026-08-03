@@ -8,7 +8,7 @@ bar. The clock starts at receipt, not at triage — log the receipt date first.
 
 ## Intake
 
-1. Requests arrive at privacy@jumponboard.hk (see `/privacy`). Log: date
+1. Requests arrive at privacy@getbinding.com (see `/privacy`). Log: date
    received, requester email, request type (access / correction / deletion /
    consent withdrawal), verification status.
 2. **Verify identity** before disclosing anything: the request must come from

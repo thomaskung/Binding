@@ -1,5 +1,5 @@
 {
-  "name": "jumponboard",
+  "name": "binding",
   "version": "0.1.0",
   "packageManager": "pnpm@11.5.2",
   "private": true,
@@ -18,7 +18,7 @@
     "test-data:generate": "tsx test-data/generate-smoke-seed.ts"
   },
   "dependencies": {
-    "@jumponboard/ui": "workspace:*",
+    "@binding/ui": "workspace:*",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.6",
     "next": "^16.2.10",

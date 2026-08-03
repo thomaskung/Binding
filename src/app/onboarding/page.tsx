@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { AuthNav } from "@/components/auth-nav";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@jumponboard/ui";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@binding/ui";
 import { getSessionProfile } from "@/lib/auth";
 import { resolveIntent, resolveOnboardingRedirect } from "@/lib/signup-intent";
 import { OnboardingChooser } from "./chooser";
@@ -27,7 +27,7 @@ export default async function OnboardingPage({
       <main className="flex flex-1 items-center justify-center p-8">
         <Card className="w-full max-w-lg">
           <CardHeader>
-            <CardTitle className="font-medium">Welcome to JumpOnBoard</CardTitle>
+            <CardTitle className="font-medium">Welcome to Binding</CardTitle>
             <CardDescription>
               What brings you here? You can add the other role any time later.
             </CardDescription>

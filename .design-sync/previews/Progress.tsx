@@ -1,4 +1,4 @@
-import { Progress, Label } from "@jumponboard/ui";
+import { Progress, Label } from "@binding/ui";
 
 export function Default() {
   return (

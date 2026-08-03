@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@jumponboard/ui";
+import { Button } from "@binding/ui";
 
 /** Shared two-card role chooser used by /signup (pre-auth) and /onboarding
  * (post-auth). Each context wires its own onPick handler. */

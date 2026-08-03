@@ -1,8 +1,8 @@
-# design-sync notes — jumponboard
+# design-sync notes — binding
 
 ## Repo shape
 
-As of 2026-07-21, `packages/ui` (`@jumponboard/ui`) is a real workspace
+As of 2026-07-21, `packages/ui` (`@binding/ui`) is a real workspace
 package — not a published npm package, but a real `package.json` with a real,
 existing entry (`packages/ui/src/index.ts`), consumed by the app itself via
 Next's `transpilePackages`. Previously this was a bare folder
@@ -23,7 +23,7 @@ history around 2026-07-21 for the migration that split it out.
   would not reliably do).
 - CSS: Tailwind v4, CSS-first config, tokens live in `packages/ui/src/theme.css`
   (not `src/app/globals.css` anymore — that file is now just
-  `@import "@jumponboard/ui/theme.css";`). `theme.css` has its own
+  `@import "@binding/ui/theme.css";`). `theme.css` has its own
   `@source "./";` directive scoping Tailwind's content-detection to
   `packages/ui/src` — this is also what fixes the old whole-repo-scan
   false-positive (see "Re-sync risks", now removed below). `cfg.buildCmd` runs
@@ -61,7 +61,7 @@ same silent-skip failure mode applies to both.
 
 `.design-sync/previews/*.tsx` are hand-authored and `import { ... } from
 "<pkg>"` by the OLD literal package name. When `cfg.pkg` changes (e.g. the
-2026-07-21 `jumponboard` → `@jumponboard/ui` rename), every preview import
+2026-08-03 `jumponboard` → `binding` rename), every preview import
 breaks (`Could not resolve "<old-pkg>"`) and all 11 previews silently fall
 back to the floor card — the build doesn't fail, so this is easy to miss
 unless you actually read the preview-build warnings. Fix: `sed -i` the old
@@ -99,11 +99,11 @@ in-module store — if `toast` and `Toaster` come from two separately-bundled
 copies of the `sonner` module (main bundle vs. the preview's own esbuild
 pass), the toast silently never appears (no error, just nothing rendered).
 Fixed via `cfg.extraEntries: ["sonner"]`, which merges sonner's exports onto
-the same `window.JumpOnBoardUI` namespace as the main bundle — the preview's
+the same `window.BindingUI` namespace as the main bundle — the preview's
 `import { toast } from "sonner"` then resolves through the same ds-shim to the
 same bundled module instance as `Toaster`. Build logs an
 `[EXPORT_COLLISION]` warning (sonner's own `Toaster` name collides with ours)
-— informational only; our preview imports `Toaster` from `"@jumponboard/ui"`
+— informational only; our preview imports `Toaster` from `"@binding/ui"`
 explicitly, never from `"sonner"`, so it isn't affected.
 
 ## 2026-07-22: added Slider + Progress (13 components total)

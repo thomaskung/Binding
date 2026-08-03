@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@jumponboard/ui";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@binding/ui";
 import { AuthNav } from "@/components/auth-nav";
 import { getSessionProfile } from "@/lib/auth";
 import { activateRecruiter } from "../actions";

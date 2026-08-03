@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Input, Label, Separator } from "@jumponboard/ui";
+import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Input, Label, Separator } from "@binding/ui";
 import { getSessionProfile } from "@/lib/auth";
 import { activateSeeker } from "../actions";
 import { OnboardingChrome } from "./onboarding-chrome";
@@ -69,7 +69,7 @@ export default async function SeekerOnboardingPage() {
               />
               <span>
                 I understand and consent that AI performs automated matching (profiling) between my
-                pseudonymized profile and job postings — this is how JumpOnBoard surfaces matches.
+                pseudonymized profile and job postings — this is how Binding surfaces matches.
                 No match is disclosed to a recruiter without the reveal flow I control.
               </span>
             </label>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { Badge, Button, Card, CardAction, CardContent, CardHeader, CardTitle, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Separator, Tabs, TabsList, TabsTrigger } from "@jumponboard/ui";
+import { Badge, Button, Card, CardAction, CardContent, CardHeader, CardTitle, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Separator, Tabs, TabsList, TabsTrigger } from "@binding/ui";
 import { saveRecruiterProfile } from "../actions";
 
 const COMPANY_SIZE_LABEL: Record<string, string> = {

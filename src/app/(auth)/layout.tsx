@@ -8,7 +8,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <div className="flex w-full max-w-[400px] flex-col gap-5">
         <Link href="/" className="flex items-center justify-center gap-2">
           <span className="inline-block size-[22px] rounded-md bg-primary" />
-          <span className="text-[15px] font-semibold tracking-tight">JumpOnBoard</span>
+          <span className="text-[15px] font-semibold tracking-tight">Binding</span>
         </Link>
         {children}
         <p className="text-center text-xs text-muted-foreground">

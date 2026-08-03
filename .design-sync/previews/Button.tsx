@@ -1,4 +1,4 @@
-import { Button } from "@jumponboard/ui";
+import { Button } from "@binding/ui";
 
 export function Variants() {
   return (

@@ -91,7 +91,7 @@ test.describe("Staging functional — privacy & Layer-0", () => {
     const requests: string[] = [];
     page.on("request", (r) => {
       const url = new URL(r.url());
-      if (!url.hostname.includes("jumponboard-staging.vercel.app") &&
+      if (!url.hostname.includes("binding-staging.vercel.app") &&
           !url.hostname.includes("supabase.co") &&
           !url.hostname.includes("127.0.0.1") &&
           !url.hostname.includes("localhost")) {

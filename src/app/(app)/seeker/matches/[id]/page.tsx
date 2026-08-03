@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Badge, Button, Card, CardContent, Separator } from "@jumponboard/ui";
+import { Badge, Button, Card, CardContent, Separator } from "@binding/ui";
 import { requireRole } from "@/lib/auth";
 import { EMPLOYMENT_TYPE_LABEL, relativeDayLabel, salaryDisplay, type EmploymentType, type SalaryVisibility } from "@/lib/jobs";
 import { matchBand, type SeekerTier } from "@/lib/matching";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Tabs, TabsList, TabsTrigger } from "@jumponboard/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Tabs, TabsList, TabsTrigger } from "@binding/ui";
 import type {
   SalaryTrendBySeniorityRow,
   SalaryTrendRow,
@@ -53,7 +53,7 @@ function LockedCard({ title }: { title: string }) {
       </Card>
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 p-4 text-center">
         <Badge variant="outline">Locked</Badge>
-        <Button size="sm" render={<a href="mailto:sales@jumponboard.example" />}>
+        <Button size="sm" render={<a href="mailto:sales@getbinding.com" />}>
           Get full access
         </Button>
       </div>

@@ -15,7 +15,7 @@ export default function PrivacyNoticePage() {
       <section className="mt-8 space-y-3 text-sm leading-relaxed">
         <h2 className="text-lg font-semibold">What we collect and why</h2>
         <p>
-          JumpOnBoard processes your resume and career data to match you with job opportunities.
+          Binding processes your resume and career data to match you with job opportunities.
           Your raw resume is stored privately — only you can access it. Recruiters only ever see a
           redacted, pseudonymized profile, and your name is disclosed only through the reveal flow
           you control. Redaction reduces but cannot eliminate re-identification risk; we manage
@@ -43,7 +43,7 @@ export default function PrivacyNoticePage() {
         <h2 className="text-lg font-semibold">Access, correction, deletion</h2>
         <p>
           You can access and correct your data in the app. For a full data access, correction, or
-          deletion request, contact privacy@jumponboard.hk — we respond within the statutory
+          deletion request, contact privacy@getbinding.com — we respond within the statutory
           windows of Hong Kong&apos;s PDPO and Singapore&apos;s PDPA.
         </p>
 

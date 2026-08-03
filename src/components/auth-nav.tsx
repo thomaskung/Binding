@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Button } from "@jumponboard/ui";
+import { Button } from "@binding/ui";
 import { SignOutButton } from "@/components/sign-out-button";
 
 /** Minimal shared header for landing/auth/onboarding pages. Wordmark always

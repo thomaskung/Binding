@@ -1,5 +1,5 @@
 {
-  "name": "JumpOnBoard",
+  "name": "Binding",
   "image": "mcr.microsoft.com/devcontainers/universal:2",
   "forwardPorts": [3000, 54321, 54323, 54324],
   "portsAttributes": {

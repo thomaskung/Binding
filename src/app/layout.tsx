@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Geist } from "next/font/google";
-import { Toaster, cn } from "@jumponboard/ui";
+import { Toaster, cn } from "@binding/ui";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
-  title: "JumpOnBoard",
+  title: "Binding",
   description:
     "Privacy-first hiring for APAC — match on skills and fit before identities are revealed.",
 };

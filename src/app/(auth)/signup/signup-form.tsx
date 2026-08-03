@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@jumponboard/ui";
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@binding/ui";
 import { RoleChooserCards } from "@/components/role-chooser-cards";
 import type { SignupIntent } from "@/lib/signup-intent";
 
@@ -21,7 +21,7 @@ export function SignupForm({ intent }: { intent: SignupIntent | null }) {
     return (
       <Card className="w-full">
         <CardHeader>
-          <CardTitle className="font-medium">Create your JumpOnBoard account</CardTitle>
+          <CardTitle className="font-medium">Create your Binding account</CardTitle>
           <CardDescription>
             What brings you here? You can add the other role any time later.
           </CardDescription>
@@ -51,7 +51,7 @@ export function SignupForm({ intent }: { intent: SignupIntent | null }) {
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle className="font-medium">Create your JumpOnBoard account</CardTitle>
+        <CardTitle className="font-medium">Create your Binding account</CardTitle>
         <CardDescription>
           {intent === "seeker"
             ? "Join the talent pool — pseudonymous until you say otherwise."

@@ -1,6 +1,6 @@
 # VISION.md — Binding Goals & Evaluation
 
-**Version 1.4** · Last updated 2026-08-03 · Revision history at the end of this document.
+**Version 1.5** · Last updated 2026-08-03 · Revision history at the end of this document.
 
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [DESIGN.md](./DESIGN.md) (architecture). This document defines what success looks like and how we'll measure it, so decisions have a shared reference point instead of being re-litigated each time.
 
@@ -80,4 +80,5 @@ Monthly review of:
 | 1.1 | 2026-07-18 | Phase 1 gains the ATS-feed discovery→consent KR and an explicit launch-readiness gate (DESIGN.md §2b), distinct from the shipping-timeline date. |
 | 1.2 | 2026-07-20 | Mission reaffirmed hiring-core; added gated long-horizon "career super-app" adjacency note (Training/Benefits/loyalty/signals, behind hiring PMF); Phase-1 profile-freshness / maintenance-loop KR and a caveat that aggregate-signal revenue is gated on k-anonymous cohort density. |
 | 1.3 | 2026-07-21 | Updated the career-super-app adjacency note: Benefits/loyalty is now discount-code-based (not credit-based), and none of Training/Benefits/AI-Credit Marketplace carry a hard legal blocker anymore — all confirmation-only (see LEGAL_REVIEW.md, DESIGN.md §7/§7a/§7b). |
-| 1.4 | 2026-08-03 | Brand rename JumpOnBoard → Binding (public brand; JumpOnBoard retired as internal code name) applied to title and narrative references. No metric/timeline changes. |
+| 1.4 | 2026-08-03 | Brand rename to **Binding** applied to title and narrative references; the prior working name was retired. Production domain moved to `getbinding.com`. No metric/timeline changes. |
+| 1.5 | 2026-08-03 | Full name purge: all technical identifiers (npm package, Vercel project, staging URL, Modal app/secret names, docker stack) renamed to Binding. Domain `getbinding.com`. |

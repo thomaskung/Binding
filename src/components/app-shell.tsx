@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Badge, Tabs, TabsList, TabsTrigger, cn } from "@jumponboard/ui";
+import { Badge, Tabs, TabsList, TabsTrigger, cn } from "@binding/ui";
 import type { SeekerTier } from "@/lib/matching";
 import { SignOutButton } from "@/components/sign-out-button";
 import { DevTierToggle } from "@/app/(app)/seeker/dev-tier-toggle";
@@ -185,7 +185,7 @@ export function AppShell({
             <Icon name="hamburger" />
             {railOpen && (
               <span className="whitespace-nowrap text-sm font-semibold tracking-tight">
-                JumpOnBoard
+                Binding
               </span>
             )}
           </button>

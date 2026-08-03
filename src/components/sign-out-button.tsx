@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { Button } from "@jumponboard/ui";
+import { Button } from "@binding/ui";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export function SignOutButton() {

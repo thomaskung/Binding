@@ -1,5 +1,5 @@
 /** Per-field profile visibility (Seeker Profile "Profile" tab, Phase 2B of
- * the JumpOnBoard.dc.html implementation). Tri-state per field:
+ * the Binding.dc.html implementation). Tri-state per field:
  *   - visible        shown to recruiters, feeds matching (default)
  *   - matching_only   hidden from recruiters, still feeds matching
  *   - hidden          hidden from recruiters, excluded from matching

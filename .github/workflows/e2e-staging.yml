@@ -50,7 +50,7 @@ jobs:
       - name: Run functional tests
         run: npx playwright test e2e/staging-functional.spec.ts --retries=1
         env:
-          E2E_BASE_URL: https://jumponboard-staging.vercel.app
+          E2E_BASE_URL: https://binding-staging.vercel.app
           E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
           E2E_SERVICE_ROLE_KEY: ${{ secrets.E2E_SERVICE_ROLE_KEY }}
           E2E_STAGING_SECRET: ${{ secrets.E2E_STAGING_SECRET }}
@@ -65,7 +65,7 @@ jobs:
               owner: 'thomaskung',
               repo: 'JumpOnBoard',
               title: 'Staging E2E — functional tests failed',
-              body: `Nightly staging functional tests failed.\nWorkflow run: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}\n\nCheck the staging environment: https://jumponboard-staging.vercel.app`
+              body: `Nightly staging functional tests failed.\nWorkflow run: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}\n\nCheck the staging environment: https://binding-staging.vercel.app`
             });
 
   uat-evidence:
@@ -82,7 +82,7 @@ jobs:
       - name: Run UAT evidence tests
         run: npx playwright test e2e/staging-uat.spec.ts --retries=1
         env:
-          E2E_BASE_URL: https://jumponboard-staging.vercel.app
+          E2E_BASE_URL: https://binding-staging.vercel.app
           E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
           E2E_SERVICE_ROLE_KEY: ${{ secrets.E2E_SERVICE_ROLE_KEY }}
           E2E_STAGING_SECRET: ${{ secrets.E2E_STAGING_SECRET }}
@@ -107,7 +107,7 @@ jobs:
         with:
           model: opencode/deepseek-v4-pro
           prompt: |
-            You are the UAT scorer for JumpOnBoard staging. Complete these steps:
+            You are the UAT scorer for Binding staging. Complete these steps:
 
             1. Read BUSINESS.md and e2e/uat-rubric.json from the repo.
             2. Fetch the latest test evidence from Supabase bucket staging-test-evidence.

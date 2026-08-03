@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AuthNav } from "@/components/auth-nav";
-import { Button } from "@jumponboard/ui";
+import { Button } from "@binding/ui";
 import { getSessionProfile } from "@/lib/auth";
 
 export default async function LandingPage() {
@@ -116,7 +116,7 @@ export default async function LandingPage() {
       </main>
 
       <footer className="border-t py-6 text-center text-sm text-muted-foreground">
-        Binding · Privacy-first hiring for Hong Kong · binding.hk
+        Binding · Privacy-first hiring for Hong Kong · getbinding.com
       </footer>
     </div>
   );

@@ -1,7 +1,7 @@
 import { chromium, type Browser } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "fs";
 
-const BASE = process.env.DEMO_BASE_URL ?? "https://jumponboard-staging.vercel.app";
+const BASE = process.env.DEMO_BASE_URL ?? "https://binding-staging.vercel.app";
 const OUT = "/tmp/binding-demo";
 mkdirSync(OUT, { recursive: true });
 

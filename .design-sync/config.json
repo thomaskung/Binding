@@ -1,8 +1,8 @@
 {
   "projectId": "dc871eb6-6c3c-48a1-bcff-c841313b456e",
   "shape": "package",
-  "pkg": "@jumponboard/ui",
-  "globalName": "JumpOnBoardUI",
+  "pkg": "@binding/ui",
+  "globalName": "BindingUI",
   "srcDir": "packages/ui/src",
   "tsconfig": "../../tsconfig.json",
   "buildCmd": "npx @tailwindcss/cli -i packages/ui/src/theme.css -o packages/ui/.ds-tailwind-cache.css",
