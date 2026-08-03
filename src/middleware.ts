@@ -28,7 +28,9 @@ function stagingGate(request: NextRequest): NextResponse | null {
 }
 
 /** Session refresh + auth gating. Public: landing, login, auth callback,
- * health. Everything else requires a session. */
+ * health, privacy notice (a privacy notice behind a login defeats its
+ * purpose — must be readable before signup). Everything else requires a
+ * session. */
 export default async function middleware(request: NextRequest) {
   const gate = stagingGate(request);
   if (gate) return gate;
@@ -64,6 +66,7 @@ export default async function middleware(request: NextRequest) {
     path.startsWith("/login") ||
     path.startsWith("/signup") ||
     path.startsWith("/auth") ||
+    path.startsWith("/privacy") ||
     path.startsWith("/api/health");
 
   if (!user && !isPublic) {
