@@ -20,7 +20,7 @@ re-check before major version bumps, not just at design time.
 ```bash
 pip install modal
 modal setup                      # authenticate (Starter plan: $30/mo included credit)
-modal secret create jumponboard-api-token MODAL_API_TOKEN=<generate a long random string>
+modal secret create binding-api-token MODAL_API_TOKEN=<generate a long random string>
 modal deploy modal_app/embeddings.py
 modal deploy modal_app/llm.py
 ```
