@@ -4,6 +4,27 @@ import { expect, type Browser, type Page } from "@playwright/test";
 const TEST_RUN_ID = Date.now().toString(36);
 const PASSWORD = "J0B!Demo#2026$secure";
 
+// Modal budget guardrail: the staging functional suite is deliberately lean on
+// AI calls (5 publish/reveal/extract calls for the whole run — see the
+// per-test cost table in staging-functional.spec.ts). Tests that trigger an AI
+// round-trip call `countAiCall()`, and the suite teardown asserts the total
+// stays under the budget so a future test can't silently inflate Modal spend.
+export const AI_CALL_BUDGET = 6;
+let _aiCalls = 0;
+
+export function countAiCall() {
+  _aiCalls++;
+}
+
+export function assertAiCallBudget(): void {
+  if (_aiCalls > AI_CALL_BUDGET) {
+    throw new Error(
+      `Modal AI call budget exceeded: ${_aiCalls} > ${AI_CALL_BUDGET}. ` +
+        "Trim AI round-trips in the staging functional suite.",
+    );
+  }
+}
+
 function env(name: string, fallback = ""): string {
   return process.env[name] ?? fallback;
 }

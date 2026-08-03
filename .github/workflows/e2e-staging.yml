@@ -31,6 +31,8 @@ jobs:
   functional:
     needs: wait-deploy
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     strategy:
       fail-fast: false
     steps:
@@ -63,7 +65,7 @@ jobs:
           script: |
             github.rest.issues.create({
               owner: 'thomaskung',
-              repo: 'JumpOnBoard',
+              repo: 'Binding',
               title: 'Staging E2E — functional tests failed',
               body: `Nightly staging functional tests failed.\nWorkflow run: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}\n\nCheck the staging environment: https://binding-staging.vercel.app`
             });
