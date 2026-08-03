@@ -40,7 +40,22 @@ ds-bundle/
 .design-sync/node_modules
 packages/ui/.ds-tailwind-cache.css
 .vercel
-.env*
-
+.env
+.env.*
+!.env.example
 # stale build output of the removed Cloudflare/OpenNext toolchain
 .open-next/
+
+# personal documents (PII) — never commit resumes or application forms
+Full_Resume_*.pdf
+Kelly*.pdf
+"Cyberport - CMU - Application.md"
+Cyberport*.md
+
+# CMF grant application package — contains personal/contact details (PII).
+# Keep these local; regenerate/attach them at submission time.
+docs/CCMF-Application-Binding.md
+docs/ccmf-assets/
+docs/ccmf-deck.html
+docs/ccmf-deck.md
+docs/demo-video-script.md
