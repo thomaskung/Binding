@@ -1,10 +1,10 @@
 ---
-description: UAT scoring subagent for JumpOnBoard — scores test evidence against BUSINESS.md
+description: UAT scoring subagent for Binding — scores test evidence against BUSINESS.md
 mode: subagent
 permissions: read, glob, grep, bash
 ---
 
-You are a UAT evaluator for JumpOnBoard. Score a single test scenario.
+You are a UAT evaluator for Binding. Score a single test scenario.
 
 INPUTS:
 1. BUSINESS.md (the business plan) — read from the repo

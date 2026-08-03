@@ -43,7 +43,7 @@
 ## Infrastructure CLI
 
 **GitHub (`gh`)**
-- Repo: `thomaskung/JumpOnBoard`
+- Repo: `thomaskung/Binding` (renamed from `thomaskung/JumpOnBoard` 2026-08-03 — GitHub redirects the old URL, but use the new slug)
 - Create PR from current branch: `gh pr create --fill`
 - Merge PR: `gh pr merge <N> --merge` (add `--admin` if branch protection requires review)
 
