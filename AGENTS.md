@@ -51,7 +51,7 @@
 - Auth: token in `.env.local` (`VERCEL_API_TOKEN`)
 - Link: `vercel link --project binding-staging`
 - Deploy: `vercel --prod --yes`
-- Project ID: `prj_Ss1Qm2DUjBCVnAT4B4wCWa61T3js`, Org: `team_CdIwdiwt4WNwzkO5q43UP29H`
+- Project ID: `prj_UHvpq7yF6pFr1L4OkZtEBf6jwKG8`, Org: `team_CdIwdiwt4WNwzkO5q43UP29H`
 - Staging URL: `https://binding-staging.vercel.app`
 
 **Modal**

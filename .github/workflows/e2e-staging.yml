@@ -42,7 +42,7 @@ jobs:
       - run: pnpm install
       - name: Modal warm-up
         run: |
-          curl -X POST https://thomaskung--jumponboard-embeddings-embedder-embed.modal.run \
+          curl -X POST https://thomaskung--binding-embeddings-embedder-embed.modal.run \
             -H "Authorization: Bearer ${{ secrets.MODAL_API_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{"text":"warmup"}' || echo "Warm-up done (cold start accepted)"

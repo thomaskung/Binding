@@ -54,3 +54,4 @@ Cyberport*.md
 # CMF/CCMU grant application package — contains personal/contact details (PII).
 # Keep these local; regenerate/attach them at submission time.
 ccmf-app/
+.env*
