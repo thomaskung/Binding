@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Browser, Page } from "@playwright/test";
+import { expect, type Browser, type Page } from "@playwright/test";
 
 const TEST_RUN_ID = Date.now().toString(36);
 const PASSWORD = "J0B!Demo#2026$secure";
@@ -47,6 +47,19 @@ export async function signIn(page: Page, email: string) {
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL(/\/(seeker|recruiter|onboarding)/);
+}
+
+/** Attempt a password sign-in and assert it FAILS (stays on /login with an
+ * invalid-credentials error). Used after account deletion to prove the
+ * account is gone. */
+export async function signInExpectFailure(page: Page, email: string) {
+  await page.goto("/login");
+  await page.getByLabel("Work email").fill(email);
+  await page.getByRole("button", { name: "Continue with email" }).click();
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByText(/invalid login credentials/i)).toBeVisible();
+  await expect(page).toHaveURL(/\/login/);
 }
 
 export async function stagingContext(browser: Browser) {

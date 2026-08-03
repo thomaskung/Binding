@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { stagingAdminClient, ensureStagingUser, signIn, stagingContext, createAiCallCounter } from "./staging-helpers";
+import { stagingAdminClient, ensureStagingUser, signIn, signInExpectFailure, stagingContext, createAiCallCounter } from "./staging-helpers";
 
 test.describe("Staging functional — auth & registration", () => {
   test("1. Login page renders email input and continue button", async ({ browser }) => {
@@ -7,7 +7,7 @@ test.describe("Staging functional — auth & registration", () => {
     const page = await ctx.newPage();
     await page.goto("/login");
     await expect(page.locator('input[type="email"]')).toBeVisible();
-    await expect(page.getByRole("button", { name: /continue/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue with email" })).toBeVisible();
     await ctx.close();
   });
 
@@ -23,7 +23,8 @@ test.describe("Staging functional — auth & registration", () => {
     const ctx = await stagingContext(browser);
     const page = await ctx.newPage();
     await page.goto("/signup");
-    await expect(page.locator("body")).toContainText(/seeker|recruiter|intent/i);
+    await expect(page.getByTestId("choose-seeker")).toBeVisible();
+    await expect(page.getByTestId("choose-recruiter")).toBeVisible();
     await ctx.close();
   });
 });
@@ -35,6 +36,8 @@ test.describe("Staging functional — consent & profiling", () => {
     const user = await ensureStagingUser("seeker");
     await signIn(page, user.email);
     await page.waitForURL(/\/onboarding/);
+    await page.getByTestId("choose-seeker").click();
+    await page.waitForURL(/onboarding\/seeker/);
     await expect(page.getByTestId("onboard-tos")).toBeVisible({ timeout: 10000 });
     await expect(page.getByTestId("onboard-consent")).toBeVisible();
     await expect(page.getByTestId("onboard-profiling")).toBeVisible();
@@ -154,8 +157,7 @@ test.describe("Staging functional — account lifecycle", () => {
     await page.getByRole("button", { name: /permanently delete/i }).click();
     await page.waitForURL(/\/login/);
     // Verify the user can no longer sign in
-    await signIn(page, user.email);
-    await expect(page).toHaveURL(/\/login/);
+    await signInExpectFailure(page, user.email);
     await ctx.close();
   });
 });
