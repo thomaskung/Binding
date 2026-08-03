@@ -62,8 +62,8 @@ jobs:
         with:
           script: |
             github.rest.issues.create({
-              owner: 'thomaskung',
-              repo: 'JumpOnBoard',
+              owner: context.repo.owner,
+              repo: context.repo.repo,
               title: 'Staging E2E — functional tests failed',
               body: `Nightly staging functional tests failed.\nWorkflow run: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}\n\nCheck the staging environment: https://jumponboard-staging.vercel.app`
             });
@@ -107,7 +107,7 @@ jobs:
         with:
           model: opencode/deepseek-v4-pro
           prompt: |
-            You are the UAT scorer for JumpOnBoard staging. Complete these steps:
+            You are the UAT scorer for Binding staging. Complete these steps:
 
             1. Read BUSINESS.md and e2e/uat-rubric.json from the repo.
             2. Fetch the latest test evidence from Supabase bucket staging-test-evidence.
