@@ -23,6 +23,11 @@ jobs:
         run: |
           set -euo pipefail
           modal token set --token-id "${{ secrets.MODAL_TOKEN_ID }}" --token-secret "${{ secrets.MODAL_TOKEN_SECRET }}"
+          # The Modal apps reference Secret.from_name("jumponboard-api-token"),
+          # which holds MODAL_API_TOKEN (the bearer the endpoints' _auth checks).
+          # Create/refresh it from the GH secret so deploy resolves it and the
+          # app's bearer matches the endpoint's expected token. Idempotent.
+          modal secret create jumponboard-api-token MODAL_API_TOKEN="${{ secrets.MODAL_API_TOKEN }}" --force
           # tee deploy output so we can pull the printed web-endpoint URLs
           modal deploy modal_app/embeddings.py 2>&1 | tee embed.log
           modal deploy modal_app/llm.py 2>&1 | tee llm.log
