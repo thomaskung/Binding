@@ -70,7 +70,7 @@
 
 ## Gotchas & Conventions
 
-- `@jumponboard/ui` is a pnpm workspace package shipped as raw TS source — needs `transpilePackages` in next.config
+- `@binding/ui` is a pnpm workspace package shipped as raw TS source — needs `transpilePackages` in next.config
 - New DB tables: add `GRANT` statements to `0002_rls.sql` or Supabase returns 42501
 - Seeded `auth.users` rows: token columns must be `''` not `NULL` (GoTrue 500s)
 - Routing is path-segment only — NO query params (founder rule)

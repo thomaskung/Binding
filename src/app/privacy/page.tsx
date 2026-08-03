@@ -43,7 +43,7 @@ export default function PrivacyNoticePage() {
         <h2 className="text-lg font-semibold">Access, correction, deletion</h2>
         <p>
           You can access and correct your data in the app. For a full data access, correction, or
-          deletion request, contact privacy@binding.hk — we respond within the statutory
+          deletion request, contact privacy@getbinding.com — we respond within the statutory
           windows of Hong Kong&apos;s PDPO and Singapore&apos;s PDPA.
         </p>
 
