@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Badge, Button, Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Tabs, TabsList, TabsTrigger } from "@binding/ui";
+import { candidateLabel, seniorityChip } from "@/lib/candidate-card";
 
 export interface PipelineCard {
   id: string;
@@ -12,6 +13,14 @@ export interface PipelineCard {
   status: "surfaced" | "interested" | "declined" | "revealed";
   revealedName: string | null;
   text: string;
+  // Strength signals (non-identifying, from match_candidates RPC)
+  seniorityBand: string | null;
+  yearsExperience: number | null;
+  skills: string[];
+  industries: string[];
+  desiredRoles: string[];
+  region: string | null;
+  credentialsSummary: string | null;
   threadId: string | null;
 }
 
@@ -73,20 +82,34 @@ export function PipelineList({ cards }: { cards: PipelineCard[] }) {
             No candidates in this filter.
           </div>
         )}
-        {visible.map((card) => (
+        {visible.map((card) => {
+          const label = card.revealedName ?? candidateLabel(card);
+          const senChip = seniorityChip(card.seniorityBand, card.yearsExperience);
+          return (
           <Card key={card.id} data-testid="pipeline-card">
             <CardHeader>
-              <CardTitle>
-                {card.revealedName
-                  ? `${card.revealedName} — ${card.jobTitle}`
-                  : `Pseudonymized candidate — ${card.jobTitle}`}
+              <CardTitle data-testid={card.revealedName ? "pipeline-revealed-name" : "pipeline-label"}>
+                {label} <span className="font-normal text-muted-foreground">— {card.jobTitle}</span>
               </CardTitle>
-              <CardDescription className="line-clamp-2">{card.text || "—"}</CardDescription>
               <CardAction>
                 <Badge variant="secondary">{Math.round(card.score * 100)}% match</Badge>
               </CardAction>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap gap-1.5">
+                {senChip && <Badge variant="secondary">{senChip}</Badge>}
+                {card.region && <Badge variant="secondary">{card.region}</Badge>}
+                {card.industries.slice(0, 1).map((ind) => (
+                  <Badge key={ind} variant="secondary">{ind}</Badge>
+                ))}
+                {card.skills.slice(0, 4).map((s) => (
+                  <Badge key={s} variant="outline">{s}</Badge>
+                ))}
+                {card.skills.length > 4 && <Badge variant="outline">+{card.skills.length - 4}</Badge>}
+                {card.credentialsSummary && (
+                  <Badge variant="default" data-testid="pipeline-credentials">★ {card.credentialsSummary}</Badge>
+                )}
+              </div>
               <Badge variant={STATUS_VARIANT[card.status] ?? "outline"}>
                 {card.status.charAt(0).toUpperCase() + card.status.slice(1)}
               </Badge>
@@ -107,7 +130,8 @@ export function PipelineList({ cards }: { cards: PipelineCard[] }) {
               )}
             </CardFooter>
           </Card>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

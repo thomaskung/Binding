@@ -4,6 +4,18 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { Badge } from "@binding/ui";
 import { PipelineList, type PipelineCard } from "./pipeline-list";
 
+interface StrengthRow {
+  profile_id: string;
+  redacted_text: string;
+  seniority_band: string | null;
+  years_experience: number | null;
+  skills: string[] | null;
+  industries: string[] | null;
+  desired_roles: string[] | null;
+  region: string | null;
+  credentials_summary: string | null;
+}
+
 /** Recruiter Dashboard (RecruiterMatchDashboard template): the aggregate
  * candidate pipeline across every one of the recruiter's roles. Reveal and
  * override actions stay on the per-job matches page — this view routes into
@@ -49,14 +61,14 @@ export default async function RecruiterDashboard() {
       jobIds.map((jobId) =>
         supabase
           .rpc("match_candidates", { p_job_id: jobId, p_threshold: 0, p_top_n: 100 })
-          .then(({ data }) => ({ jobId, rows: (data ?? []) as { profile_id: string; redacted_text: string }[] })),
+          .then(({ data }) => ({ jobId, rows: (data ?? []) as StrengthRow[] })),
       ),
     ),
   ]);
 
-  const textByJobProfile = new Map<string, string>();
+  const strengthByJobProfile = new Map<string, StrengthRow>();
   for (const { jobId, rows } of candidateTextResults) {
-    for (const row of rows) textByJobProfile.set(`${jobId}:${row.profile_id}`, row.redacted_text);
+    for (const row of rows) strengthByJobProfile.set(`${jobId}:${row.profile_id}`, row);
   }
 
   const revealByJobProfile = new Map(
@@ -75,6 +87,7 @@ export default async function RecruiterDashboard() {
         ? reveal.message_threads[0]
         : reveal.message_threads
       : null;
+    const strength = strengthByJobProfile.get(`${m.job_posting_id}:${m.profile_id}`);
     return {
       id: m.id,
       jobId: m.job_posting_id,
@@ -82,7 +95,14 @@ export default async function RecruiterDashboard() {
       score: m.score,
       status: m.status,
       revealedName: m.status === "revealed" ? (revealedProfile?.display_name ?? null) : null,
-      text: textByJobProfile.get(`${m.job_posting_id}:${m.profile_id}`) ?? "",
+      text: strength?.redacted_text ?? "",
+      seniorityBand: strength?.seniority_band ?? null,
+      yearsExperience: strength?.years_experience ?? null,
+      skills: strength?.skills ?? [],
+      industries: strength?.industries ?? [],
+      desiredRoles: strength?.desired_roles ?? [],
+      region: strength?.region ?? null,
+      credentialsSummary: strength?.credentials_summary ?? null,
       threadId: reveal?.status === "accepted" ? (thread?.id ?? null) : null,
     };
   });
