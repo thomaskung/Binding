@@ -61,20 +61,33 @@ export async function ensureStagingUser(role: "seeker" | "recruiter"): Promise<{
   throw new Error("unreachable");
 }
 
+/**
+ * Fill the login email and wait for the Continue button to enable. React 19
+ * hydration can reset a controlled input right after fill (value snaps back to
+ * "" and the button stays disabled) on cold staging instances — retry until the
+ * value actually sticks.
+ */
+async function fillEmailAndEnableContinue(page: Page, email: string) {
+  const input = page.getByLabel("Work email");
+  const continueBtn = page.getByRole("button", { name: "Continue with email" });
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    await input.fill(email);
+    // Wait for the input to actually hold the value AND the button to enable —
+    // a hydration reset clears both together.
+    try {
+      await expect(input).toHaveValue(email, { timeout: 5_000 });
+      await expect(continueBtn).toBeEnabled({ timeout: 5_000 });
+      return;
+    } catch {
+      if (attempt === 5) throw new Error(`email fill did not stick after ${attempt} attempts`);
+    }
+  }
+}
+
 export async function signIn(page: Page, email: string) {
   await page.goto("/login");
-  await page.getByLabel("Work email").fill(email);
+  await fillEmailAndEnableContinue(page, email);
   const continueBtn = page.getByRole("button", { name: "Continue with email" });
-  // React hydration can reset a controlled input right after fill (value snaps
-  // back to "" and the submit button stays disabled). Re-apply the email if the
-  // button hasn't enabled — cold staging instances hydrate slower than the
-  // first sign-in on a warm function.
-  try {
-    await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
-  } catch {
-    await page.getByLabel("Work email").fill(email);
-    await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
-  }
   await continueBtn.click();
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
@@ -86,14 +99,8 @@ export async function signIn(page: Page, email: string) {
  * account is gone. */
 export async function signInExpectFailure(page: Page, email: string) {
   await page.goto("/login");
-  await page.getByLabel("Work email").fill(email);
+  await fillEmailAndEnableContinue(page, email);
   const continueBtn = page.getByRole("button", { name: "Continue with email" });
-  try {
-    await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
-  } catch {
-    await page.getByLabel("Work email").fill(email);
-    await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
-  }
   await continueBtn.click();
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
