@@ -1,10 +1,12 @@
 # Smoke-test dataset (dev only)
 
 A larger, static dataset layered on top of `supabase/seed.sql`'s two demo
-accounts: 10 seeker profiles across distinct verticals (backend, data,
-frontend, mobile, ML, DevOps, security, QA, product, design) and 11 job
-postings across 4 fictional companies, with matches pre-computed via the
-real `match_candidates()` RPC.
+accounts: **50 seeker profiles + 20 job postings** across **20 role families
+(10 tech, 10 finance)** and 8 fictional companies, with matches pre-computed
+via the real `match_candidates()` RPC. Every seeker carries the full
+recruiter-card surface (skills, industries, desired roles, seniority band,
+years of experience, region, and a de-identified credentials summary), with
+varied values so the card and its match ratios don't all look the same.
 
 ## Why it exists
 
@@ -22,11 +24,15 @@ hosted/production project.
 
 ## Files
 
-- `smoke-recruiters.json`, `smoke-seekers.json`, `smoke-jobs.json` — the
-  human-readable source data.
-- `generate-smoke-seed.ts` — reads the JSON, computes real stub embeddings
-  (`src/lib/ai/stub.ts`, same code path the app uses) so match scores are
-  realistic and varied, and emits the static SQL file below.
+- `smoke-recruiters.json` — the 8 fictional companies (tech + finance), the
+  one hand-edited source file.
+- `generate-smoke-seed.ts` — holds the 20 role families and **procedurally
+  generates** the 50 seekers + 20 jobs from them (deterministic seeded RNG, so
+  the output is stable). Computes real stub embeddings (`src/lib/ai/stub.ts`,
+  same code path the app uses) and the deterministic credentials floor
+  (`src/lib/credentials.ts`), then emits the static SQL below. To change the
+  dataset, edit the `FAMILIES` array (or `smoke-recruiters.json`) and
+  regenerate. (Seekers and jobs are no longer hand-authored JSON.)
 - `smoke-seed.generated.sql` — generated, checked-in output. Do not edit by
   hand; regenerate instead.
 

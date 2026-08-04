@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { sqlString, sqlVector } from "../test-data/generate-smoke-seed";
+import { buildJobs, buildSeeker, SEEKER_COUNT, sqlString, sqlVector } from "../test-data/generate-smoke-seed";
 
 const DIR = join(__dirname, "..", "test-data");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -10,14 +10,18 @@ function readJson<T>(name: string): T {
   return JSON.parse(readFileSync(join(DIR, name), "utf8"));
 }
 
-describe("smoke-test dataset", () => {
-  const recruiters = readJson<{ id: string; email: string }[]>("smoke-recruiters.json");
-  const seekers = readJson<{ id: string; email: string }[]>("smoke-seekers.json");
-  const jobs = readJson<{ id: string; recruiterId: string }[]>("smoke-jobs.json");
+describe("smoke-test dataset (procedurally generated: 50 seekers + 20 jobs)", () => {
+  const recruiters = readJson<
+    { id: string; email: string; displayName: string; companyName: string; kind: "tech" | "finance" }[]
+  >("smoke-recruiters.json");
+  const seekers = Array.from({ length: SEEKER_COUNT }, (_, i) => buildSeeker(i));
+  const jobs = buildJobs(recruiters);
 
-  it("has at least 10 seeker profiles and 10 jobs", () => {
-    expect(seekers.length).toBeGreaterThanOrEqual(10);
-    expect(jobs.length).toBeGreaterThanOrEqual(10);
+  it("has 50 seekers, 20 jobs, and both tech + finance recruiters", () => {
+    expect(seekers.length).toBe(50);
+    expect(jobs.length).toBe(20);
+    expect(recruiters.some((r) => r.kind === "tech")).toBe(true);
+    expect(recruiters.some((r) => r.kind === "finance")).toBe(true);
   });
 
   it("uses well-formed, unique, non-overlapping uuids across all entities", () => {
@@ -36,7 +40,19 @@ describe("smoke-test dataset", () => {
     for (const job of jobs) expect(recruiterIds.has(job.recruiterId)).toBe(true);
   });
 
-  it("generates the checked-in SQL file from the current JSON (run `pnpm test-data:generate` if this fails)", () => {
+  it("gives every seeker the recruiter-card fields (varied)", () => {
+    for (const s of seekers) {
+      expect(s.skills.length).toBeGreaterThanOrEqual(5);
+      expect(s.yearsExperience).toBeGreaterThanOrEqual(2);
+      expect(s.headline).toBeTruthy();
+      expect(s.location).toMatch(/Hong Kong|Singapore/);
+    }
+    // Variety: not everyone has the same years / headline.
+    expect(new Set(seekers.map((s) => s.yearsExperience)).size).toBeGreaterThan(3);
+    expect(new Set(seekers.map((s) => s.headline)).size).toBeGreaterThan(10);
+  });
+
+  it("regenerates the checked-in SQL (run `pnpm test-data:generate` if this fails)", () => {
     const sql = readFileSync(join(DIR, "smoke-seed.generated.sql"), "utf8");
     for (const entity of [...recruiters, ...seekers, ...jobs]) {
       expect(sql).toContain(entity.id);
