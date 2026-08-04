@@ -11,6 +11,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stubProvider } from "../src/lib/ai/stub";
+import { credentialsFloorSummary } from "../src/lib/credentials";
+import { seniorityBand } from "../src/lib/experience";
 
 const DIR = import.meta.dirname;
 const DEMO_PASSWORD = "J0B!Demo#2026$secure";
@@ -24,6 +26,13 @@ type Seeker = {
   id: string;
   email: string;
   displayName: string;
+  headline: string;
+  location: string;
+  yearsExperience: number;
+  skills: string[];
+  industries: string[];
+  desiredRoles: string[];
+  credentials: string;
   text: string;
   minSalary: number;
   workSetups: string[];
@@ -48,6 +57,11 @@ export function sqlString(s: string): string {
 
 export function sqlVector(embedding: number[]): string {
   return `'[${embedding.join(",")}]'::vector(1024)`;
+}
+
+export function sqlArray(values: string[]): string {
+  if (!values.length) return "'{}'::text[]";
+  return `array[${values.map((v) => sqlString(v)).join(",")}]::text[]`;
 }
 
 async function main() {
@@ -104,18 +118,32 @@ async function main() {
   lines.push("");
 
   // --- profiles -----------------------------------------------------------
-  lines.push(
-    "insert into profiles (id, is_seeker, is_recruiter, company_name, display_name, dealbreaker_matrix, draft_text, published_text) values",
-  );
+  // Seekers carry the full structured surface the recruiter card reads via the
+  // match_candidates RPC: skills/industries/desired_roles/location, plus the
+  // derived seniority_band + years_experience and a Modal-generalized-style
+  // credentials_summary (deterministic floor here — no model at seed time).
+  const profileCols =
+    "id, is_seeker, is_recruiter, company_name, display_name, headline, location, " +
+    "skills, industries, desired_roles, seniority_band, years_experience, " +
+    "credentials, credentials_summary, dealbreaker_matrix, draft_text, published_text";
+  lines.push(`insert into profiles (${profileCols}) values`);
   const recruiterProfileRows = recruiters.map(
     (r) =>
-      `  ('${r.id}', false, true, ${sqlString(r.companyName)}, ${sqlString(r.displayName)}, null, null, null)`,
+      `  ('${r.id}', false, true, ${sqlString(r.companyName)}, ${sqlString(r.displayName)}, null, null, ` +
+      `'{}'::text[], '{}'::text[], '{}'::text[], null, null, null, null, null, null, null)`,
   );
   const seekerProfileRows = seekers.map((s) => {
     const dealbreakers = sqlString(
       JSON.stringify({ min_salary: s.minSalary, currency: "USD", work_setups: s.workSetups }),
     );
-    return `  ('${s.id}', true, false, null, ${sqlString(s.displayName)}, ${dealbreakers}::jsonb, ${sqlString(s.text)}, ${sqlString(s.text)})`;
+    const credSummary = credentialsFloorSummary(s.credentials);
+    return (
+      `  ('${s.id}', true, false, null, ${sqlString(s.displayName)}, ${sqlString(s.headline)}, ${sqlString(s.location)}, ` +
+      `${sqlArray(s.skills)}, ${sqlArray(s.industries)}, ${sqlArray(s.desiredRoles)}, ` +
+      `${sqlString(seniorityBand(s.yearsExperience))}, ${s.yearsExperience}, ` +
+      `${s.credentials ? sqlString(s.credentials) : "null"}, ${credSummary ? sqlString(credSummary) : "null"}, ` +
+      `${dealbreakers}::jsonb, ${sqlString(s.text)}, ${sqlString(s.text)})`
+    );
   });
   lines.push([...recruiterProfileRows, ...seekerProfileRows].join(",\n") + ";");
   lines.push("");
@@ -149,7 +177,11 @@ async function main() {
   const skillRows: string[] = [];
   for (const s of seekers) {
     const { redactedText } = await stubProvider.redact(s.text);
-    const embedding = await stubProvider.embed(redactedText);
+    // Mirror publishProfile: redacted_text is the display text; the embedding
+    // folds in the credentials summary so it nudges matching.
+    const credSummary = credentialsFloorSummary(s.credentials);
+    const matchingText = [redactedText, credSummary].filter(Boolean).join(" ");
+    const embedding = await stubProvider.embed(matchingText);
     skillRows.push(`  ('${s.id}', ${sqlString(redactedText)}, ${sqlVector(embedding)})`);
   }
   lines.push(skillRows.join(",\n") + ";");
