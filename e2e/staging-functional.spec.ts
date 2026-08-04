@@ -116,7 +116,9 @@ test.describe("Staging functional — matching pipeline", () => {
     countAiCall(); // ai.redact
     countAiCall(); // ai.embed
     await page.getByTestId("publish-profile").click();
-    await expect(page.getByTestId("redacted-preview")).toBeVisible({ timeout: 30_000 });
+    // Modal redact+embed can cold-start (the CI warm-up only hits the embedder)
+    // — give the round-trip generous headroom.
+    await expect(page.getByTestId("redacted-preview")).toBeVisible({ timeout: 60_000 });
 
     await ctx.close();
   });
@@ -149,7 +151,7 @@ test.describe("Staging functional — matching pipeline", () => {
     countAiCall(); // ai.embed on publish
     await page.getByTestId("publish-job").click();
     await expect(page.getByText("Published — matches refreshed.")).toBeVisible({
-      timeout: 30_000,
+      timeout: 60_000,
     });
 
     await ctx.close();
@@ -162,7 +164,7 @@ test.describe("Staging functional — matching pipeline", () => {
 
     await page.goto("/seeker/matches");
     const matchCard = page.getByTestId("seeker-match-card").first();
-    await expect(matchCard).toBeVisible({ timeout: 30_000 });
+    await expect(matchCard).toBeVisible({ timeout: 60_000 });
     // Qualitative band badge — never a raw percentage on the seeker view.
     await expect(matchCard.getByText(/(High|Normal|Low) match/)).toBeVisible();
     await expect(matchCard.getByText(/\d+%/)).toHaveCount(0);
@@ -182,7 +184,7 @@ test.describe("Staging functional — reveal mechanics", () => {
     await signIn(seeker, pipelineSeekerEmail);
     await seeker.goto("/seeker/matches");
     const matchCard = seeker.getByTestId("seeker-match-card").first();
-    await expect(matchCard).toBeVisible({ timeout: 30_000 });
+    await expect(matchCard).toBeVisible({ timeout: 60_000 });
     await matchCard.getByTestId("match-interested").click();
     await expect(matchCard.getByText("Interested", { exact: true })).toBeVisible({
       timeout: 15_000,
@@ -195,9 +197,9 @@ test.describe("Staging functional — reveal mechanics", () => {
     countAiCall(); // ai.fitSummary on reveal
     await recruiter.getByTestId("reveal-candidate").click();
     await expect(recruiter.getByTestId("revealed-name")).toHaveText(pipelineSeekerName, {
-      timeout: 30_000,
+      timeout: 60_000,
     });
-    await expect(recruiter.getByTestId("fit-summary")).toBeVisible();
+    await expect(recruiter.getByTestId("fit-summary")).toBeVisible({ timeout: 60_000 });
 
     // Recruiter spent 10 of 100 seed points.
     await recruiter.goto("/recruiter/jobs");
