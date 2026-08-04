@@ -36,7 +36,10 @@ def _download_model():
 image = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install("vllm>=0.9", "fastapi[standard]", "huggingface_hub[hf_transfer]")
-    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})
+    # VLLM_USE_V1=0: the V1 engine crashes on this L4 during startup KV-cache
+    # profiling (_dummy_sampler_run → topk_topp_sampler.forward_cuda). The V0
+    # engine skips that path and is far more robust in this container.
+    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "VLLM_USE_V1": "0"})
     .run_function(_download_model)
 )
 
