@@ -89,3 +89,60 @@ describe("stub maintenance-update draft", () => {
     expect(await stubProvider.draftMaintenanceUpdate("current profile", "   ")).toBe("");
   });
 });
+
+describe("stub fit-summary", () => {
+  it("returns a deterministic summary for any input", async () => {
+    const summary = await stubProvider.fitSummary(
+      "backend engineer with distributed systems and postgres",
+      "Backend Engineer role requiring distributed systems experience",
+    );
+    expect(typeof summary).toBe("string");
+    expect(summary.length).toBeGreaterThan(0);
+  });
+
+  it("is deterministic for the same inputs", async () => {
+    const a = await stubProvider.fitSummary("candidate a", "job x");
+    const b = await stubProvider.fitSummary("candidate a", "job x");
+    expect(a).toBe(b);
+  });
+});
+
+describe("stub refine-profile", () => {
+  it("returns the input unchanged for a blank instruction", async () => {
+    const refined = await stubProvider.refineProfile("senior engineer go rust distributed");
+    expect(refined).toBe("senior engineer go rust distributed");
+  });
+
+  it("appends the instruction as a suffix when given", async () => {
+    const refined = await stubProvider.refineProfile("senior engineer", "add metrics");
+    expect(refined).toContain("senior engineer");
+    expect(refined).toContain("add metrics");
+  });
+});
+
+describe("stub refine-job-description", () => {
+  it("returns the JD unchanged (stub)", async () => {
+    const jd = "Backend Engineer" as import("@/lib/ai/types").JDTextOnly;
+    const refined = await stubProvider.refineJobDescription(jd);
+    expect(refined).toBe(jd);
+  });
+});
+
+describe("stub generalize-credentials", () => {
+  it("returns a category-count rollup for known certs", async () => {
+    const result = await stubProvider.generalizeCredentials(
+      "AWS Solutions Architect Professional, Certified Kubernetes Administrator, PMP",
+    );
+    expect(result).toContain("3 certifications");
+  });
+
+  it("returns empty for empty input", async () => {
+    expect(await stubProvider.generalizeCredentials("")).toBe("");
+  });
+
+  it("is deterministic", async () => {
+    const a = await stubProvider.generalizeCredentials("AWS SA Pro, CKA");
+    const b = await stubProvider.generalizeCredentials("AWS SA Pro, CKA");
+    expect(a).toBe(b);
+  });
+});

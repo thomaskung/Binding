@@ -1,7 +1,45 @@
 import { describe, expect, it } from "vitest";
-import { computeExperienceStats, normalizeExperienceDates, seniorityBand } from "@/lib/experience";
+import { computeExperienceStats, normalizeExperienceDates, parseFlexibleDate, seniorityBand } from "@/lib/experience";
 
 const NOW = new Date("2026-08-04T00:00:00Z");
+
+describe("parseFlexibleDate", () => {
+  it("returns null for null / undefined / empty", () => {
+    expect(parseFlexibleDate(null)).toBeNull();
+    expect(parseFlexibleDate(undefined)).toBeNull();
+    expect(parseFlexibleDate("")).toBeNull();
+  });
+
+  it("returns null for Present-like tokens (case-insensitive)", () => {
+    expect(parseFlexibleDate("Present")).toBeNull();
+    expect(parseFlexibleDate("present")).toBeNull();
+    expect(parseFlexibleDate("PRESENT")).toBeNull();
+    expect(parseFlexibleDate("current")).toBeNull();
+  });
+
+  it("parses YYYY format by padding to Jan 1", () => {
+    const result = parseFlexibleDate("2022");
+    expect(result).not.toBeNull();
+    expect(new Date(result!).toISOString().slice(0, 10)).toBe("2022-01-01");
+  });
+
+  it("parses YYYY-MM format by padding day to 01", () => {
+    const result = parseFlexibleDate("2022-06");
+    expect(result).not.toBeNull();
+    expect(new Date(result!).toISOString().slice(0, 10)).toBe("2022-06-01");
+  });
+
+  it("parses full YYYY-MM-DD format", () => {
+    const result = parseFlexibleDate("2022-06-15");
+    expect(result).not.toBeNull();
+    expect(new Date(result!).toISOString().slice(0, 10)).toBe("2022-06-15");
+  });
+
+  it("returns null for unparseable garbage", () => {
+    expect(parseFlexibleDate("garbage")).toBeNull();
+    expect(parseFlexibleDate("not-a-date")).toBeNull();
+  });
+});
 
 describe("normalizeExperienceDates + defensive stats (G2)", () => {
   it("coerces 'Present' / YYYY-MM extractor output to a clean 13-year timeline (not NaN/junior)", () => {
