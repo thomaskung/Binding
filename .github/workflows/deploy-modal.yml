@@ -2,10 +2,10 @@ name: Deploy Modal (on-demand)
 
 # Manual Modal deploy for the demo / after the endpoints have been torn down.
 # Uses the MODAL_TOKEN_ID/SECRET already stored as GitHub Actions secrets — the
-# credentials never leave CI. Prints the resolved endpoint URLs to the job
-# summary so they can be wired into the Vercel staging env (AI_PROVIDER=modal +
-# the five MODAL_*_URL vars + MODAL_API_TOKEN). See src/lib/ai/modal.ts for the
-# env-var contract.
+# credentials never leave CI. After deploy, writes the resolved endpoint URLs
+# into the Vercel staging project env (AI_PROVIDER=modal + the five MODAL_*_URL
+# vars + MODAL_API_TOKEN) via the Vercel API so the deployed app immediately
+# talks to the fresh endpoints. See src/lib/ai/modal.ts for the env-var contract.
 
 on:
   workflow_dispatch:
@@ -20,6 +20,7 @@ jobs:
           python-version: "3.12"
       - run: pip install modal
       - name: Deploy Modal apps + capture endpoint URLs
+        id: endpoints
         run: |
           set -euo pipefail
           modal token set --token-id "${{ secrets.MODAL_TOKEN_ID }}" --token-secret "${{ secrets.MODAL_TOKEN_SECRET }}"
@@ -37,21 +38,57 @@ jobs:
           modal app stop jumponboard-embeddings 2>/dev/null || true
           modal app stop jumponboard-llm 2>/dev/null || true
 
-          echo "## Modal endpoints" >> "$GITHUB_STEP_SUMMARY"
-          echo "Wire these into the Vercel staging env (plus AI_PROVIDER=modal and MODAL_API_TOKEN):" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          # Modal prints lines like: "Created web function embed => https://...modal.run"
-          # Map each endpoint to the env var name src/lib/ai/modal.ts expects.
+          # Map each endpoint to the env var name src/lib/ai/modal.ts expects,
+          # and emit them as step outputs (URLs only — token comes from GH secrets).
           map_url() {
             # $1 = grep pattern for the endpoint, $2 = env var name, $3 = logfile
             url=$(grep -Eo 'https://[a-z0-9.-]+\.modal\.run' "$3" | grep -i "$1" | head -1 || true)
-            echo "$2=${url:-<not found — check the deploy log above>}"
-            echo "$2=${url:-<not found — check the deploy log above>}" >> "$GITHUB_STEP_SUMMARY"
+            if [ -z "$url" ]; then
+              echo "::error::Could not resolve $2 from Modal deploy output"
+              exit 1
+            fi
+            echo "  $2=$url"
+            echo "$2=$url" >> "$GITHUB_ENV"
           }
           map_url "embed"       MODAL_EMBED_URL   embed.log
           map_url "redact"      MODAL_REDACT_URL  llm.log
           map_url "fit-summary" MODAL_SUMMARY_URL llm.log
           map_url "refine"      MODAL_REFINE_URL  llm.log
           map_url "extract"     MODAL_EXTRACT_URL llm.log
+
+          echo "## Modal endpoints" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "MODAL_API_TOKEN is already a GH secret; set the same value as a Vercel env var." >> "$GITHUB_STEP_SUMMARY"
+          env | grep -E '^MODAL_(EMBED|REDACT|SUMMARY|REFINE|EXTRACT)_URL=' | sort >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wire endpoints into Vercel staging env
+        run: |
+          set -euo pipefail
+          # idempotent upsert per var: delete any existing value, then create.
+          for name in AI_PROVIDER MODAL_EMBED_URL MODAL_REDACT_URL MODAL_SUMMARY_URL MODAL_REFINE_URL MODAL_EXTRACT_URL MODAL_API_TOKEN; do
+            case "$name" in
+              AI_PROVIDER)        value="modal" ;;
+              MODAL_API_TOKEN)    value="${{ secrets.MODAL_API_TOKEN }}" ;;
+              *)                  value="${!name}" ;;
+            esac
+            echo "Upserting $name (len=${#value})"
+
+            # find existing env var id(s) for this key in production/preview
+            existing=$(curl -s "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}/env?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+              -H "Authorization: Bearer ${{ secrets.VERCEL_API_TOKEN }}" | \
+              jq -r '.envs[] | select(.key=="'"$name"'" and (("production" in .target) or ("preview" in .target))) | .id')
+            for id in $existing; do
+              curl -s -X DELETE "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}/env/$id?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+                -H "Authorization: Bearer ${{ secrets.VERCEL_API_TOKEN }}" >/dev/null
+            done
+
+            curl -s -X POST "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}/env?teamId=${{ secrets.VERCEL_ORG_ID }}" \
+              -H "Authorization: Bearer ${{ secrets.VERCEL_API_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d "{\"key\":\"$name\",\"value\":$(python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$value"),\"type\":\"encrypted\",\"target\":[\"production\",\"preview\"]}" \
+              | python3 -c "import sys,json; d=json.load(sys.stdin); print('  created:', d.get('key'), 'id:', d.get('id'))"
+          done
+
+      - name: Redeploy staging with new env
+        run: |
+          npx vercel@latest deploy --prod --yes --token "${{ secrets.VERCEL_API_TOKEN }}" --force
