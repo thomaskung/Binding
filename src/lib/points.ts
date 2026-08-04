@@ -261,6 +261,7 @@ export interface StaleCheckReveal {
   recruiter_id: string;
   created_at: string;
   refunded: boolean;
+  premium_refund?: number | null; // scaled refund locked at charge time (§4a); null → flat fallback
 }
 
 /** Lazy 7-day expiry: a pending override past the window becomes a decline —
@@ -285,7 +286,7 @@ export async function expireStaleOverride(
     await appendLedger(admin, {
       profileId: reveal.recruiter_id,
       event: "partial_refund",
-      amount: OVERRIDE_PREMIUM_REFUND,
+      amount: reveal.premium_refund ?? OVERRIDE_PREMIUM_REFUND,
       revealRequestId: reveal.id,
       note: "override expired (7 days unanswered)",
     });

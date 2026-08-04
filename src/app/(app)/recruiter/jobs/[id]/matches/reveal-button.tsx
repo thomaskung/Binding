@@ -30,7 +30,15 @@ export function RevealButton({ matchId, cost = 10 }: { matchId: string; cost?: n
   );
 }
 
-export function OverrideButton({ matchId }: { matchId: string }) {
+export function OverrideButton({
+  matchId,
+  cost = 25,
+  refund = 15,
+}: {
+  matchId: string;
+  cost?: number;
+  refund?: number;
+}) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   return (
@@ -51,12 +59,12 @@ export function OverrideButton({ matchId }: { matchId: string }) {
             })
           }
         >
-          Reveal now (25 pts — hasn&apos;t opted in)
+          Reveal now ({cost} pts — hasn&apos;t opted in)
         </Button>
         {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
       <p className="text-xs text-muted-foreground">
-        15 pts refund if they decline or don&apos;t respond in 7 days. Candidate is compensated
+        {refund} pts refund if they decline or don&apos;t respond in 7 days. Candidate is compensated
         either way.
       </p>
     </div>

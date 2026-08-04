@@ -16,6 +16,7 @@ import {
   OVERRIDE_COMPENSATION,
   OVERRIDE_COST,
   OVERRIDE_DAILY_CAP,
+  OVERRIDE_PREMIUM_REFUND,
   REVEAL_COMPENSATION,
   REVEAL_COST,
   REVEAL_DAILY_CAP,
@@ -240,7 +241,7 @@ export async function overrideRevealCandidate(matchId: string) {
 
   const { data: match, error } = await admin
     .from("matches")
-    .select("id, status, profile_id, job_posting_id, job_postings(recruiter_id, title, description)")
+    .select("id, status, score, profile_id, job_posting_id, job_postings(recruiter_id, title, description)")
     .eq("id", matchId)
     .single();
   if (error) throw new Error("match not found");
@@ -250,6 +251,13 @@ export async function overrideRevealCandidate(matchId: string) {
   if (match.status !== "surfaced") {
     throw new Error("override only applies to candidates who haven't responded yet");
   }
+
+  // Match-quality pricing (§4a): scale the total cost AND the engagement-premium
+  // refund by the same factor, so a declined premium-priced override refunds the
+  // right amount. The scaled refund is stored on the reveal_request (below) so
+  // both refund paths return exactly what was charged.
+  const cost = revealCostForScore(OVERRIDE_COST, match.score);
+  const premiumRefund = revealCostForScore(OVERRIDE_PREMIUM_REFUND, match.score);
 
   const [{ data: candidate }, { data: consent }] = await Promise.all([
     admin.from("profiles").select("visibility").eq("id", match.profile_id).single(),
@@ -278,7 +286,7 @@ export async function overrideRevealCandidate(matchId: string) {
     usedToday,
     dailyCap: OVERRIDE_DAILY_CAP,
     balance,
-    cost: OVERRIDE_COST,
+    cost,
     kind: "override",
   });
   if (guardError) throw new Error(guardError);
@@ -304,6 +312,7 @@ export async function overrideRevealCandidate(matchId: string) {
       path: "override",
       status: "pending", // candidate decides; messaging locked until accepted
       fit_summary: fitSummary,
+      premium_refund: premiumRefund, // scaled refund locked at charge time (§4a)
     })
     .select("id")
     .single();
@@ -312,9 +321,9 @@ export async function overrideRevealCandidate(matchId: string) {
   await appendLedger(admin, {
     profileId: session.userId,
     event: "override_spend",
-    amount: -OVERRIDE_COST,
+    amount: -cost,
     revealRequestId: reveal.id,
-    note: "override reveal (10 base + 15 premium)",
+    note: `override reveal (${Math.round(match.score * 100)}% match, ${premiumRefund} pts refundable)`,
   });
   await appendLedger(admin, {
     profileId: match.profile_id,

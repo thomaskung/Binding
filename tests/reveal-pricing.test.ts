@@ -29,4 +29,17 @@ describe("match-quality reveal pricing (§4a)", () => {
   it("applies to the override base too", () => {
     expect(revealCostForScore(OVERRIDE_COST, 0.9)).toBe(50);
   });
+
+  it("override cost and premium refund scale together (kept base stays proportional)", () => {
+    // 25 = 10 base (kept on decline) + 15 premium (refunded). Both scale by the
+    // same multiplier, so the recruiter always keeps the scaled 10-base and gets
+    // the scaled 15-premium back on decline.
+    for (const s of [0.5, 0.7, 0.9]) {
+      const cost = revealCostForScore(OVERRIDE_COST, s);
+      const refund = revealCostForScore(15, s); // OVERRIDE_PREMIUM_REFUND
+      const keptBase = revealCostForScore(10, s);
+      expect(cost).toBe(keptBase + refund);
+      expect(refund).toBeLessThan(cost);
+    }
+  });
 });

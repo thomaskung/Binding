@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Badge, Button } from "@binding/ui";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
-import { expireStaleOverride, getBalance, OVERRIDE_COST, REVEAL_COST, revealCostForScore } from "@/lib/points";
+import { expireStaleOverride, getBalance, OVERRIDE_COST, OVERRIDE_PREMIUM_REFUND, REVEAL_COST, revealCostForScore } from "@/lib/points";
 import { MatchesView } from "./matches-view";
 import { type RecruiterMatchCard } from "./match-list";
 
@@ -31,7 +31,7 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
       supabase
         .from("reveal_requests")
         .select(
-          "id, profile_id, path, status, refunded, created_at, recruiter_id, fit_summary, profiles!reveal_requests_profile_id_fkey(display_name), message_threads(id)",
+          "id, profile_id, path, status, refunded, premium_refund, created_at, recruiter_id, fit_summary, profiles!reveal_requests_profile_id_fkey(display_name), message_threads(id)",
         )
         .eq("job_posting_id", id),
       supabase.rpc("match_candidates", { p_job_id: id, p_threshold: 0, p_top_n: 100 }),
@@ -52,6 +52,7 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
         recruiter_id: r.recruiter_id,
         created_at: r.created_at,
         refunded: r.refunded,
+        premium_refund: r.premium_refund,
       }),
     ),
   );
@@ -132,10 +133,12 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
       region: strength?.region ?? null,
       credentialsSummary: strength?.credentials_summary ?? null,
       interestedAt: match.interested_at ?? null,
-      revealCost:
-        match.status === "interested"
-          ? revealCostForScore(REVEAL_COST, match.score) // match-quality pricing (§4a)
-          : OVERRIDE_COST,
+      // Match-quality pricing (§4a): interested → standard reveal, surfaced → override.
+      revealCost: revealCostForScore(
+        match.status === "interested" ? REVEAL_COST : OVERRIDE_COST,
+        match.score,
+      ),
+      overrideRefund: revealCostForScore(OVERRIDE_PREMIUM_REFUND, match.score),
       revealRequestId: reveal?.id ?? null,
       overridePending: reveal?.path === "override" && reveal.status === "pending",
       overrideDeclined: reveal?.path === "override" && reveal.status === "declined",
