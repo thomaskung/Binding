@@ -69,19 +69,27 @@ export async function ensureStagingUser(role: "seeker" | "recruiter"): Promise<{
  * value, up to a generous budget.
  */
 async function fillEmailAndEnableContinue(page: Page, email: string) {
-  const input = page.getByLabel("Work email");
-  const continueBtn = page.getByRole("button", { name: "Continue with email" });
-  const deadline = Date.now() + 60_000;
+  const deadline = Date.now() + 90_000;
+  let reloads = 0;
   while (Date.now() < deadline) {
-    await input.fill(email);
+    // Re-resolve locators each pass — a reload (below) swaps the DOM.
+    const input = page.getByLabel("Work email");
+    const continueBtn = page.getByRole("button", { name: "Continue with email" });
+    await input.fill(email).catch(() => {});
     try {
-      await expect(continueBtn).toBeEnabled({ timeout: 3_000 });
+      await expect(continueBtn).toBeEnabled({ timeout: 4_000 });
       return;
     } catch {
-      // hydration (or a slow re-render) reset the value — refill and retry
+      // The value snapped back (hydration) or the lambda is still cold. A full
+      // reload kicks a fresh hydration pass and usually clears it faster than
+      // repeated refills — bounded so a genuinely broken page still fails.
+      if (reloads < 4) {
+        reloads++;
+        await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+      }
     }
   }
-  throw new Error(`email fill did not stick within 60s`);
+  throw new Error(`email fill did not stick within 90s`);
 }
 
 export async function signIn(page: Page, email: string) {
