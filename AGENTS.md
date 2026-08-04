@@ -23,7 +23,7 @@
 - E2E: `pnpm e2e` — must `pnpm db:reset` first, needs `NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN=true` in `.env.local`, runs serially (1 worker)
 - Staging E2E (password login + basic auth required, secrets from `.env.local`):
   ```
-  E2E_BASE_URL=https://jumponboard-staging.vercel.app \
+  E2E_BASE_URL=https://binding-staging.vercel.app \
   E2E_SUPABASE_URL=https://qjqaeuzpsefawqwlfwlf.supabase.co \
   E2E_SERVICE_ROLE_KEY="<supabase-role-key>" \
   E2E_STAGING_SECRET="<shared-secret>" \
@@ -52,7 +52,7 @@
 - Link: `vercel link --project jumponboard-staging`
 - Deploy: `vercel --prod --yes`
 - Project ID: `prj_Ss1Qm2DUjBCVnAT4B4wCWa61T3js`, Org: `team_CdIwdiwt4WNwzkO5q43UP29H`
-- Staging URL: `https://jumponboard-staging.vercel.app`
+- Staging URL: `https://binding-staging.vercel.app`
 
 **Modal**
 - Auth: `modal token set --token-id <ID> --token-secret <SECRET>` (values from `.env.local` comment; profile `thomaskung`)
