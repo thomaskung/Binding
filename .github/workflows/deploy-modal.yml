@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install modal
+      - run: pip install modal fastapi  # fastapi: module-top Header import runs at deploy introspection
       - name: Deploy Modal apps + capture endpoint URLs
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
@@ -26,10 +26,6 @@ jobs:
           APP_BEARER: ${{ secrets.MODAL_API_TOKEN }}
         run: |
           set -euo pipefail
-          # Fingerprint the GH secret (length + sha — GitHub masks values, not
-          # these) so it can be compared to .env.local without exposing it.
-          echo "gh-secret: len=${#APP_BEARER} sha12=$(printf %s "$APP_BEARER" | sha256sum | cut -c1-12)"
-
           modal token set --token-id "$MODAL_TOKEN_ID" --token-secret "$MODAL_TOKEN_SECRET"
           # The apps reference Secret.from_name("binding-api-token") holding
           # MODAL_API_TOKEN (the bearer _auth checks). Refresh from the GH secret
@@ -44,7 +40,6 @@ jobs:
           sleep 5
           modal deploy modal_app/embeddings.py -e main 2>&1 | tee embed.log
           modal deploy modal_app/llm.py -e main 2>&1 | tee llm.log
-          echo "secrets in main:"; modal secret list -e main 2>&1 | grep -i binding-api-token || true
 
           EMBED=$(grep -Eo 'https://[a-z0-9.-]+\.modal\.run' embed.log | grep -i embed | head -1)
           # CI-side auth test: CI holds the same GH secret that baked the Modal
