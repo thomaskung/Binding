@@ -56,6 +56,4 @@ Cyberport*.md
 ccmf-app/
 .env*
 
-# secrets misnamed without a leading dot (the .env* rules do NOT catch these)
-env.local
-env*.local
+

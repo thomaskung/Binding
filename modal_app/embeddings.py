@@ -44,7 +44,10 @@ class Embedder:
 
         expected = os.environ.get("MODAL_API_TOKEN", "")
         if not expected or authorization != f"Bearer {expected}":
-            raise HTTPException(status_code=401, detail="bad token")
+            import hashlib
+
+            fp = hashlib.sha256(expected.encode()).hexdigest()[:12] if expected else "EMPTY"
+            raise HTTPException(status_code=401, detail=f"bad token; expected_len={len(expected)} expected_sha12={fp}")
 
         vector = self.model.encode(body["text"], normalize_embeddings=True)
         return {"embedding": vector.tolist()}
