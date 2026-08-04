@@ -55,6 +55,8 @@ jobs:
             fi
             echo "  $2=$url"
             echo "$2=$url" >> "$GITHUB_ENV"
+            # Also set it in THIS step's shell so the summary below can read it.
+            export "$2=$url"
           }
           map_url "embed"       MODAL_EMBED_URL   embed.log
           map_url "redact"      MODAL_REDACT_URL  llm.log
