@@ -87,6 +87,22 @@ export default async function SeekerDashboard({
       </header>
       <p className="-mt-4 text-sm text-muted-foreground">Your matches and profile at a glance.</p>
 
+      {seekerTier === "free" && (
+        <Card data-testid="pro-upsell-card">
+          <CardHeader>
+            <CardTitle>Unlock more with Pro</CardTitle>
+            <CardDescription>
+              High-match badges, free training programs, and unlimited AI resume rewrites.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter>
+            <Button size="sm" render={<Link href="/seeker/profile/resume" />}>
+              See what Pro unlocks
+            </Button>
+          </CardFooter>
+        </Card>
+      )}
+
       <OverrideBanners context={context} />
 
       {!published && (

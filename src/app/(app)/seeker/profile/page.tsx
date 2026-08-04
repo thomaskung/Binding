@@ -13,7 +13,7 @@ export default async function SeekerProfilePage() {
       supabase
         .from("profiles")
         .select(
-          "display_name, draft_text, published_text, visibility, dealbreaker_matrix, headline, phone, location, skills, desired_roles, industries, references_available, share_salary, field_visibility",
+          "display_name, draft_text, published_text, visibility, dealbreaker_matrix, headline, phone, location, skills, desired_roles, industries, references_available, share_salary, field_visibility, seeker_tier",
         )
         .eq("id", session.userId)
         .single(),
@@ -46,6 +46,7 @@ export default async function SeekerProfilePage() {
     <ProfileFields
       displayName={profile?.display_name ?? ""}
       email={auth.user?.email ?? ""}
+      seekerTier={profile?.seeker_tier === "pro" ? "pro" : "free"}
       draftText={profile?.draft_text ?? ""}
       publishedText={profile?.published_text ?? null}
       visibility={(profile?.visibility ?? "active") as "active" | "paused"}

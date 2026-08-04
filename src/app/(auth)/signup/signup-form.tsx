@@ -7,6 +7,31 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Inpu
 import { RoleChooserCards } from "@/components/role-chooser-cards";
 import type { SignupIntent } from "@/lib/signup-intent";
 
+// Consumer email providers — recruiter accounts must use a business email
+// (BUSINESS.md §7: "Recruiter signup already requires a business email").
+const FREE_EMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "yahoo.com",
+  "ymail.com",
+  "hotmail.com",
+  "outlook.com",
+  "live.com",
+  "msn.com",
+  "aol.com",
+  "aim.com",
+  "icloud.com",
+  "me.com",
+  "mac.com",
+  "proton.me",
+  "protonmail.com",
+  "mail.com",
+  "inbox.com",
+  "gmx.com",
+  "gmx.de",
+  "yandex.com",
+]);
+
 /** Magic-link-only signup. No password option — that's a demo/e2e shortcut
  * that lives (env-gated) on /login, not in a real account-creation flow.
  * With no valid intent, a role chooser shows first; picking updates the URL
@@ -36,6 +61,14 @@ export function SignupForm({ intent }: { intent: SignupIntent | null }) {
   async function sendMagicLink() {
     setBusy(true);
     setStatus(null);
+    if (intent === "recruiter") {
+      const domain = email.split("@")[1]?.toLowerCase();
+      if (domain && FREE_EMAIL_DOMAINS.has(domain)) {
+        setStatus("Please use a business email address for recruiter accounts.");
+        setBusy(false);
+        return;
+      }
+    }
     const supabase = createSupabaseBrowserClient();
     const destination = `/onboarding?intent=${intent}`;
     const { error } = await supabase.auth.signInWithOtp({

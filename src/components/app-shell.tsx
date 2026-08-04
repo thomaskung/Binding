@@ -5,8 +5,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Badge, Tabs, TabsList, TabsTrigger, cn } from "@binding/ui";
 import type { SeekerTier } from "@/lib/matching";
+import { recruiterTierLabel, type RecruiterTier } from "@/lib/recruiter-tier";
 import { SignOutButton } from "@/components/sign-out-button";
 import { DevTierToggle } from "@/app/(app)/seeker/dev-tier-toggle";
+import { DevRecruiterTierToggle } from "@/app/(app)/recruiter/dev-tier-toggle";
 
 type Role = "seeker" | "recruiter";
 
@@ -88,6 +90,7 @@ interface AppShellProps {
   displayName: string;
   companyName: string | null;
   seekerTier: SeekerTier;
+  recruiterTier: RecruiterTier;
   points: number;
   /** job_active_role cookie, read server-side (see (app)/layout.tsx) — must
    * NOT be read from document.cookie in this client component: doing so
@@ -109,6 +112,7 @@ export function AppShell({
   displayName,
   companyName,
   seekerTier,
+  recruiterTier,
   points,
   cookieRole,
   initialRailOpen,
@@ -165,7 +169,15 @@ export function AppShell({
 
   const navItems = role === "seeker" ? SEEKER_NAV : RECRUITER_NAV;
   const aiSuggestion = role === "seeker" ? aiSuggestionSeeker : aiSuggestionRecruiter;
-  const modeLabel = role === "seeker" ? "Seeker" : "Recruiter";
+  // Recruiter mode label reflects the tier when on a paid tier ("Solo ·
+  // Settings"); free tiers keep the plain "Recruiter" label. Seekers keep
+  // "Seeker" (their Pro badge lives on the dashboard, not the shell).
+  const modeLabel =
+    role === "seeker"
+      ? "Seeker"
+      : recruiterTier !== "free"
+        ? recruiterTierLabel(recruiterTier)
+        : "Recruiter";
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
@@ -259,6 +271,11 @@ export function AppShell({
               {role === "seeker" && (
                 <div className="px-1">
                   <DevTierToggle tier={seekerTier} />
+                </div>
+              )}
+              {role === "recruiter" && (
+                <div className="px-1">
+                  <DevRecruiterTierToggle tier={recruiterTier} />
                 </div>
               )}
               <SignOutButton />
