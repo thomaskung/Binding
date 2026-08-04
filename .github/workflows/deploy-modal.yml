@@ -27,6 +27,7 @@ jobs:
           # which holds MODAL_API_TOKEN (the bearer the endpoints' _auth checks).
           # Create/refresh it from the GH secret so deploy resolves it and the
           # app's bearer matches the endpoint's expected token. Idempotent.
+          T="${{ secrets.MODAL_API_TOKEN }}"; echo "DEBUG gh-secret fp: len=${#T} first4=${T:0:4} last4=${T: -4}"
           modal secret create binding-api-token MODAL_API_TOKEN="${{ secrets.MODAL_API_TOKEN }}" --force
           # tee deploy output so we can pull the printed web-endpoint URLs
           modal deploy modal_app/embeddings.py 2>&1 | tee embed.log
