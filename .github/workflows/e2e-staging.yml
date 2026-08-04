@@ -43,9 +43,10 @@ jobs:
         with: { node-version: '22', cache: 'pnpm' }
       - run: pnpm install
       - name: Modal warm-up
-        # Warm the embedder AND the LLM endpoints so the publish/reveal tests
-        # don't blow their 60s budget on cold starts (a cold LLM container can
-        # take 30-60s+ to spin up on first request).
+        # Warm the embedder AND the LLM endpoints, RETRYING until each returns
+        # 200 — a single cold-start request often returns before the container
+        # is actually ready, leaving the publish/reveal tests to hit a still-cold
+        # endpoint and blow their 60s budget (test 5, redacted-preview).
         run: |
           for url in \
             "https://thomaskung--binding-embeddings-embedder-embed.modal.run" \
@@ -53,11 +54,28 @@ jobs:
             "https://thomaskung--binding-llm-qwen-fit-summary.modal.run" \
             "https://thomaskung--binding-llm-qwen-refine.modal.run" \
             "https://thomaskung--binding-llm-qwen-extract.modal.run"; do
-            curl -s -m 90 -X POST "$url" \
-              -H "Authorization: Bearer ${{ secrets.MODAL_API_TOKEN }}" \
-              -H "Content-Type: application/json" \
-              -d '{"text":"warmup"}' -o /dev/null -w "warmed %{http_code} in %{time_total}s $url\n" \
-              || echo "warm-up accepted (cold start) $url"
+            for i in $(seq 1 5); do
+              code=$(curl -s -m 120 -X POST "$url" \
+                -H "Authorization: Bearer ${{ secrets.MODAL_API_TOKEN }}" \
+                -H "Content-Type: application/json" \
+                -d '{"text":"warmup"}' -o /dev/null -w "%{http_code}" || echo "000")
+              echo "warm $url attempt $i -> $code"
+              [ "$code" = "200" ] && break
+              sleep 5
+            done
+          done
+      - name: App warm-up
+        # Spin up the Next.js serverless functions for the routes the tests hit
+        # first, so React hydration isn't racing a cold lambda (the "email fill
+        # did not stick" failures — tests 16/17 — are cold-hydration flakes).
+        run: |
+          for path in "/health" "/login" "/" "/seeker" "/recruiter"; do
+            for i in 1 2; do
+              curl -s -m 40 "https://binding-staging.vercel.app$path" \
+                -u "staging:${{ secrets.E2E_STAGING_BASIC_PW }}" \
+                -H "x-staging-auth: ${{ secrets.E2E_STAGING_SECRET }}" \
+                -o /dev/null -w "warmed %{http_code} %{time_total}s $path\n" || true
+            done
           done
       - run: npx playwright install chromium
       - name: Run functional tests
