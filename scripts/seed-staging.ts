@@ -41,7 +41,9 @@ const admin = createClient(SUPA_URL, SUPA_KEY, { auth: { persistSession: false }
 
 const PASSWORD = "J0B!Demo#2026$secure";
 const CONSENT_V = "2026-07-28-draft";
-const SMOKE_DOMAIN = "@smoke.local";
+// Both seed domains: @smoke.local (this dataset) and @demo.local (the retired
+// ccmf-app seeder's accounts) — clear both so staging isn't a mix of old + new.
+const SEED_DOMAINS = ["@smoke.local", "@demo.local"];
 
 type Recruiter = { id: string; email: string; displayName: string; companyName: string; kind: "tech" | "finance" };
 
@@ -75,22 +77,22 @@ async function ensureUser(email: string): Promise<string> {
   throw new Error(`createUser(${email}): ${error?.message}`);
 }
 
-/** Delete only the seed accounts (@smoke.local) — cascades their marketplace
- * data — so re-seeding is clean without nuking unrelated staging users. */
-async function wipeSmoke() {
-  console.log("RESET: deleting @smoke.local users (cascades their data)…");
+/** Delete the seed accounts (@smoke.local + @demo.local) — cascades their
+ * marketplace data — so re-seeding is clean without nuking unrelated staging
+ * users. Paginates by always fetching page 1 and deleting until none remain. */
+async function wipeSeedUsers() {
+  console.log(`RESET: deleting ${SEED_DOMAINS.join(" / ")} users (cascades their data)…`);
   let total = 0;
-  for (;;) {
+  for (let guard = 0; guard < 50; guard++) {
     const { data } = await admin.auth.admin.listUsers({ perPage: 200 });
-    const smoke = data.users.filter((u) => u.email?.endsWith(SMOKE_DOMAIN));
-    if (!smoke.length) break;
-    for (const u of smoke) {
+    const seed = data.users.filter((u) => SEED_DOMAINS.some((d) => u.email?.endsWith(d)));
+    if (!seed.length) break;
+    for (const u of seed) {
       await admin.auth.admin.deleteUser(u.id);
       total++;
     }
-    if (data.users.length < 200) break;
   }
-  console.log(`  deleted ${total} @smoke.local users`);
+  console.log(`  deleted ${total} seed users`);
 }
 
 async function main() {
@@ -99,7 +101,7 @@ async function main() {
   console.log(`pre-flight embed OK: dim=${probe.length}`);
   if (probe.length !== 1024) throw new Error(`embed dim ${probe.length} != 1024`);
 
-  if (!process.argv.includes("--no-wipe")) await wipeSmoke();
+  if (!process.argv.includes("--no-wipe")) await wipeSeedUsers();
 
   // --- recruiters (8 companies, tech + finance) ---
   const recruiterDefs = JSON.parse(
