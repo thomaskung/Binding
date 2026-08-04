@@ -40,6 +40,7 @@ export default async function SeekerProfilePage() {
   const dealbreakers = (profile?.dealbreaker_matrix ?? {}) as {
     min_salary?: number | null;
     work_setups?: string[];
+    equity_required?: boolean;
   };
 
   return (
@@ -55,6 +56,7 @@ export default async function SeekerProfilePage() {
       maintenanceConsented={consent?.maintenance_consent_at != null}
       minSalary={dealbreakers.min_salary ?? null}
       workSetups={dealbreakers.work_setups ?? []}
+      equityRequired={dealbreakers.equity_required ?? false}
       headline={profile?.headline ?? ""}
       phone={profile?.phone ?? ""}
       location={profile?.location ?? ""}

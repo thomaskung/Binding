@@ -106,8 +106,12 @@ export async function refreshMatchesForProfile(
 /** Dealbreaker filter, extracted for unit testing (mirrors the SQL in
  * match_candidates — keep the two in sync). */
 export function passesDealbreakers(
-  dealbreakers: { min_salary?: number; work_setups?: string[] } | null,
-  job: { salary_max: number | null; work_setups: string[] },
+  dealbreakers: {
+    min_salary?: number;
+    work_setups?: string[];
+    equity_required?: boolean;
+  } | null,
+  job: { salary_max: number | null; work_setups: string[]; offers_equity: boolean },
 ): boolean {
   if (!dealbreakers) return true;
   if (
@@ -122,6 +126,9 @@ export function passesDealbreakers(
     dealbreakers.work_setups.length > 0 &&
     !dealbreakers.work_setups.some((s) => job.work_setups.includes(s))
   ) {
+    return false;
+  }
+  if (dealbreakers.equity_required && !job.offers_equity) {
     return false;
   }
   return true;

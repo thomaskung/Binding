@@ -77,6 +77,7 @@ export interface ProfileFieldsProps {
   maintenanceConsented: boolean;
   minSalary: number | null;
   workSetups: string[];
+  equityRequired: boolean;
   headline: string;
   phone: string;
   location: string;
@@ -166,6 +167,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
   const [shareSalary, setShareSalary] = useState(props.shareSalary);
   const [minSalary, setMinSalary] = useState(props.minSalary?.toString() ?? "");
   const [workSetups, setWorkSetups] = useState<string[]>(props.workSetups);
+  const [equityRequired, setEquityRequired] = useState(props.equityRequired);
   const [experience, setExperience] = useState<ExperienceRow[]>(props.experience);
   const [fieldVisibility, setFieldVisibility] = useState<FieldVisibilityMap>(
     props.fieldVisibility ?? {},
@@ -204,6 +206,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
       if (referencesAvailable) fd.set("references_available", "on");
       if (shareSalary) fd.set("share_salary", "on");
       if (minSalary) fd.set("min_salary", minSalary);
+      if (equityRequired) fd.set("equity_required", "on");
       workSetups.forEach((s) => fd.append("work_setups", s));
       await saveDraft(fd);
       await saveExperience(experience);
@@ -448,9 +451,15 @@ export function ProfileFields(props: ProfileFieldsProps) {
                       placeholder="e.g. 90000"
                     />
                   </div>
-                  <p className="self-end text-xs text-muted-foreground">
-                    Availability is set in the Privacy card below.
-                  </p>
+                  <label className="flex items-center gap-2 self-end text-sm">
+                    <input
+                      type="checkbox"
+                      checked={equityRequired}
+                      onChange={(e) => setEquityRequired(e.target.checked)}
+                      data-testid="dealbreaker-equity"
+                    />
+                    Equity required
+                  </label>
                 </div>
               )}
             </CardContent>
@@ -719,6 +728,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
                           if (referencesAvailable) fd.set("references_available", "on");
                           if (next) fd.set("share_salary", "on");
                           if (minSalary) fd.set("min_salary", minSalary);
+                          if (equityRequired) fd.set("equity_required", "on");
                           workSetups.forEach((s) => fd.append("work_setups", s));
                           await saveDraft(fd);
                         });

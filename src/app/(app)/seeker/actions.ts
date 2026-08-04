@@ -27,6 +27,7 @@ export async function saveDraft(formData: FormData) {
   const draftText = String(formData.get("draft_text") ?? "");
   const minSalary = formData.get("min_salary");
   const workSetups = formData.getAll("work_setups").map(String);
+  const equityRequired = formData.get("equity_required") === "on";
 
   const { error } = await supabase
     .from("profiles")
@@ -35,6 +36,7 @@ export async function saveDraft(formData: FormData) {
       dealbreaker_matrix: {
         min_salary: minSalary ? Number(minSalary) : null,
         currency: "USD",
+        equity_required: equityRequired,
         work_setups: workSetups,
       },
       headline: String(formData.get("headline") ?? "").trim() || null,

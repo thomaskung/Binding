@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { matchBand, passesDealbreakers } from "@/lib/matching";
 
 describe("dealbreaker filter (mirrors match_candidates SQL — keep in sync)", () => {
-  const job = { salary_max: 120000, work_setups: ["remote", "hybrid"] };
+  const job = { salary_max: 120000, work_setups: ["remote", "hybrid"], offers_equity: false };
 
   it("passes with no dealbreakers set", () => {
     expect(passesDealbreakers(null, job)).toBe(true);
@@ -19,7 +19,10 @@ describe("dealbreaker filter (mirrors match_candidates SQL — keep in sync)", (
 
   it("passes when the job has no stated ceiling", () => {
     expect(
-      passesDealbreakers({ min_salary: 150000 }, { salary_max: null, work_setups: ["remote"] }),
+      passesDealbreakers(
+        { min_salary: 150000 },
+        { salary_max: null, work_setups: ["remote"], offers_equity: false },
+      ),
     ).toBe(true);
   });
 
@@ -33,6 +36,22 @@ describe("dealbreaker filter (mirrors match_candidates SQL — keep in sync)", (
 
   it("empty work-setup preference means no constraint", () => {
     expect(passesDealbreakers({ work_setups: [] }, job)).toBe(true);
+  });
+
+  it("fails when candidate requires equity but the job does not offer it", () => {
+    expect(passesDealbreakers({ equity_required: true }, job)).toBe(false);
+    expect(
+      passesDealbreakers({ equity_required: true }, { ...job, offers_equity: false }),
+    ).toBe(false);
+  });
+
+  it("passes when candidate requires equity and the job offers it", () => {
+    expect(passesDealbreakers({ equity_required: true }, { ...job, offers_equity: true })).toBe(true);
+  });
+
+  it("passes when candidate does not require equity regardless of job offering", () => {
+    expect(passesDealbreakers({ equity_required: false }, job)).toBe(true);
+    expect(passesDealbreakers({ equity_required: false }, { ...job, offers_equity: true })).toBe(true);
   });
 });
 
