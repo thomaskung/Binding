@@ -429,7 +429,7 @@ export async function respondToOverride(revealId: string, response: "accepted" |
 
   const { data: reveal, error } = await admin
     .from("reveal_requests")
-    .select("id, path, status, profile_id, recruiter_id, created_at, refunded")
+    .select("id, path, status, profile_id, recruiter_id, created_at, refunded, premium_refund")
     .eq("id", revealId)
     .single();
   if (error || reveal.profile_id !== session.userId) throw new Error("reveal not found");
@@ -458,7 +458,7 @@ export async function respondToOverride(revealId: string, response: "accepted" |
     await appendLedger(admin, {
       profileId: reveal.recruiter_id,
       event: "partial_refund",
-      amount: OVERRIDE_PREMIUM_REFUND,
+      amount: reveal.premium_refund ?? OVERRIDE_PREMIUM_REFUND,
       revealRequestId: reveal.id,
       note: "override declined by candidate",
     });

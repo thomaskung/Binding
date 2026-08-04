@@ -34,6 +34,7 @@ export interface RecruiterMatchCard {
   credentialsSummary: string | null;
   interestedAt: string | null;
   revealCost: number;
+  overrideRefund: number;
   revealRequestId: string | null;
   overridePending: boolean;
   overrideDeclined: boolean;

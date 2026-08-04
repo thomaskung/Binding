@@ -120,7 +120,7 @@ export function CandidatePanel({ card, onClose }: { card: RecruiterMatchCard; on
           {card.status === "interested" && <RevealButton matchId={card.id} cost={card.revealCost} />}
           {card.status === "surfaced" &&
             (card.overrideAllowed ? (
-              <OverrideButton matchId={card.id} />
+              <OverrideButton matchId={card.id} cost={card.revealCost} refund={card.overrideRefund} />
             ) : (
               <p className="text-xs text-muted-foreground">
                 Waiting for the candidate to express interest.

@@ -29,7 +29,7 @@ export async function loadSeekerContext(userId: string) {
     supabase
       .from("reveal_requests")
       .select(
-        "id, match_id, path, status, refunded, created_at, recruiter_id, job_postings(title), profiles!reveal_requests_recruiter_id_fkey(company_name, display_name), message_threads(id)",
+        "id, match_id, path, status, refunded, premium_refund, created_at, recruiter_id, job_postings(title), profiles!reveal_requests_recruiter_id_fkey(company_name, display_name), message_threads(id)",
       )
       .eq("profile_id", userId),
     getBalance(supabase, userId),
@@ -46,6 +46,7 @@ export async function loadSeekerContext(userId: string) {
         recruiter_id: r.recruiter_id,
         created_at: r.created_at,
         refunded: r.refunded,
+        premium_refund: r.premium_refund,
       }),
     ),
   );
