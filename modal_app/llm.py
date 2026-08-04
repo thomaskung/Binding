@@ -23,9 +23,21 @@ MODEL_ID = "Qwen/Qwen3-8B-AWQ"
 
 app = modal.App("binding-llm")
 
+
+def _download_model():
+    # Bake the weights into the image at BUILD time so a cold container starts
+    # from local disk instead of downloading ~5GB — the download was the bulk
+    # of the >150s cold start that overran Modal's sync web-endpoint window.
+    from huggingface_hub import snapshot_download
+
+    snapshot_download(MODEL_ID)
+
+
 image = (
     modal.Image.debian_slim(python_version="3.12")
-    .pip_install("vllm>=0.9", "fastapi[standard]")
+    .pip_install("vllm>=0.9", "fastapi[standard]", "huggingface_hub[hf_transfer]")
+    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})
+    .run_function(_download_model)
 )
 
 REDACT_SYSTEM = """You redact resumes for a privacy-first hiring platform.
@@ -89,7 +101,9 @@ class Qwen:
     def load(self):
         from vllm import LLM
 
-        self.llm = LLM(model=MODEL_ID, max_model_len=8192)
+        # enforce_eager skips CUDA-graph capture — meaningfully faster cold
+        # start (a bit slower per-token, fine at demo volume).
+        self.llm = LLM(model=MODEL_ID, max_model_len=8192, enforce_eager=True)
 
     def _generate(self, system: str, user: str) -> str:
         from vllm import SamplingParams
