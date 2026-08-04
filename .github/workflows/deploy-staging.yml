@@ -6,8 +6,31 @@ on:
   workflow_dispatch: # manual redeploy (e.g. after changing Vercel env vars)
 
 jobs:
+  # Apply pending DB migrations to hosted Supabase BEFORE the frontend ships,
+  # so the deployed code never runs ahead of the schema. Previously nothing
+  # applied migrations to staging (CI only deployed Vercel + Modal), so every
+  # migration-bearing merge silently broke staging until a manual `db push`.
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply pending migrations (supabase db push)
+        env:
+          # Full pooler connection string, e.g.
+          # postgresql://postgres.<ref>:<PW>@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+          # (URL-encode any special chars in the password). Set in repo secrets.
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::warning::SUPABASE_DB_URL secret not set — skipping migrations (staging DB may drift from code)."
+            exit 0
+          fi
+          npx --yes --safe-chain-skip-minimum-package-age supabase@latest db push \
+            --db-url "$SUPABASE_DB_URL" --include-all --yes
+
   vercel:
     runs-on: ubuntu-latest
+    needs: migrate # schema first, then ship the code that depends on it
     steps:
       - uses: actions/checkout@v4
 
