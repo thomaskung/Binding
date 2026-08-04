@@ -307,6 +307,12 @@ test.describe("Staging functional — routing & UIUX", () => {
     await completeSeekerOnboarding(page, { name: "Switchy Seeker" });
     await page.waitForURL(/\/seeker$/);
 
+    // The rail starts collapsed by default; the full role-switch tabs only
+    // render when it's expanded (collapsed shows an icon-only switcher). Expand
+    // it once (cookie-persisted) so the "Seeker"/"Recruiter" tabs are present.
+    const expandRail = page.getByLabel("Expand navigation");
+    if (await expandRail.isVisible().catch(() => false)) await expandRail.click();
+
     // Switch to the missing recruiter role — routes to /onboarding/recruiter.
     await page.getByTestId("account-menu-toggle").click();
     await page.getByRole("tab", { name: "Recruiter" }).click();
