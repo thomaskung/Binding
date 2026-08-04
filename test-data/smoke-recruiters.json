@@ -1,26 +1,10 @@
 [
-  {
-    "id": "20000000-0000-0000-0000-000000000001",
-    "email": "nimbus@smoke.local",
-    "displayName": "Nimbus Recruiter",
-    "companyName": "Nimbus Cloud Systems"
-  },
-  {
-    "id": "20000000-0000-0000-0000-000000000002",
-    "email": "vertex@smoke.local",
-    "displayName": "Vertex Recruiter",
-    "companyName": "Vertex Analytics"
-  },
-  {
-    "id": "20000000-0000-0000-0000-000000000003",
-    "email": "bright@smoke.local",
-    "displayName": "Bright Recruiter",
-    "companyName": "Bright Studio"
-  },
-  {
-    "id": "20000000-0000-0000-0000-000000000004",
-    "email": "fortress@smoke.local",
-    "displayName": "Fortress Recruiter",
-    "companyName": "Fortress Security Group"
-  }
+  { "id": "20000000-0000-0000-0000-000000000001", "email": "nimbus@smoke.local", "displayName": "Nimbus Recruiter", "companyName": "Nimbus Cloud Systems", "kind": "tech" },
+  { "id": "20000000-0000-0000-0000-000000000002", "email": "vertex@smoke.local", "displayName": "Vertex Recruiter", "companyName": "Vertex Analytics", "kind": "tech" },
+  { "id": "20000000-0000-0000-0000-000000000003", "email": "bright@smoke.local", "displayName": "Bright Recruiter", "companyName": "Bright Studio", "kind": "tech" },
+  { "id": "20000000-0000-0000-0000-000000000004", "email": "fortress@smoke.local", "displayName": "Fortress Recruiter", "companyName": "Fortress Security Group", "kind": "tech" },
+  { "id": "20000000-0000-0000-0000-000000000005", "email": "harbour@smoke.local", "displayName": "Harbour Recruiter", "companyName": "Harbour Capital Partners", "kind": "finance" },
+  { "id": "20000000-0000-0000-0000-000000000006", "email": "meridian@smoke.local", "displayName": "Meridian Recruiter", "companyName": "Meridian Asset Management", "kind": "finance" },
+  { "id": "20000000-0000-0000-0000-000000000007", "email": "sterling@smoke.local", "displayName": "Sterling Recruiter", "companyName": "Sterling Investment Bank", "kind": "finance" },
+  { "id": "20000000-0000-0000-0000-000000000008", "email": "cathay@smoke.local", "displayName": "Cathay Recruiter", "companyName": "Cathay Digital Finance", "kind": "finance" }
 ]
