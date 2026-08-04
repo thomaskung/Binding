@@ -122,7 +122,13 @@ class Qwen:
         ]
         params = SamplingParams(temperature=0.2, max_tokens=2048)
         outputs = self.llm.chat(conversation, params)
-        return outputs[0].outputs[0].text.strip()
+        text = outputs[0].outputs[0].text
+        # Qwen3 emits an (often empty) <think>…</think> block even with
+        # /no_think — strip it so callers get clean redaction/summary text.
+        import re
+
+        text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+        return text.strip()
 
     @modal.fastapi_endpoint(method="POST")
     def redact(self, body: dict, authorization: str = Header(default="")):
