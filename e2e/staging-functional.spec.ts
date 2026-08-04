@@ -408,3 +408,175 @@ test.describe("Staging functional — maintenance & messaging", () => {
     await seekerCtx.close();
   });
 });
+
+test.describe("Staging functional — dealbreaker & tier differentiation", () => {
+  test("18. Equity dealbreaker filters matches when candidate requires it", async ({ browser }) => {
+    const admin = stagingAdminClient();
+    // Set equity_required on the demo seeker's dealbreaker matrix.
+    const { data: demoProfile } = await admin
+      .from("profiles")
+      .select("dealbreaker_matrix")
+      .eq("id", "00000000-0000-0000-0000-000000000001")
+      .maybeSingle();
+    const updated = {
+      ...((demoProfile?.dealbreaker_matrix ?? {}) as Record<string, unknown>),
+      equity_required: true,
+    };
+    await admin
+      .from("profiles")
+      .update({ dealbreaker_matrix: updated })
+      .eq("id", "00000000-0000-0000-0000-000000000001");
+
+    // Recruiter creates + publishes a job that DOES offer equity.
+    const recruiterCtx = await stagingContext(browser);
+    const recruiter = await recruiterCtx.newPage();
+    await signIn(recruiter, "recruiter@demo.local");
+
+    await recruiter.goto("/recruiter/jobs/new");
+    await recruiter.getByTestId("job-title").fill("Backend Equity Engineer");
+    await recruiter.getByTestId("job-description").fill(
+      "Backend engineer: distributed systems, Postgres, Kubernetes, event-driven pipelines. Equity offered.",
+    );
+    await recruiter.getByTestId("job-salary-max").fill("160000");
+    await recruiter.locator('input[name="work_setups"][value="remote"]').check();
+    await recruiter.getByTestId("save-job").click();
+    await recruiter.waitForURL(/\/recruiter\/jobs\/[0-9a-f-]+$/);
+    countAiCall(); // ai.embed on publish
+    await recruiter.getByTestId("publish-job").click();
+    await expect(recruiter.getByText("Published — matches refreshed.")).toBeVisible({ timeout: 60_000 });
+
+    // Seeker with equity_required should see the match.
+    const seekerCtx = await stagingContext(browser);
+    const seeker = await seekerCtx.newPage();
+    await signIn(seeker, "seeker@demo.local");
+    await seeker.goto("/seeker/matches");
+    await expect(seeker.getByTestId("seeker-match-card").first()).toBeVisible({ timeout: 30_000 });
+
+    // Clean up: restore equity_required to false.
+    await admin
+      .from("profiles")
+      .update({ dealbreaker_matrix: { ...updated, equity_required: false } })
+      .eq("id", "00000000-0000-0000-0000-000000000001");
+
+    await seekerCtx.close();
+    await recruiterCtx.close();
+  });
+
+  test("19. Business-email signup gate rejects consumer domains", async ({ browser }) => {
+    const admin = stagingAdminClient();
+    // Create a user with a consumer email directly via admin API.
+    const user = await admin.auth.admin.createUser({
+      email: `test-gate-${Date.now().toString(36)}@gmail.com`,
+      password: "J0B!Demo#2026$secure",
+      email_confirm: true,
+    });
+    if (!user.data.user) throw new Error("createUser failed");
+
+    const ctx = await stagingContext(browser);
+    const page = await ctx.newPage();
+    await signIn(page, user.data.user.email!);
+
+    // Attempt recruiter activation — should see the server-side rejection.
+    await page.goto("/onboarding");
+    await page.getByTestId("choose-recruiter").click();
+    await page.waitForURL(/onboarding\/recruiter/);
+    await page.getByTestId("recruiter-name").fill("Gate Test");
+    await page.getByTestId("recruiter-company").fill("Acme");
+    await page.getByTestId("recruiter-tos").check();
+    await page.getByTestId("recruiter-continue").click();
+    await expect(page.getByText(/business email/i)).toBeVisible({ timeout: 15_000 });
+    await ctx.close();
+  });
+
+  test("20. Credentials de-identified on recruiter match card", async ({ browser }) => {
+    const admin = stagingAdminClient();
+    // Set credentials + credential_summary on the demo seeker (already published).
+    await admin
+      .from("profiles")
+      .update({
+        credentials: "AWS Solutions Architect Professional, Certified Kubernetes Administrator",
+        credentials_summary: "2 certifications",
+      })
+      .eq("id", "00000000-0000-0000-0000-000000000001");
+
+    // Recruiter creates + publishes a matching job.
+    const recruiterCtx = await stagingContext(browser);
+    const recruiter = await recruiterCtx.newPage();
+    await signIn(recruiter, "recruiter@demo.local");
+    await recruiter.goto("/recruiter/jobs/new");
+    await recruiter.getByTestId("job-title").fill("Cloud Infrastructure Engineer");
+    await recruiter.getByTestId("job-description").fill(
+      "Cloud engineer: AWS, Kubernetes, distributed systems, CI/CD automation.",
+    );
+    await recruiter.getByTestId("job-salary-max").fill("170000");
+    await recruiter.locator('input[name="work_setups"][value="remote"]').check();
+    await recruiter.getByTestId("save-job").click();
+    await recruiter.waitForURL(/\/recruiter\/jobs\/[0-9a-f-]+$/);
+    countAiCall();
+    await recruiter.getByTestId("publish-job").click();
+    await expect(recruiter.getByText("Published — matches refreshed.")).toBeVisible({ timeout: 60_000 });
+
+    // View match card — should show generalized credential summary, not raw PII.
+    await recruiter.getByTestId("view-matches").click();
+    await expect(recruiter.getByTestId("recruiter-match-card").first()).toBeVisible({ timeout: 30_000 });
+    const bodyText = await recruiter.locator("body").innerText();
+    expect(bodyText).not.toContain("AWS Solutions Architect Professional");
+    expect(bodyText).not.toContain("Certified Kubernetes Administrator");
+
+    await recruiterCtx.close();
+  });
+
+  test("21. Recruiter tier badge and sidebar label", async ({ browser }) => {
+    const admin = stagingAdminClient();
+    await admin
+      .from("profiles")
+      .update({ recruiter_tier: "solo" })
+      .eq("id", "00000000-0000-0000-0000-000000000002");
+
+    const ctx = await stagingContext(browser);
+    const page = await ctx.newPage();
+    await signIn(page, "recruiter@demo.local");
+
+    // Dashboard shows Solo badge.
+    await page.goto("/recruiter");
+    await expect(page.getByText("Solo")).toBeVisible({ timeout: 10_000 });
+
+    // Clean up.
+    await admin
+      .from("profiles")
+      .update({ recruiter_tier: "free" })
+      .eq("id", "00000000-0000-0000-0000-000000000002");
+    await ctx.close();
+  });
+
+  test("22. Pro tier badge on dashboard, profile, and points page", async ({ browser }) => {
+    const admin = stagingAdminClient();
+    await admin
+      .from("profiles")
+      .update({ seeker_tier: "pro" })
+      .eq("id", "00000000-0000-0000-0000-000000000001");
+
+    const ctx = await stagingContext(browser);
+    const page = await ctx.newPage();
+    await signIn(page, "seeker@demo.local");
+
+    // Dashboard: Pro badge, no upsell card.
+    await expect(page.getByText("Pro")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId("pro-upsell-card")).toHaveCount(0);
+
+    // Profile page: Pro badge.
+    await page.goto("/seeker/profile");
+    await expect(page.getByText("Pro")).toBeVisible({ timeout: 10_000 });
+
+    // Points page: Pro badge.
+    await page.goto("/seeker/points");
+    await expect(page.getByText("Pro")).toBeVisible({ timeout: 10_000 });
+
+    // Clean up.
+    await admin
+      .from("profiles")
+      .update({ seeker_tier: "free" })
+      .eq("id", "00000000-0000-0000-0000-000000000001");
+    await ctx.close();
+  });
+});

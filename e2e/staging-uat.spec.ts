@@ -12,10 +12,19 @@ test.describe("UAT: Privacy-first promise (§1, §3 pillar 1)", () => {
     const page = await ctx.newPage();
     await signIn(page, RECRUITER.email);
 
-    // Navigate to job matches — verify only redacted data visible
+    // Navigate to job matches — verify only redacted data visible.
     await page.goto("/recruiter/jobs");
 
-    // Capture evidence for subagent
+    // Navigate into the first job's match list to capture the
+    // non-identifying candidate labels + credential summaries.
+    const jobLink = page.locator('a[href^="/recruiter/jobs/"]:not([href$="/new"])').first();
+    if (await jobLink.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await jobLink.click();
+      await page.getByTestId("view-matches").click();
+      await page.waitForTimeout(3000);
+      await page.screenshot({ path: `e2e-results/${RUN_ID}/1_privacy_first_matches.png`, fullPage: true });
+    }
+
     const evidence = {
       runId: RUN_ID,
       scenario: "1_privacy_first",

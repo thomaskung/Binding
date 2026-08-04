@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/supabase/server", () => ({
-  createSupabaseServerClient: vi.fn().mockResolvedValue({
+  createSupabaseServerClient: vi.fn().mockResolvedValue(({
     auth: {
       getUser: vi.fn().mockResolvedValue({
         data: { user: { id: "u-1", email: "test@company.com" } },
         error: null,
       }),
     },
-  }),
-  createSupabaseAdminClient: vi.fn().mockResolvedValue({
+  }) as any),
+  createSupabaseAdminClient: vi.fn().mockResolvedValue(({
     from: vi.fn().mockReturnValue({
       upsert: vi.fn().mockResolvedValue({ error: null }),
       select: vi.fn().mockReturnValue({
@@ -19,7 +19,7 @@ vi.mock("@/lib/supabase/server", () => ({
       }),
       insert: vi.fn().mockResolvedValue({ error: null }),
     }),
-  }),
+  }) as any),
 }));
 
 vi.mock("@/lib/consent", () => ({
@@ -47,16 +47,15 @@ describe("activateSeeker", () => {
 describe("activateRecruiter", () => {
   it("throws on consumer email domain (gmail.com)", async () => {
     const { activateRecruiter } = await import("@/app/onboarding/actions");
-    // Override the mocked supabase to return a user with gmail
     const serverMod = await import("@/lib/supabase/server");
-    vi.mocked(serverMod.createSupabaseServerClient).mockResolvedValue({
+    vi.mocked(serverMod.createSupabaseServerClient).mockResolvedValue(({
       auth: {
         getUser: vi.fn().mockResolvedValue({
           data: { user: { id: "u-2", email: "test@gmail.com" } },
           error: null,
         }),
       },
-    } as any);
+    }) as any);
     const fd = new FormData();
     fd.set("display_name", "Recruiter");
     fd.set("company_name", "Acme");
@@ -67,14 +66,14 @@ describe("activateRecruiter", () => {
   it("throws when company name is empty", async () => {
     const { activateRecruiter } = await import("@/app/onboarding/actions");
     const serverMod = await import("@/lib/supabase/server");
-    vi.mocked(serverMod.createSupabaseServerClient).mockResolvedValue({
+    vi.mocked(serverMod.createSupabaseServerClient).mockResolvedValue(({
       auth: {
         getUser: vi.fn().mockResolvedValue({
           data: { user: { id: "u-3", email: "test@company.com" } },
           error: null,
         }),
       },
-    } as any);
+    }) as any);
     const fd = new FormData();
     fd.set("display_name", "Recruiter");
     fd.set("company_name", "");

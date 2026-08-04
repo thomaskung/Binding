@@ -33,8 +33,8 @@ function mockSupabase(overrides: {
 }
 
 vi.mock("@/lib/supabase/server", () => ({
-  createSupabaseServerClient: vi.fn(() => Promise.resolve(mockSupabase({}))),
-  createSupabaseAdminClient: vi.fn(() => Promise.resolve(mockSupabase({}))),
+  createSupabaseServerClient: vi.fn(() => Promise.resolve(mockSupabase({}) as any)),
+  createSupabaseAdminClient: vi.fn(() => Promise.resolve(mockSupabase({}) as any)),
 }));
 
 const { getSessionProfile } = await import("@/lib/auth");
@@ -42,16 +42,18 @@ const { getSessionProfile } = await import("@/lib/auth");
 describe("getSessionProfile", () => {
   it("returns null when no user is signed in", async () => {
     vi.mocked(await import("@/lib/supabase/server")).createSupabaseServerClient = vi.fn(() =>
-      Promise.resolve(mockSupabase({})),
-    );
+      Promise.resolve(mockSupabase({}) as any),
+    ) as any;
     const result = await getSessionProfile();
     expect(result).toBeNull();
   });
 
   it("returns a populated session profile for a dual-role onboarded user", async () => {
     vi.mocked(await import("@/lib/supabase/server")).createSupabaseServerClient = vi.fn(() =>
-      Promise.resolve(mockSupabase({ userId: "user-1", isSeeker: true, isRecruiter: true, displayName: "Alex", companyName: "Acme" })),
-    );
+      Promise.resolve(
+        mockSupabase({ userId: "user-1", isSeeker: true, isRecruiter: true, displayName: "Alex", companyName: "Acme" }) as any,
+      ),
+    ) as any;
     const session = await getSessionProfile();
     expect(session).toMatchObject({
       userId: "user-1",
@@ -65,8 +67,8 @@ describe("getSessionProfile", () => {
 
   it("marks onboarded=false when the profile row has no role flags", async () => {
     vi.mocked(await import("@/lib/supabase/server")).createSupabaseServerClient = vi.fn(() =>
-      Promise.resolve(mockSupabase({ userId: "u", isSeeker: false, isRecruiter: false })),
-    );
+      Promise.resolve(mockSupabase({ userId: "u", isSeeker: false, isRecruiter: false }) as any),
+    ) as any;
     const session = await getSessionProfile();
     expect(session!.onboarded).toBe(false);
   });
