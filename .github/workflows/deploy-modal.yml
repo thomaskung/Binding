@@ -35,12 +35,17 @@ jobs:
           # MODAL_API_TOKEN (the bearer _auth checks). Refresh from the GH secret
           # via env (no inline-quoting pitfalls). Idempotent.
           modal secret create binding-api-token MODAL_API_TOKEN="$APP_BEARER" --force
-          modal deploy modal_app/embeddings.py 2>&1 | tee embed.log
-          modal deploy modal_app/llm.py 2>&1 | tee llm.log
-
+          # Stop the apps BEFORE deploy so warm containers can't keep serving a
+          # stale secret — modal deploy won't cycle containers when the code is
+          # byte-identical, so a refreshed secret otherwise never reaches them.
+          modal app stop binding-embeddings 2>/dev/null || true
+          modal app stop binding-llm 2>/dev/null || true
           # One-time cleanup of the pre-rename apps (jumponboard-* → binding-*).
           modal app stop jumponboard-embeddings 2>/dev/null || true
           modal app stop jumponboard-llm 2>/dev/null || true
+          sleep 5
+          modal deploy modal_app/embeddings.py 2>&1 | tee embed.log
+          modal deploy modal_app/llm.py 2>&1 | tee llm.log
 
           EMBED=$(grep -Eo 'https://[a-z0-9.-]+\.modal\.run' embed.log | grep -i embed | head -1)
           # CI-side auth test: CI holds the same GH secret that baked the Modal
