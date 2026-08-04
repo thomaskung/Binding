@@ -94,6 +94,9 @@ jobs:
   score-uat:
     needs: uat-evidence
     runs-on: ubuntu-latest
+    # The scoring agent must finish in one headless pass — a hung subagent
+    # pipeline previously stalled the job past an hour. Fail fast instead.
+    timeout-minutes: 30
     permissions:
       contents: write
       pull-requests: write
@@ -111,26 +114,27 @@ jobs:
         with:
           # opencode-go = the free "OpenCode Go"/Zen lane (same OPENCODE_API_KEY,
           # no prepaid balance) — the paid opencode/deepseek-v4-pro API errored
-          # with "Insufficient balance".
-          model: opencode-go/deepseek-v4-pro
+          # with "Insufficient balance". deepseek-v4-flash is the fast lane.
+          model: opencode-go/deepseek-v4-flash
           use_github_token: true
           prompt: |
-            You are the UAT scorer for Binding staging. Complete these steps:
+            You are the UAT scorer for Binding staging. Score each scenario in
+            ONE headless pass — do not spawn subagents.
 
             1. Read BUSINESS.md and e2e/uat-rubric.json from the repo.
-            2. Fetch the latest test evidence from Supabase bucket staging-test-evidence.
-               Use the SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY from environment variables.
-            3. For each of the 7 UAT scenarios, use the Task tool to spawn TWO subagents
-               (configured with mode: subagent, from .opencode/agent/uat-scorer.md).
-               Each subagent independently reads the scenario evidence and relevant
-               BUSINESS.md section, then returns a JSON score.
-            4. Compare the two agents' scores. If any dimension delta > 1 on any scenario,
-               flag for human review. If scores are close (delta ≤ 1), average them.
-            5. Fetch the previous baseline from staging-test-scores/latest.json.
-               If any score dropped from baseline, flag as regression with specific detail.
-            6. Output the complete scored report as JSON.
-            7. Store the report to Supabase bucket staging-test-scores/{runId}.json
+            2. Fetch the latest test evidence from Supabase bucket
+               staging-test-evidence. Use the SUPABASE_URL and
+               SUPABASE_SERVICE_ROLE_KEY from environment variables.
+            3. For each of the 7 UAT scenarios, read the scenario's evidence
+               files (screenshots + DOM state) and the relevant BUSINESS.md
+               section, then score it yourself against e2e/uat-rubric.json.
+            4. Fetch the previous baseline from staging-test-scores/latest.json.
+               If any score dropped from baseline, flag as regression with
+               specific detail.
+            5. Output the complete scored report as JSON.
+            6. Store the report to Supabase bucket staging-test-scores/{runId}.json
                and update staging-test-scores/latest.json.
-            8. If any score < 3 OR any regression detected, create a GitHub issue
-               with the failure summary and a link to the evidence bucket.
-            9. Purge evidence runs older than 3 from the staging-test-evidence bucket.
+            7. If any score < 3 OR any regression detected, create a GitHub
+               issue with the failure summary and a link to the evidence bucket.
+            8. Purge evidence runs older than 3 from the staging-test-evidence
+               bucket.
