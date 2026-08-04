@@ -55,3 +55,7 @@ Cyberport*.md
 # Keep these local; regenerate/attach them at submission time.
 ccmf-app/
 .env*
+
+# secrets misnamed without a leading dot (the .env* rules do NOT catch these)
+env.local
+env*.local
