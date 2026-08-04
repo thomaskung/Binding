@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Badge, Button } from "@binding/ui";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
-import { expireStaleOverride, getBalance, OVERRIDE_COST, REVEAL_COST } from "@/lib/points";
+import { expireStaleOverride, getBalance, OVERRIDE_COST, REVEAL_COST, revealCostForScore } from "@/lib/points";
 import { MatchesView } from "./matches-view";
 import { type RecruiterMatchCard } from "./match-list";
 
@@ -132,7 +132,10 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
       region: strength?.region ?? null,
       credentialsSummary: strength?.credentials_summary ?? null,
       interestedAt: match.interested_at ?? null,
-      revealCost: match.status === "interested" ? REVEAL_COST : OVERRIDE_COST,
+      revealCost:
+        match.status === "interested"
+          ? revealCostForScore(REVEAL_COST, match.score) // match-quality pricing (§4a)
+          : OVERRIDE_COST,
       revealRequestId: reveal?.id ?? null,
       overridePending: reveal?.path === "override" && reveal.status === "pending",
       overrideDeclined: reveal?.path === "override" && reveal.status === "declined",

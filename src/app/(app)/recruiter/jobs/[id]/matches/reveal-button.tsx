@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@binding/ui";
 import { overrideRevealCandidate, revealCandidate } from "../../../actions";
 
-export function RevealButton({ matchId }: { matchId: string }) {
+export function RevealButton({ matchId, cost = 10 }: { matchId: string; cost?: number }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   return (
@@ -23,7 +23,7 @@ export function RevealButton({ matchId }: { matchId: string }) {
           })
         }
       >
-        Reveal candidate (10 pts)
+        Reveal candidate ({cost} pts)
       </Button>
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>

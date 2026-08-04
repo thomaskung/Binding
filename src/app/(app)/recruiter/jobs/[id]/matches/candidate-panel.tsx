@@ -117,7 +117,7 @@ export function CandidatePanel({ card, onClose }: { card: RecruiterMatchCard; on
             </p>
           </section>
 
-          {card.status === "interested" && <RevealButton matchId={card.id} />}
+          {card.status === "interested" && <RevealButton matchId={card.id} cost={card.revealCost} />}
           {card.status === "surfaced" &&
             (card.overrideAllowed ? (
               <OverrideButton matchId={card.id} />
