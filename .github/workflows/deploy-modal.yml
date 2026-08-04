@@ -58,7 +58,11 @@ jobs:
 
           echo "## Modal endpoints" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          env | grep -E '^MODAL_(EMBED|REDACT|SUMMARY|REFINE|EXTRACT)_URL=' | sort >> "$GITHUB_STEP_SUMMARY"
+          echo "MODAL_EMBED_URL=$MODAL_EMBED_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "MODAL_REDACT_URL=$MODAL_REDACT_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "MODAL_SUMMARY_URL=$MODAL_SUMMARY_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "MODAL_REFINE_URL=$MODAL_REFINE_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "MODAL_EXTRACT_URL=$MODAL_EXTRACT_URL" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Wire endpoints into Vercel staging env
