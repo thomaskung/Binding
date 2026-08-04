@@ -1,8 +1,29 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Browser, Page } from "@playwright/test";
+import { expect, type Browser, type Page } from "@playwright/test";
 
 const TEST_RUN_ID = Date.now().toString(36);
 const PASSWORD = "J0B!Demo#2026$secure";
+
+// Modal budget guardrail: the staging functional suite is deliberately lean on
+// AI calls (5 publish/reveal/extract calls for the whole run — see the
+// per-test cost table in staging-functional.spec.ts). Tests that trigger an AI
+// round-trip call `countAiCall()`, and the suite teardown asserts the total
+// stays under the budget so a future test can't silently inflate Modal spend.
+export const AI_CALL_BUDGET = 6;
+let _aiCalls = 0;
+
+export function countAiCall() {
+  _aiCalls++;
+}
+
+export function assertAiCallBudget(): void {
+  if (_aiCalls > AI_CALL_BUDGET) {
+    throw new Error(
+      `Modal AI call budget exceeded: ${_aiCalls} > ${AI_CALL_BUDGET}. ` +
+        "Trim AI round-trips in the staging functional suite.",
+    );
+  }
+}
 
 function env(name: string, fallback = ""): string {
   return process.env[name] ?? fallback;
@@ -43,10 +64,41 @@ export async function ensureStagingUser(role: "seeker" | "recruiter"): Promise<{
 export async function signIn(page: Page, email: string) {
   await page.goto("/login");
   await page.getByLabel("Work email").fill(email);
-  await page.getByRole("button", { name: "Continue with email" }).click();
+  const continueBtn = page.getByRole("button", { name: "Continue with email" });
+  // React hydration can reset a controlled input right after fill (value snaps
+  // back to "" and the submit button stays disabled). Re-apply the email if the
+  // button hasn't enabled — cold staging instances hydrate slower than the
+  // first sign-in on a warm function.
+  try {
+    await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  } catch {
+    await page.getByLabel("Work email").fill(email);
+    await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  }
+  await continueBtn.click();
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL(/\/(seeker|recruiter|onboarding)/);
+}
+
+/** Attempt a password sign-in and assert it FAILS (stays on /login with an
+ * invalid-credentials error). Used after account deletion to prove the
+ * account is gone. */
+export async function signInExpectFailure(page: Page, email: string) {
+  await page.goto("/login");
+  await page.getByLabel("Work email").fill(email);
+  const continueBtn = page.getByRole("button", { name: "Continue with email" });
+  try {
+    await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  } catch {
+    await page.getByLabel("Work email").fill(email);
+    await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  }
+  await continueBtn.click();
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByText(/invalid login credentials/i)).toBeVisible();
+  await expect(page).toHaveURL(/\/login/);
 }
 
 export async function stagingContext(browser: Browser) {

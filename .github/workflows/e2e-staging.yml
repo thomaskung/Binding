@@ -31,6 +31,8 @@ jobs:
   functional:
     needs: wait-deploy
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     strategy:
       fail-fast: false
     steps:
@@ -50,7 +52,7 @@ jobs:
       - name: Run functional tests
         run: npx playwright test e2e/staging-functional.spec.ts --retries=1
         env:
-          E2E_BASE_URL: https://jumponboard-staging.vercel.app
+          E2E_BASE_URL: https://binding-staging.vercel.app
           E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
           E2E_SERVICE_ROLE_KEY: ${{ secrets.E2E_SERVICE_ROLE_KEY }}
           E2E_STAGING_SECRET: ${{ secrets.E2E_STAGING_SECRET }}
@@ -65,7 +67,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: 'Staging E2E — functional tests failed',
-              body: `Nightly staging functional tests failed.\nWorkflow run: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}\n\nCheck the staging environment: https://jumponboard-staging.vercel.app`
+              body: `Nightly staging functional tests failed.\nWorkflow run: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}\n\nCheck the staging environment: https://binding-staging.vercel.app`
             });
 
   uat-evidence:
@@ -82,7 +84,7 @@ jobs:
       - name: Run UAT evidence tests
         run: npx playwright test e2e/staging-uat.spec.ts --retries=1
         env:
-          E2E_BASE_URL: https://jumponboard-staging.vercel.app
+          E2E_BASE_URL: https://binding-staging.vercel.app
           E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
           E2E_SERVICE_ROLE_KEY: ${{ secrets.E2E_SERVICE_ROLE_KEY }}
           E2E_STAGING_SECRET: ${{ secrets.E2E_STAGING_SECRET }}
@@ -96,6 +98,7 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
+      id-token: write
     steps:
       - uses: actions/checkout@v6
         with: { persist-credentials: false }

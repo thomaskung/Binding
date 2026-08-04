@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== Setting up JumpOnBoard dev environment ==="
+echo "=== Setting up Binding dev environment ==="
 
 # Enable corepack and install pnpm
 corepack enable

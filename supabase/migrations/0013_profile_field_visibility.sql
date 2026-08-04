@@ -1,5 +1,5 @@
 -- Per-field visibility for the seeker Profile/Résumé-canvas restructure
--- (Phase 2B of the JumpOnBoard.dc.html implementation). Tri-state map, key ->
+-- (Phase 2B of the Binding.dc.html implementation). Tri-state map, key ->
 -- 'visible' | 'matching_only' | 'hidden', but 'matching_only' is only ever a
 -- truthful option for the fields that actually feed the match embedding
 -- (skills, desired_roles, industries, references_available — see

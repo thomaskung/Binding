@@ -1,4 +1,4 @@
--- JumpOnBoard walking-skeleton schema. Mirrors DESIGN.md §2.
+-- Binding walking-skeleton schema. Mirrors DESIGN.md §2.
 -- Full schema up front (including tables with no UI yet) so RLS thinking
 -- happens now, not retroactively.
 

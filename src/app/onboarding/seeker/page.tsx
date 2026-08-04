@@ -69,7 +69,7 @@ export default async function SeekerOnboardingPage() {
               />
               <span>
                 I understand and consent that AI performs automated matching (profiling) between my
-                pseudonymized profile and job postings — this is how JumpOnBoard surfaces matches.
+                pseudonymized profile and job postings — this is how Binding surfaces matches.
                 No match is disclosed to a recruiter without the reveal flow I control.
               </span>
             </label>

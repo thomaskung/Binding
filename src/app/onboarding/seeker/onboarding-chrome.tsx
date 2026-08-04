@@ -21,7 +21,7 @@ export function OnboardingChrome({
         <div className="flex items-center justify-between gap-3">
           <Link href="/" className="flex items-center gap-2">
             <span className="inline-block size-5 rounded-md bg-primary" />
-            <span className="text-sm font-semibold tracking-tight">JumpOnBoard</span>
+            <span className="text-sm font-semibold tracking-tight">Binding</span>
           </Link>
           {skipHref && (
             <Link

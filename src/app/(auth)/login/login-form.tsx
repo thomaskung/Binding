@@ -117,7 +117,7 @@ export function LoginForm({ intent }: { intent: SignupIntent | null }) {
           </CardContent>
           <CardFooter>
             <p className="w-full text-center text-sm text-muted-foreground">
-              New to JumpOnBoard? <a href="/signup" data-testid="nav-signup">Create an account</a>
+              New to Binding? <a href="/signup" data-testid="nav-signup">Create an account</a>
             </p>
           </CardFooter>
         </>

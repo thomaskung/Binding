@@ -27,7 +27,7 @@ export default async function OnboardingPage({
       <main className="flex flex-1 items-center justify-center p-8">
         <Card className="w-full max-w-lg">
           <CardHeader>
-            <CardTitle className="font-medium">Welcome to JumpOnBoard</CardTitle>
+            <CardTitle className="font-medium">Welcome to Binding</CardTitle>
             <CardDescription>
               What brings you here? You can add the other role any time later.
             </CardDescription>

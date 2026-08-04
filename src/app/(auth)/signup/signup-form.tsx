@@ -21,7 +21,7 @@ export function SignupForm({ intent }: { intent: SignupIntent | null }) {
     return (
       <Card className="w-full">
         <CardHeader>
-          <CardTitle className="font-medium">Create your JumpOnBoard account</CardTitle>
+          <CardTitle className="font-medium">Create your Binding account</CardTitle>
           <CardDescription>
             What brings you here? You can add the other role any time later.
           </CardDescription>
@@ -51,7 +51,7 @@ export function SignupForm({ intent }: { intent: SignupIntent | null }) {
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle className="font-medium">Create your JumpOnBoard account</CardTitle>
+        <CardTitle className="font-medium">Create your Binding account</CardTitle>
         <CardDescription>
           {intent === "seeker"
             ? "Join the talent pool — pseudonymous until you say otherwise."

@@ -3,7 +3,7 @@ name: Supabase keepalive
 # Supabase free-tier projects pause after 7 days without database activity.
 # This pings /api/health (which runs a count query) every 3 days.
 # Set the KEEPALIVE_URL repo variable to the deployed app's health endpoint,
-# e.g. https://jumponboard.<subdomain>.workers.dev/api/health
+# e.g. https://binding-staging.vercel.app/api/health
 
 on:
   schedule:

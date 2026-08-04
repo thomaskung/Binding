@@ -55,7 +55,7 @@ function PartnerCard({ partner, unlocked }: { partner: Partner; unlocked: boolea
               {partner.code}
             </span>
             <span className="text-xs leading-normal text-muted-foreground">
-              You&apos;ll pay {partner.partner_name} directly on their site — JumpOnBoard never
+              You&apos;ll pay {partner.partner_name} directly on their site — Binding never
               processes this payment.
             </span>
           </div>

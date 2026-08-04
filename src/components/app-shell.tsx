@@ -185,7 +185,7 @@ export function AppShell({
             <Icon name="hamburger" />
             {railOpen && (
               <span className="whitespace-nowrap text-sm font-semibold tracking-tight">
-                JumpOnBoard
+                Binding
               </span>
             )}
           </button>

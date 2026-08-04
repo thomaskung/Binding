@@ -92,6 +92,6 @@ test("complete a training program, then see the Benefits signal move", async ({ 
   await page.getByTestId("get-code").first().click();
   await expect(page.getByTestId("benefit-code").first()).toBeVisible();
   await expect(
-    page.getByText("JumpOnBoard never processes this payment.").first(),
+    page.getByText("Binding never processes this payment.").first(),
   ).toBeVisible();
 });

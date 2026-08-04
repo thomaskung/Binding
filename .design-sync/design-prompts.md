@@ -1,6 +1,6 @@
 # Claude Design prompts — resume-first pivot + recruiter-monetization surfaces
 
-Prompts for the **JumpOnBoard UI** design project (`dc871eb6-6c3c-48a1-bcff-c841313b456e`).
+Prompts for the **Binding UI** design project (`dc871eb6-6c3c-48a1-bcff-c841313b456e`).
 Paste **① Setup** first to establish shared rules, then one surface block per screen.
 Surfaces ②–⑦ are backed by DESIGN.md §2c/§2d/§2e/§7a — all of which **shipped** since
 these prompts were first written (corrected 2026-07-23; these blocks were mocked
@@ -23,8 +23,8 @@ before starting ⑨–⑯; the allowlist and shared facts both changed.
 ## ① Setup — paste first (updated 2026-07-22 — re-paste even if you pasted the old version earlier)
 
 ```
-You are designing screens for JumpOnBoard, a privacy-first APAC (HK/SG) hiring
-platform. Build ONLY with the JumpOnBoard UI components (Button, Card + parts,
+You are designing screens for Binding, a privacy-first APAC (HK/SG) hiring
+platform. Build ONLY with the Binding UI components (Button, Card + parts,
 Tabs, Input, Label, Select, Textarea, Badge, Dialog, Separator, Toaster, Slider,
 Progress). Do not invent components or pull generic ones.
 
@@ -264,7 +264,7 @@ accommodation, wellness, IT equipment, healthcare, career advisory. Each card: p
 name, discount description (e.g. "15% off with partner code"), a "Get code" button.
 Clicking reveals a generic code (same code for every user at that tier — never
 personalized/tracked) and a clear line: "You'll pay [Partner] directly on their site —
-JumpOnBoard never processes this payment." No checkout, no cart, no payment form
+Binding never processes this payment." No checkout, no cart, no payment form
 anywhere in this surface — every card ends at a redirect-out affordance, not a
 transaction. Use Card, Badge (for tier + category), Button, Separator.
 ```
