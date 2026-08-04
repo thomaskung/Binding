@@ -33,6 +33,21 @@ export const OVERRIDE_DAILY_CAP = Number(process.env.OVERRIDE_DAILY_CAP ?? 5);
 export const OVERRIDE_REBLOCK_DAYS = Number(process.env.OVERRIDE_REBLOCK_DAYS ?? 30);
 export const OVERRIDE_EXPIRY_DAYS = Number(process.env.OVERRIDE_EXPIRY_DAYS ?? 7);
 
+// Match-quality reveal pricing (DESIGN.md §4a — a first cut of the dynamic
+// pricing roadmap, founder directive 2026-08-04): a stronger match costs more
+// to reveal. Multiplier tiers on the raw cosine score; placeholder like every
+// other constant here, env-tunable-in-spirit, sized once real usage exists.
+// Charged AND displayed through revealCostForScore so the card can never show
+// a price different from what's spent.
+export function matchPriceMultiplier(score: number): number {
+  if (score >= 0.8) return 2; // top matches — premium
+  if (score >= 0.65) return 1.5; // strong
+  return 1; // baseline
+}
+export function revealCostForScore(baseCost: number, score: number): number {
+  return Math.round(baseCost * matchPriceMultiplier(score));
+}
+
 export async function getBalance(
   supabase: SupabaseClient,
   profileId: string,

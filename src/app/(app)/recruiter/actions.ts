@@ -19,6 +19,7 @@ import {
   REVEAL_COMPENSATION,
   REVEAL_COST,
   REVEAL_DAILY_CAP,
+  revealCostForScore,
   revealSpendGuard,
 } from "@/lib/points";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
@@ -140,7 +141,7 @@ export async function revealCandidate(matchId: string) {
 
   const { data: match, error } = await admin
     .from("matches")
-    .select("id, status, profile_id, job_posting_id, job_postings(recruiter_id, title, description)")
+    .select("id, status, score, profile_id, job_posting_id, job_postings(recruiter_id, title, description)")
     .eq("id", matchId)
     .single();
   if (error) throw new Error("match not found");
@@ -150,6 +151,9 @@ export async function revealCandidate(matchId: string) {
   if (match.status !== "interested") {
     throw new Error("candidate has not expressed interest yet (override path ships post-MVP)");
   }
+
+  // Match-quality pricing (§4a): a stronger match costs more to reveal.
+  const cost = revealCostForScore(REVEAL_COST, match.score);
 
   // Cap before balance — deterministic error ordering (revealSpendGuard
   // contract). The daily cap is the DESIGN.md §5 anti-enumeration control;
@@ -162,7 +166,7 @@ export async function revealCandidate(matchId: string) {
     usedToday,
     dailyCap: REVEAL_DAILY_CAP,
     balance,
-    cost: REVEAL_COST,
+    cost,
     kind: "reveal",
   });
   if (guardError) throw new Error(guardError);
@@ -197,9 +201,9 @@ export async function revealCandidate(matchId: string) {
   await appendLedger(admin, {
     profileId: session.userId,
     event: "reveal_spend",
-    amount: -REVEAL_COST,
+    amount: -cost,
     revealRequestId: reveal.id,
-    note: "standard reveal",
+    note: `standard reveal (${Math.round(match.score * 100)}% match)`,
   });
   await appendLedger(admin, {
     profileId: match.profile_id,
