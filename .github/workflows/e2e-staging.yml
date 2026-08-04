@@ -111,6 +111,13 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_UAT_READONLY_KEY }}
+          # Headless `opencode github run` cannot answer interactive permission
+          # prompts — a bare external_directory ask (/tmp staging) hung the job
+          # for 30m. Pre-allow the tools the scorer needs so it never blocks.
+          OPENCODE_PERMISSION: >-
+            {"bash":"allow","edit":"allow","read":"allow","glob":"allow",
+            "grep":"allow","list":"allow","webfetch":"allow","websearch":"allow",
+            "task":"allow","external_directory":{"*":"allow"}}
         with:
           # opencode-go = the free "OpenCode Go"/Zen lane (same OPENCODE_API_KEY,
           # no prepaid balance) — the paid opencode/deepseek-v4-pro API errored
