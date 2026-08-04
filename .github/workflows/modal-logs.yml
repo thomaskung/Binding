@@ -1,0 +1,31 @@
+name: Modal logs (binding-llm crash)
+
+# One-shot diagnostic: trigger a cold start on the llm app and capture the
+# container logs (the crash traceback). workflow_dispatch only.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install modal
+      - name: Trigger cold start + capture logs
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          APP_BEARER: ${{ secrets.MODAL_API_TOKEN }}
+        run: |
+          modal token set --token-id "$MODAL_TOKEN_ID" --token-secret "$MODAL_TOKEN_SECRET"
+          # Fire a request in the background to force a cold start (which crashes),
+          # then stream logs for a window to capture the traceback.
+          ( curl -s -m 200 -X POST https://thomaskung--binding-llm-qwen-redact.modal.run \
+              -H "content-type: application/json" -H "authorization: Bearer $APP_BEARER" \
+              -d '{"text":"trigger cold start"}' >/dev/null 2>&1 & )
+          sleep 8
+          timeout 180 modal app logs binding-llm -e main 2>&1 | tail -120 || true
