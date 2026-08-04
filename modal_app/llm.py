@@ -19,7 +19,12 @@ import os
 import modal
 from fastapi import Header
 
-MODEL_ID = "Qwen/Qwen3-8B-AWQ"
+# Qwen3-1.7B (was Qwen3-8B-AWQ): the 8B couldn't load within Modal's ~151s
+# sync web-endpoint window on an L4, so cold calls always 303'd. The 1.7B
+# loads in well under the window → reliable on-demand, no keep-warm cost.
+# This is the generation model (redaction / fit-summary / refine / extract)
+# ONLY — matching quality is unaffected (separate Qwen3-Embedding model).
+MODEL_ID = "Qwen/Qwen3-1.7B"
 
 app = modal.App("binding-llm")
 
