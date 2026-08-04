@@ -38,11 +38,17 @@ jobs:
           modal app stop jumponboard-embeddings 2>/dev/null || true
           modal app stop jumponboard-llm 2>/dev/null || true
 
-          # Map each endpoint to the env var name src/lib/ai/modal.ts expects,
-          # and emit them as step outputs (URLs only — token comes from GH secrets).
+          # Map each endpoint to the env var name src/lib/ai/modal.ts expects.
+          # The `tee` below streams deploy output while map_url reads the log —
+          # wait for the URL to appear rather than racing the flush.
           map_url() {
             # $1 = grep pattern for the endpoint, $2 = env var name, $3 = logfile
-            url=$(grep -Eo 'https://[a-z0-9.-]+\.modal\.run' "$3" | grep -i "$1" | head -1 || true)
+            local url=""
+            for _ in $(seq 1 20); do
+              url=$(grep -Eo 'https://[a-z0-9.-]+\.modal\.run' "$3" | grep -i "$1" | head -1 || true)
+              [ -n "$url" ] && break
+              sleep 1
+            done
             if [ -z "$url" ]; then
               echo "::error::Could not resolve $2 from Modal deploy output"
               exit 1
