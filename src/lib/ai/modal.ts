@@ -1,3 +1,4 @@
+import { credentialsFloorSummary, credentialsLooksSafe } from "@/lib/credentials";
 import type { AiProvider, ExtractedProfileFields, JDTextOnly, RedactionResult } from "./types";
 
 /**
@@ -98,5 +99,24 @@ export const modalProvider: AiProvider = {
       kind: "maintenance_update",
     });
     return refined;
+  },
+
+  async generalizeCredentials(rawCredentials: string): Promise<string> {
+    const floor = credentialsFloorSummary(rawCredentials);
+    if (!rawCredentials.trim()) return "";
+    // Ask the self-hosted model to generalize; but the deterministic floor is
+    // the guarantee — if the model output still carries a specific identifier
+    // (or the call fails), fall back to the floor. The model can only ever
+    // REMOVE specifics, never smuggle one through.
+    try {
+      const c = config();
+      const { refined } = await post<{ refined: string }>(c.refineUrl, c.apiToken, {
+        text: rawCredentials,
+        kind: "credentials",
+      });
+      return credentialsLooksSafe(refined) ? refined.trim() : floor;
+    } catch {
+      return floor;
+    }
   },
 };

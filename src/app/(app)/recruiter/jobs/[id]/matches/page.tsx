@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import { Badge, Button } from "@binding/ui";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
-import { expireStaleOverride, getBalance, OVERRIDE_COST } from "@/lib/points";
-import { MatchList, type RecruiterMatchCard } from "./match-list";
+import { expireStaleOverride, getBalance, OVERRIDE_COST, REVEAL_COST } from "@/lib/points";
+import { MatchesView } from "./matches-view";
+import { type RecruiterMatchCard } from "./match-list";
 
 export default async function JobMatchesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -24,7 +25,7 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
         .maybeSingle(),
       supabase
         .from("matches")
-        .select("id, profile_id, score, status")
+        .select("id, profile_id, score, status, interested_at")
         .eq("job_posting_id", id)
         .order("score", { ascending: false }),
       supabase
@@ -85,11 +86,19 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
     }
   }
 
-  const textByProfile = new Map<string, string>(
-    ((candidateTexts ?? []) as { profile_id: string; redacted_text: string }[]).map((c) => [
-      c.profile_id,
-      c.redacted_text,
-    ]),
+  interface StrengthRow {
+    profile_id: string;
+    redacted_text: string;
+    seniority_band: string | null;
+    years_experience: number | null;
+    skills: string[] | null;
+    industries: string[] | null;
+    desired_roles: string[] | null;
+    region: string | null;
+    credentials_summary: string | null;
+  }
+  const strengthByProfile = new Map<string, StrengthRow>(
+    ((candidateTexts ?? []) as StrengthRow[]).map((c) => [c.profile_id, c]),
   );
   const revealByProfile = new Map(liveReveals.map((r) => [r.profile_id, r]));
 
@@ -106,6 +115,7 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
         : reveal.message_threads
       : null;
     const override = overrideInfo.get(match.profile_id);
+    const strength = strengthByProfile.get(match.profile_id);
     return {
       id: match.id,
       profileId: match.profile_id,
@@ -113,7 +123,17 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
       status: match.status,
       revealedName: revealedProfile?.display_name ?? null,
       fitSummary: reveal?.fit_summary ?? null,
-      text: textByProfile.get(match.profile_id) ?? "",
+      text: strength?.redacted_text ?? "",
+      seniorityBand: strength?.seniority_band ?? null,
+      yearsExperience: strength?.years_experience ?? null,
+      skills: strength?.skills ?? [],
+      industries: strength?.industries ?? [],
+      desiredRoles: strength?.desired_roles ?? [],
+      region: strength?.region ?? null,
+      credentialsSummary: strength?.credentials_summary ?? null,
+      interestedAt: match.interested_at ?? null,
+      revealCost: match.status === "interested" ? REVEAL_COST : OVERRIDE_COST,
+      revealRequestId: reveal?.id ?? null,
       overridePending: reveal?.path === "override" && reveal.status === "pending",
       overrideDeclined: reveal?.path === "override" && reveal.status === "declined",
       overrideAllowed: override?.allowed ?? false,
@@ -124,7 +144,7 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
   });
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 p-8">
+    <main className="mx-auto max-w-6xl space-y-6 p-8">
       <header className="flex items-start justify-between gap-6">
         <div>
           <h1 className="text-2xl font-medium tracking-tight">Matches — {job.title}</h1>
@@ -142,7 +162,7 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
         </div>
       </header>
 
-      <MatchList cards={cards} />
+      <MatchesView cards={cards} />
     </main>
   );
 }

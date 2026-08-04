@@ -62,4 +62,15 @@ describe("candidate-derived AI capabilities stay off the frontier-capable path",
     };
     expect(typeof draft).toBe("function");
   });
+
+  it("generalizeCredentials takes plain candidate credentials, not JDTextOnly", () => {
+    // Raw credentials are candidate-derived → Modal-only, never a frontier API.
+    const generalize: AiProvider["generalizeCredentials"] = async (rawCredentials) => {
+      // @ts-expect-error — if this compiles, credentials were wrongly branded
+      // frontier-capable and could leak to a frontier API.
+      const _wouldRequireBrand: JDTextOnly = rawCredentials;
+      return "";
+    };
+    expect(typeof generalize).toBe("function");
+  });
 });

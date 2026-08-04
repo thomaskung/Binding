@@ -72,4 +72,12 @@ export interface AiProvider {
    * seeker's free-text answer to "anything new?". Private-path only.
    * Suggest-and-approve — the result is never auto-applied. */
   draftMaintenanceUpdate(currentProfileSummary: string, userAnswer: string): Promise<string>;
+
+  /** Generalize free-text credentials (awards/certs/patents) into a
+   * de-identified summary for the recruiter card. Private-path only (raw
+   * credentials are candidate-derived). MUST NOT preserve specific identifiers
+   * (patent numbers, exact award titles/years) — implementations fall back to
+   * the deterministic category+count floor (src/lib/credentials.ts) if the
+   * model output still looks identifying. */
+  generalizeCredentials(rawCredentials: string): Promise<string>;
 }

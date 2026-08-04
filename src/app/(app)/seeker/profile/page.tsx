@@ -13,7 +13,7 @@ export default async function SeekerProfilePage() {
       supabase
         .from("profiles")
         .select(
-          "display_name, draft_text, published_text, visibility, dealbreaker_matrix, headline, phone, location, skills, desired_roles, industries, references_available, share_salary, field_visibility, seeker_tier",
+          "display_name, draft_text, published_text, visibility, dealbreaker_matrix, headline, phone, location, skills, desired_roles, industries, references_available, share_salary, credentials, credentials_summary, field_visibility, seeker_tier",
         )
         .eq("id", session.userId)
         .single(),
@@ -63,6 +63,8 @@ export default async function SeekerProfilePage() {
       industries={profile?.industries ?? []}
       referencesAvailable={profile?.references_available ?? false}
       shareSalary={profile?.share_salary ?? true}
+      credentials={profile?.credentials ?? ""}
+      credentialsSummary={profile?.credentials_summary ?? null}
       fieldVisibility={(profile?.field_visibility ?? {}) as FieldVisibilityMap}
       experience={(experience ?? []).map((e) => ({
         id: e.id,
