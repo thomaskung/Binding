@@ -20,34 +20,47 @@ jobs:
           python-version: "3.12"
       - run: pip install modal
       - name: Deploy Modal apps + capture endpoint URLs
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          APP_BEARER: ${{ secrets.MODAL_API_TOKEN }}
         run: |
           set -euo pipefail
-          modal token set --token-id "${{ secrets.MODAL_TOKEN_ID }}" --token-secret "${{ secrets.MODAL_TOKEN_SECRET }}"
-          # The Modal apps reference Secret.from_name("binding-api-token"),
-          # which holds MODAL_API_TOKEN (the bearer the endpoints' _auth checks).
-          # Create/refresh it from the GH secret so deploy resolves it and the
-          # app's bearer matches the endpoint's expected token. Idempotent.
-          T="${{ secrets.MODAL_API_TOKEN }}"; echo "DEBUG gh-secret fp: len=${#T} first4=${T:0:4} last4=${T: -4}"
-          modal secret create binding-api-token MODAL_API_TOKEN="${{ secrets.MODAL_API_TOKEN }}" --force
-          # tee deploy output so we can pull the printed web-endpoint URLs
+          # Fingerprint the GH secret (length + sha — GitHub masks values, not
+          # these) so it can be compared to .env.local without exposing it.
+          echo "gh-secret: len=${#APP_BEARER} sha12=$(printf %s "$APP_BEARER" | sha256sum | cut -c1-12)"
+
+          modal token set --token-id "$MODAL_TOKEN_ID" --token-secret "$MODAL_TOKEN_SECRET"
+          # The apps reference Secret.from_name("binding-api-token") holding
+          # MODAL_API_TOKEN (the bearer _auth checks). Refresh from the GH secret
+          # via env (no inline-quoting pitfalls). Idempotent.
+          modal secret create binding-api-token MODAL_API_TOKEN="$APP_BEARER" --force
           modal deploy modal_app/embeddings.py 2>&1 | tee embed.log
           modal deploy modal_app/llm.py 2>&1 | tee llm.log
 
           # One-time cleanup of the pre-rename apps (jumponboard-* → binding-*).
-          # Idempotent — harmless once they're already gone.
           modal app stop jumponboard-embeddings 2>/dev/null || true
           modal app stop jumponboard-llm 2>/dev/null || true
 
+          EMBED=$(grep -Eo 'https://[a-z0-9.-]+\.modal\.run' embed.log | grep -i embed | head -1)
+          # CI-side auth test: CI holds the same GH secret that baked the Modal
+          # secret, so this MUST be 200 once propagated — proves the endpoint
+          # accepts the GH-secret value (isolates propagation/caching vs a
+          # local value mismatch). Retry through the cold start.
+          for i in 1 2 3 4; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -m 180 -X POST "$EMBED" \
+              -H "content-type: application/json" -H "authorization: Bearer $APP_BEARER" \
+              -d '{"text":"ci auth check"}')
+            echo "CI self-auth embed attempt $i: HTTP $code"
+            [ "$code" = "200" ] && break
+            sleep 3
+          done
+
           echo "## Modal endpoints" >> "$GITHUB_STEP_SUMMARY"
-          echo "Wire these into the Vercel staging env (plus AI_PROVIDER=modal and MODAL_API_TOKEN):" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          # Modal prints lines like: "Created web function embed => https://...modal.run"
-          # Map each endpoint to the env var name src/lib/ai/modal.ts expects.
           map_url() {
-            # $1 = grep pattern for the endpoint, $2 = env var name, $3 = logfile
             url=$(grep -Eo 'https://[a-z0-9.-]+\.modal\.run' "$3" | grep -i "$1" | head -1 || true)
-            echo "$2=${url:-<not found — check the deploy log above>}"
-            echo "$2=${url:-<not found — check the deploy log above>}" >> "$GITHUB_STEP_SUMMARY"
+            echo "$2=${url:-<not found>}" >> "$GITHUB_STEP_SUMMARY"
           }
           map_url "embed"       MODAL_EMBED_URL   embed.log
           map_url "redact"      MODAL_REDACT_URL  llm.log
@@ -55,4 +68,3 @@ jobs:
           map_url "refine"      MODAL_REFINE_URL  llm.log
           map_url "extract"     MODAL_EXTRACT_URL llm.log
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "MODAL_API_TOKEN is already a GH secret; set the same value as a Vercel env var." >> "$GITHUB_STEP_SUMMARY"
