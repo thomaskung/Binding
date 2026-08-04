@@ -17,6 +17,7 @@ credit. Watch the Modal dashboard weekly; see modal_app/README.md.
 import os
 
 import modal
+from fastapi import Header
 
 MODEL_ID = "Qwen/Qwen3-8B-AWQ"
 
@@ -102,24 +103,24 @@ class Qwen:
         return outputs[0].outputs[0].text.strip()
 
     @modal.fastapi_endpoint(method="POST")
-    def redact(self, body: dict, authorization: str = ""):
+    def redact(self, body: dict, authorization: str = Header(default="")):
         _auth(authorization)
         return {"redactedText": self._generate(REDACT_SYSTEM, body["text"])}
 
     @modal.fastapi_endpoint(method="POST")
-    def fit_summary(self, body: dict, authorization: str = ""):
+    def fit_summary(self, body: dict, authorization: str = Header(default="")):
         _auth(authorization)
         user = f"CANDIDATE (redacted):\n{body['candidate']}\n\nROLE:\n{body['job']}"
         return {"summary": self._generate(SUMMARY_SYSTEM, user)}
 
     @modal.fastapi_endpoint(method="POST")
-    def refine(self, body: dict, authorization: str = ""):
+    def refine(self, body: dict, authorization: str = Header(default="")):
         _auth(authorization)
         system = REFINE_JD_SYSTEM if body.get("kind") == "job_description" else REFINE_PROFILE_SYSTEM
         return {"refined": self._generate(system, body["text"])}
 
     @modal.fastapi_endpoint(method="POST")
-    def extract(self, body: dict, authorization: str = ""):
+    def extract(self, body: dict, authorization: str = Header(default="")):
         _auth(authorization)
         import json
         raw = self._generate(EXTRACT_SYSTEM, body["text"])
