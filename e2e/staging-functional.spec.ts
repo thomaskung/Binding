@@ -61,6 +61,21 @@ test.describe("Staging functional — auth & registration", () => {
     await expect(page.getByTestId("choose-recruiter")).toBeVisible();
     await ctx.close();
   });
+
+  test("3b. Privacy notice is readable signed-out (session middleware must not gate it)", async ({
+    browser,
+  }) => {
+    // Regression guard for the launch-blocking miss found 2026-07-30: /privacy
+    // shipped without a middleware allowlist entry, so signed-out visitors got
+    // the login page. A privacy notice behind a login defeats its purpose.
+    const ctx = await stagingContext(browser);
+    const page = await ctx.newPage();
+    await page.goto("/privacy");
+    expect(page.url()).toContain("/privacy");
+    await expect(page.getByRole("heading", { name: "Privacy Notice" })).toBeVisible();
+    await expect(page.getByText("Subprocessors and data location")).toBeVisible();
+    await ctx.close();
+  });
 });
 
 test.describe("Staging functional — consent & profiling", () => {

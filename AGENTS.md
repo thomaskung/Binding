@@ -23,7 +23,7 @@
 - E2E: `pnpm e2e` — must `pnpm db:reset` first, needs `NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN=true` in `.env.local`, runs serially (1 worker)
 - Staging E2E (password login + basic auth required, secrets from `.env.local`):
   ```
-  E2E_BASE_URL=https://binding-staging.vercel.app \
+  E2E_BASE_URL=https://jumponboard-staging.vercel.app \
   E2E_SUPABASE_URL=https://qjqaeuzpsefawqwlfwlf.supabase.co \
   E2E_SERVICE_ROLE_KEY="<supabase-role-key>" \
   E2E_STAGING_SECRET="<shared-secret>" \
@@ -36,23 +36,23 @@
 
 ## PDF Reading
 
-- Public brand is **Binding**.
+- Public brand is **Binding**; "JumpOnBoard" was the internal code name (retired for branding).
 - To read a PDF: `node scripts/pdf2md.mjs "<file.pdf>" /tmp/out.md` (uses `@firecrawl/pdf-inspector`), then Read the markdown. See the `pdf-reader` skill.
 - Scanned/image PDFs with no text layer can't be read this way — flag for OCR.
 
 ## Infrastructure CLI
 
 **GitHub (`gh`)**
-- Repo: `thomaskung/JumpOnBoard` (GitHub repo name is the immutable infra identifier — product/brand is Binding)
+- Repo: `thomaskung/Binding` (renamed from `thomaskung/JumpOnBoard` 2026-08-03 — GitHub redirects the old URL, but use the new slug)
 - Create PR from current branch: `gh pr create --fill`
 - Merge PR: `gh pr merge <N> --merge` (add `--admin` if branch protection requires review)
 
 **Vercel**
 - Auth: token in `.env.local` (`VERCEL_API_TOKEN`)
-- Link: `vercel link --project binding-staging`
+- Link: `vercel link --project jumponboard-staging`
 - Deploy: `vercel --prod --yes`
-- Project ID: `prj_UHvpq7yF6pFr1L4OkZtEBf6jwKG8`, Org: `team_CdIwdiwt4WNwzkO5q43UP29H`
-- Staging URL: `https://binding-staging.vercel.app`
+- Project ID: `prj_Ss1Qm2DUjBCVnAT4B4wCWa61T3js`, Org: `team_CdIwdiwt4WNwzkO5q43UP29H`
+- Staging URL: `https://jumponboard-staging.vercel.app`
 
 **Modal**
 - Auth: `modal token set --token-id <ID> --token-secret <SECRET>` (values from `.env.local` comment; profile `thomaskung`)

@@ -32,6 +32,16 @@ test("landing splits sign-up CTAs from the sign-in nav link", async ({ page }) =
   await page.waitForURL(/\/signup$/);
 });
 
+test("privacy notice is readable signed-out (middleware must not gate it)", async ({ page }) => {
+  // Regression guard: /privacy shipped without a middleware allowlist entry,
+  // so signed-out staging visitors got the login page instead — a privacy
+  // notice behind a login defeats its purpose (must be readable pre-signup).
+  await page.goto("/privacy");
+  await expect(page).toHaveURL(/\/privacy$/);
+  await expect(page.getByRole("heading", { name: "Privacy Notice" })).toBeVisible();
+  await expect(page.getByText("Subprocessors and data location")).toBeVisible();
+});
+
 test("signup with intent shows the email form directly; without intent shows the chooser", async ({
   page,
 }) => {

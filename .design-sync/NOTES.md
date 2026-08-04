@@ -126,3 +126,29 @@ Added for the recruiter-monetization per-role budget UI (budget-cap slider + spe
   `componentSrcMap`-based exclusion list (nothing to update) — only new
   *sub-parts* of already-synced compounds need a new `componentSrcMap: null`
   entry, or they'll surface as their own (likely low-value) card.
+
+## 2026-08-03: brand rename (JumpOnBoard → Binding) + deferred re-sync
+
+- **Deferred cosmetic delta (not yet synced)**: since the last sync
+  (`5847371`, 2026-07-23), `packages/ui` changed only to remove the serif
+  heading font — `theme.css` dropped the `--font-heading: var(--font-sans)`
+  token, and `card.tsx` (`CardTitle`) + `dialog.tsx` (`DialogTitle`) dropped
+  the `font-heading` class. Visually ~nil (the token was already aliased to
+  sans). Founder chose to **skip the re-sync** rather than spend a full-cost
+  verify pass on a near-no-op; fold it into the next real component change.
+  So the project's Card/Dialog cards + compiled CSS are one cosmetic step
+  stale until then — expected, not drift.
+- **Brand rename, project identity**: public brand is now **Binding**
+  (repo renamed `thomaskung/JumpOnBoard` → `thomaskung/Binding` 2026-08-03).
+  The founder is renaming the Claude Design project "JumpOnBoard UI" →
+  "Binding UI" **manually in the claude.ai/design UI** (the DesignSync tool
+  has no rename method). Project id is unchanged (`dc871eb6-…`, also the
+  authoritative mockup-template source cited in CLAUDE.md — do NOT create a
+  fresh project, it would break that reference).
+- **Technical identifiers stay JumpOnBoard on purpose**: `cfg.globalName`
+  (`JumpOnBoardUI`), `cfg.pkg` (`@jumponboard/ui`), the bundle's
+  `window.JumpOnBoardUI` namespace, and `srcDir` are deliberately kept —
+  same call as PR #10 (renaming the package would break `transpilePackages`
+  and the bundle globalName the app + design bundle both bind to). A future
+  package rename, if ever done, is a `pkg`/`srcDir` change → full re-grade
+  (see "Re-sync risks" above).
