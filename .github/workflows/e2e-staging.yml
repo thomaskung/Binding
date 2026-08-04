@@ -43,11 +43,22 @@ jobs:
         with: { node-version: '22', cache: 'pnpm' }
       - run: pnpm install
       - name: Modal warm-up
+        # Warm the embedder AND the LLM endpoints so the publish/reveal tests
+        # don't blow their 60s budget on cold starts (a cold LLM container can
+        # take 30-60s+ to spin up on first request).
         run: |
-          curl -X POST https://thomaskung--binding-embeddings-embedder-embed.modal.run \
-            -H "Authorization: Bearer ${{ secrets.MODAL_API_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d '{"text":"warmup"}' || echo "Warm-up done (cold start accepted)"
+          for url in \
+            "https://thomaskung--binding-embeddings-embedder-embed.modal.run" \
+            "https://thomaskung--binding-llm-qwen-redact.modal.run" \
+            "https://thomaskung--binding-llm-qwen-fit-summary.modal.run" \
+            "https://thomaskung--binding-llm-qwen-refine.modal.run" \
+            "https://thomaskung--binding-llm-qwen-extract.modal.run"; do
+            curl -s -m 90 -X POST "$url" \
+              -H "Authorization: Bearer ${{ secrets.MODAL_API_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d '{"text":"warmup"}' -o /dev/null -w "warmed %{http_code} in %{time_total}s $url\n" \
+              || echo "warm-up accepted (cold start) $url"
+          done
       - run: npx playwright install chromium
       - name: Run functional tests
         run: npx playwright test e2e/staging-functional.spec.ts --retries=1
