@@ -109,7 +109,10 @@ jobs:
           SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_UAT_READONLY_KEY }}
         with:
-          model: opencode/deepseek-v4-pro
+          # opencode-go = the free "OpenCode Go"/Zen lane (same OPENCODE_API_KEY,
+          # no prepaid balance) — the paid opencode/deepseek-v4-pro API errored
+          # with "Insufficient balance".
+          model: opencode-go/deepseek-v4-pro
           use_github_token: true
           prompt: |
             You are the UAT scorer for Binding staging. Complete these steps:
