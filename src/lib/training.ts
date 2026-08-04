@@ -93,6 +93,7 @@ export async function rewardTrainingCompletion(
   profileId: string,
   programId: string,
   programTitle: string,
+  seekerTier?: "free" | "pro",
 ): Promise<void> {
   await appendTrainingLedger(admin, {
     profileId,
@@ -101,10 +102,14 @@ export async function rewardTrainingCompletion(
     programId,
     note: `completed: ${programTitle}`,
   });
+  // Pro seekers earn at 2x on the points side (BUSINESS.md §7 "accelerated
+  // point earning"). Credits are unchanged — the acceleration is points-only.
+  const pointsReward =
+    seekerTier === "pro" ? TRAINING_COMPLETION_POINTS_REWARD * 2 : TRAINING_COMPLETION_POINTS_REWARD;
   await appendLedger(admin, {
     profileId,
     event: "verified_action",
-    amount: TRAINING_COMPLETION_POINTS_REWARD,
+    amount: pointsReward,
     note: `training completion: ${programTitle}`,
   });
 }

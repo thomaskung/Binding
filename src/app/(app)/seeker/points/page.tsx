@@ -10,19 +10,25 @@ export default async function SeekerPointsPage() {
   const session = await requireRole("seeker");
   const supabase = await createSupabaseServerClient();
 
-  const [balance, { data: ledger }] = await Promise.all([
+  const [balance, { data: ledger }, { data: profile }] = await Promise.all([
     getBalance(supabase, session.userId),
     supabase
       .from("points_ledger")
       .select("id, event, amount, note, created_at")
       .eq("profile_id", session.userId)
       .order("created_at", { ascending: false }),
+    supabase.from("profiles").select("seeker_tier").eq("id", session.userId).maybeSingle(),
   ]);
+
+  const isPro = profile?.seeker_tier === "pro";
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 px-5 py-8">
       <header className="flex items-center justify-between gap-3">
-        <h1 className="text-[26px] font-semibold tracking-tight">Points</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-[26px] font-semibold tracking-tight">Points</h1>
+          {isPro && <Badge variant="outline">Pro</Badge>}
+        </div>
         <Badge variant="secondary" data-testid="points-page-balance">
           {balance.toLocaleString()} points
         </Badge>

@@ -45,15 +45,16 @@ insert into auth.identities (
     'email', now(), now(), now()
   );
 
-insert into profiles (id, is_seeker, is_recruiter, company_name, display_name, dealbreaker_matrix, draft_text, published_text) values
+insert into profiles (id, is_seeker, is_recruiter, company_name, display_name, dealbreaker_matrix, draft_text, published_text, seeker_tier, recruiter_tier) values
   (
     '00000000-0000-0000-0000-000000000001', true, false, null, 'Demo Seeker',
     '{"min_salary": 90000, "currency": "USD", "work_setups": ["remote", "hybrid"]}',
     'Senior backend engineer, 8 years: distributed systems, Postgres, event-driven pipelines, Kubernetes. Led payments platform serving 2M users.',
-    'Senior backend engineer, 8 years: distributed systems, Postgres, event-driven pipelines, Kubernetes. Led payments platform serving 2M users.'
+    'Senior backend engineer, 8 years: distributed systems, Postgres, event-driven pipelines, Kubernetes. Led payments platform serving 2M users.',
+    'free', 'free'
   ),
   (
-    '00000000-0000-0000-0000-000000000002', false, true, 'Apex Talent Partners', 'Demo Recruiter', null, null, null
+    '00000000-0000-0000-0000-000000000002', false, true, 'Apex Talent Partners', 'Demo Recruiter', null, null, null, 'free', 'solo'
   );
 
 insert into consent_flags (profile_id, reveal_override_enabled, tos_accepted_at, processing_consent_at, consent_version) values

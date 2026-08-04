@@ -353,3 +353,28 @@ export async function sendMessage(threadId: string, body: string) {
   if (error) throw new Error(`send failed: ${error.message}`);
   revalidatePath(`/thread/${threadId}`);
 }
+
+/** Dev-only: flip recruiter_tier between 'free' and 'solo' for demoing tier
+ * differentiation (BUSINESS.md §7) — no billing integration exists yet.
+ * Refuses outside dev so this never ships as a real, unpaid upgrade path. */
+export async function toggleRecruiterTier() {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("dev-only action");
+  }
+  const session = await requireRole("recruiter");
+  const supabase = await createSupabaseServerClient();
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("recruiter_tier")
+    .eq("id", session.userId)
+    .single();
+  if (error) throw new Error(error.message);
+
+  const nextTier = profile.recruiter_tier === "solo" ? "free" : "solo";
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({ recruiter_tier: nextTier })
+    .eq("id", session.userId);
+  if (updateError) throw new Error(updateError.message);
+  revalidatePath("/recruiter");
+}
