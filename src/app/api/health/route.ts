@@ -12,7 +12,14 @@ export async function GET() {
       .from("profiles")
       .select("id", { count: "exact", head: true });
     if (error) throw error;
-    return NextResponse.json({ ok: true, db: "reachable" });
+    // aiProvider surfaces which inference path is configured (stub vs modal) —
+    // a readiness signal, not a secret. Lets an external check confirm staging
+    // is wired to Modal without an authenticated session.
+    return NextResponse.json({
+      ok: true,
+      db: "reachable",
+      aiProvider: process.env.AI_PROVIDER ?? "stub",
+    });
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "unknown" },

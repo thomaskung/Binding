@@ -18,42 +18,55 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install modal
+      - run: pip install modal fastapi  # fastapi: module-top Header import runs at deploy introspection
       - name: Deploy Modal apps + capture endpoint URLs
-        id: endpoints
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          APP_BEARER: ${{ secrets.MODAL_API_TOKEN }}
         run: |
           set -euo pipefail
-          modal token set --token-id "${{ secrets.MODAL_TOKEN_ID }}" --token-secret "${{ secrets.MODAL_TOKEN_SECRET }}"
-          # The Modal apps reference Secret.from_name("binding-api-token"),
-          # which holds MODAL_API_TOKEN (the bearer the endpoints' _auth checks).
-          # Create/refresh it from the GH secret so deploy resolves it and the
-          # app's bearer matches the endpoint's expected token. Idempotent.
-          modal secret create binding-api-token MODAL_API_TOKEN="${{ secrets.MODAL_API_TOKEN }}" --force
-          # tee deploy output so we can pull the printed web-endpoint URLs
-          modal deploy modal_app/embeddings.py 2>&1 | tee embed.log
-          modal deploy modal_app/llm.py 2>&1 | tee llm.log
+          modal token set --token-id "$MODAL_TOKEN_ID" --token-secret "$MODAL_TOKEN_SECRET"
+          # The apps reference Secret.from_name("binding-api-token") holding
+          # MODAL_API_TOKEN (the bearer _auth checks). Refresh from the GH secret
+          # via env (no inline-quoting pitfalls). Idempotent.
+          # Pin everything to the 'main' environment so secret-create and
+          # deploy can't diverge into different Modal environments.
+          modal secret create binding-api-token MODAL_API_TOKEN="$APP_BEARER" --force -e main
+          modal app stop binding-embeddings -e main 2>/dev/null || true
+          modal app stop binding-llm -e main 2>/dev/null || true
+          modal app stop jumponboard-embeddings -e main 2>/dev/null || true
+          modal app stop jumponboard-llm -e main 2>/dev/null || true
+          sleep 5
+          modal deploy modal_app/embeddings.py -e main 2>&1 | tee embed.log
+          modal deploy modal_app/llm.py -e main 2>&1 | tee llm.log
 
-          # One-time cleanup of the pre-rename apps (jumponboard-* → binding-*).
-          # Idempotent — harmless once they're already gone.
-          modal app stop jumponboard-embeddings 2>/dev/null || true
-          modal app stop jumponboard-llm 2>/dev/null || true
+          EMBED=$(grep -Eo 'https://[a-z0-9.-]+\.modal\.run' embed.log | grep -i embed | head -1)
+          # CI-side auth test: CI holds the same GH secret that baked the Modal
+          # secret, so this MUST be 200 once propagated — proves the endpoint
+          # accepts the GH-secret value (isolates propagation/caching vs a
+          # local value mismatch). Retry through the cold start.
+          for i in 1 2 3 4; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -m 180 -X POST "$EMBED" \
+              -H "content-type: application/json" -H "authorization: Bearer $APP_BEARER" \
+              -d '{"text":"ci auth check"}')
+            echo "CI self-auth embed attempt $i: HTTP $code"
+            [ "$code" = "200" ] && break
+            sleep 3
+          done
 
           # Map each endpoint to the env var name src/lib/ai/modal.ts expects.
-          # The `tee` below streams deploy output while map_url reads the log —
-          # wait for the URL to appear rather than racing the flush.
+          # Writes to GITHUB_ENV so the Vercel-wiring step below can read them.
+          echo "## Modal endpoints" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
           map_url() {
             # $1 = grep pattern for the endpoint, $2 = env var name, $3 = logfile
-            local url=""
-            for _ in $(seq 1 20); do
-              url=$(grep -Eo 'https://[a-z0-9.-]+\.modal\.run' "$3" | grep -i "$1" | head -1 || true)
-              [ -n "$url" ] && break
-              sleep 1
-            done
+            url=$(grep -Eo 'https://[a-z0-9.-]+\.modal\.run' "$3" | grep -i "$1" | head -1 || true)
+            echo "$2=${url:-<not found>}" >> "$GITHUB_STEP_SUMMARY"
             if [ -z "$url" ]; then
               echo "::error::Could not resolve $2 from Modal deploy output"
               exit 1
             fi
-            echo "  $2=$url"
             echo "$2=$url" >> "$GITHUB_ENV"
             # Also set it in THIS step's shell so the summary below can read it.
             export "$2=$url"
@@ -64,8 +77,6 @@ jobs:
           map_url "refine"      MODAL_REFINE_URL  llm.log
           map_url "extract"     MODAL_EXTRACT_URL llm.log
 
-          echo "## Modal endpoints" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "MODAL_EMBED_URL=$MODAL_EMBED_URL" >> "$GITHUB_STEP_SUMMARY"
           echo "MODAL_REDACT_URL=$MODAL_REDACT_URL" >> "$GITHUB_STEP_SUMMARY"
           echo "MODAL_SUMMARY_URL=$MODAL_SUMMARY_URL" >> "$GITHUB_STEP_SUMMARY"

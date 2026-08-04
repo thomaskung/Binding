@@ -1,6 +1,6 @@
 # DESIGN.md — Binding (formerly JumpOnBoard) Technical Architecture
 
-**Version 2.4** · Last updated 2026-08-04 · Revision history at the end of this document.
+**Version 2.5** · Last updated 2026-08-04 · Revision history at the end of this document.
 
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [VISION.md](./VISION.md) (goals/metrics). This document describes how the product is actually built. Status: walking-skeleton MVP implemented (see §12 for what's built vs. deferred and where the MVP diverges from the target architecture below).
 
@@ -341,11 +341,24 @@ sections above remain the target architecture.
   Previously on Cloudflare Workers but migrated for simpler DX during
   staging/prototype phase.
 - **AI serving**: Modal Starter plan ($30/mo recurring credit), not
-  pay-as-you-go Modal/Baseten. Models updated after a build-time landscape
-  re-check: **Qwen3 8B** (generation) + **Qwen3-Embedding-0.6B** (1024-dim
-  embeddings) replace the design-time Llama 3.1/BGE-M3 picks. A deterministic
-  **stub provider** is the dev/CI default (`AI_PROVIDER=stub`) — zero network,
-  zero cost, fully testable slice.
+  pay-as-you-go Modal/Baseten. Models: **Qwen3-1.7B** (generation —
+  redaction/fit-summary/refine/extract) + **Qwen3-Embedding-0.6B** (1024-dim
+  embeddings, the matching path). A deterministic **stub provider** is the
+  dev/CI default (`AI_PROVIDER=stub`) — zero network, zero cost, fully
+  testable slice; `modal` is live on staging (2026-08-04).
+  - **Generation model was Qwen3-8B-AWQ** — downsized to 1.7B (2026-08-04):
+    the 8B couldn't load within Modal's ~151s sync web-endpoint window on an
+    L4 (every cold call 303'd), and its vllm V1 engine crashed on startup
+    KV-cache profiling. Fixes: `VLLM_USE_V1=0` (V0 engine), weights pre-baked
+    into the image, `enforce_eager`, and the 1.7B model — cold start now
+    ~20s, reliable on-demand, no keep-warm cost. Matching quality is
+    unaffected (it uses the separate embedding model). Redaction/fit-summary
+    quality at 1.7B is adequate for MVP; revisit if it proves thin.
+  - **Endpoint auth** reads the `Authorization` header via FastAPI
+    `Header(...)` — a bare `str = ""` param binds as a *query* parameter, so
+    header-based Bearer auth silently 401s (fixed 2026-08-04). `modal_app/`
+    deploys on-demand via `.github/workflows/deploy-modal.yml` (workflow, GH
+    secrets only), which includes a CI-side auth test as a regression guard.
 - **DB keepalive**: GitHub Actions cron (`.github/workflows/keepalive.yml`)
   pings `/api/health` every 3 days — Supabase free tier pauses projects after
   7 days of DB inactivity.
@@ -409,3 +422,4 @@ sections above remain the target architecture.
 | 2.2 | 2026-07-30 | Staging E2E pipeline + security hardening + account deletion. Middleware auth gate (basic auth + `x-staging-auth` shared secret, defense-in-depth, only activates when env vars set — invisible in local dev). Account deletion at `/account` (server action: Supabase Storage cleanup, points ledger sanitization, soft-close recruiter job postings, cascade via `auth.users`, confirmation email, sign-out). 17 functional pass/fail E2E tests against hosted staging (auth, matching pipeline, reveal mechanics, privacy Layer-0, routing/UIUX, account lifecycle, staleness nudge, in-app messaging). 7 UAT rubric scenarios with evidence capture — scored by OpenCode GitHub action with dual-agent consensus via `.opencode/agent/uat-scorer.md` subagent. Nightly cron (3am UTC) → wait-for-deploy → Modal warm-up → functional suite → UAT evidence → OpenCode scoring → issue on failure. Weekly cleanup (Sunday 4am UTC) deletes stale test users > 24h via cleanup workflow. All credentials stored as GH Actions encrypted secrets, never in code. Supabase storage buckets `staging-test-evidence` + `staging-test-scores` for evidence retention (keep 3 runs). |
 | 2.3 | 2026-08-03 | Brand rename JumpOnBoard → Binding (public brand; JumpOnBoard retired as internal code name). Domain strategy `binding.hk` (corrected to `getbinding.com` in 2.4). No architectural change — naming substitution in narrative text only; technical identifiers unchanged at the time (`@jumponboard/ui` later renamed `@binding/ui`, Vercel project/staging-URL/docker-stack-name unchanged). |
 | 2.4 | 2026-08-04 | **Demo-readiness reconciliation pass** (investor/CCMF-demo milestone; companion to BUSINESS.md 2.1). Corrected doc-vs-code drift so every "built" claim matches the codebase: §12 gains a "Shipped since" block + an honest deferred/roadmap list (billing/skill-assessment/interview-scheduling/§4a-monetization/§2b-supply/ranking-boost/enterprise all roadmap; no payment processor); interview scheduling downgraded from a listed component to roadmap (§1/§8 — table only); account-deletion removed from the §5/§2f/§11 pending lists (it is built); skill-assessment earning marked roadmap in §6. Modal endpoint verified down (needs redeploy for the demo). Revision history reordered (1.9/1.10 were below 2.x; 2.0-2.3 were in reverse order). Domain `binding.hk` → `getbinding.com` reflected in BUSINESS/`/privacy`/DSAR. |
+| 2.5 | 2026-08-04 | Modal brought live on staging for the demo (§12). Fixes to make it work end-to-end: endpoint auth reads the Authorization header via FastAPI `Header(...)` (a bare `str=""` binds as a query param → header Bearer auth always 401'd); generation model Qwen3-8B-AWQ → **Qwen3-1.7B** (8B couldn't load within Modal's ~151s sync window on L4 and its vllm V1 engine crashed on startup profiling — now `VLLM_USE_V1=0`, weights pre-baked, `enforce_eager`, cold start ~20s); `<think>` block stripped from output. On-demand deploy via `.github/workflows/deploy-modal.yml` (GH secrets, CI-side auth-test guard). Curated staging demo dataset seeded (`scripts/seed-demo-staging.ts`): HK+SG backend cohorts clearing k≥20, hero JD ranks HK candidates ~0.81. Matching path (embedding model) unchanged. |

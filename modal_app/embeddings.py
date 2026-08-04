@@ -10,6 +10,7 @@ Deploy: modal deploy modal_app/embeddings.py
 import os
 
 import modal
+from fastapi import Header, HTTPException
 
 MODEL_ID = "Qwen/Qwen3-Embedding-0.6B"
 
@@ -39,9 +40,9 @@ class Embedder:
         self.model = SentenceTransformer(MODEL_ID, truncate_dim=1024)
 
     @modal.fastapi_endpoint(method="POST")
-    def embed(self, body: dict, authorization: str = ""):
-        from fastapi import HTTPException
-
+    def embed(self, body: dict, authorization: str = Header(default="")):
+        # authorization MUST be bound via Header(...) — a bare `str = ""` is a
+        # FastAPI *query* param, so header-based Bearer auth silently 401s.
         expected = os.environ.get("MODAL_API_TOKEN", "")
         if not expected or authorization != f"Bearer {expected}":
             raise HTTPException(status_code=401, detail="bad token")

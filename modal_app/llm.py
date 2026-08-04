@@ -17,14 +17,35 @@ credit. Watch the Modal dashboard weekly; see modal_app/README.md.
 import os
 
 import modal
+from fastapi import Header
 
-MODEL_ID = "Qwen/Qwen3-8B-AWQ"
+# Qwen3-1.7B (was Qwen3-8B-AWQ): the 8B couldn't load within Modal's ~151s
+# sync web-endpoint window on an L4, so cold calls always 303'd. The 1.7B
+# loads in well under the window → reliable on-demand, no keep-warm cost.
+# This is the generation model (redaction / fit-summary / refine / extract)
+# ONLY — matching quality is unaffected (separate Qwen3-Embedding model).
+MODEL_ID = "Qwen/Qwen3-1.7B"
 
 app = modal.App("binding-llm")
 
+
+def _download_model():
+    # Bake the weights into the image at BUILD time so a cold container starts
+    # from local disk instead of downloading ~5GB — the download was the bulk
+    # of the >150s cold start that overran Modal's sync web-endpoint window.
+    from huggingface_hub import snapshot_download
+
+    snapshot_download(MODEL_ID)
+
+
 image = (
     modal.Image.debian_slim(python_version="3.12")
-    .pip_install("vllm>=0.9", "fastapi[standard]")
+    .pip_install("vllm>=0.9", "fastapi[standard]", "huggingface_hub[hf_transfer]")
+    # VLLM_USE_V1=0: the V1 engine crashes on this L4 during startup KV-cache
+    # profiling (_dummy_sampler_run → topk_topp_sampler.forward_cuda). The V0
+    # engine skips that path and is far more robust in this container.
+    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "VLLM_USE_V1": "0"})
+    .run_function(_download_model)
 )
 
 REDACT_SYSTEM = """You redact resumes for a privacy-first hiring platform.
@@ -88,7 +109,9 @@ class Qwen:
     def load(self):
         from vllm import LLM
 
-        self.llm = LLM(model=MODEL_ID, max_model_len=8192)
+        # enforce_eager skips CUDA-graph capture — meaningfully faster cold
+        # start (a bit slower per-token, fine at demo volume).
+        self.llm = LLM(model=MODEL_ID, max_model_len=8192, enforce_eager=True)
 
     def _generate(self, system: str, user: str) -> str:
         from vllm import SamplingParams
@@ -99,27 +122,33 @@ class Qwen:
         ]
         params = SamplingParams(temperature=0.2, max_tokens=2048)
         outputs = self.llm.chat(conversation, params)
-        return outputs[0].outputs[0].text.strip()
+        text = outputs[0].outputs[0].text
+        # Qwen3 emits an (often empty) <think>…</think> block even with
+        # /no_think — strip it so callers get clean redaction/summary text.
+        import re
+
+        text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+        return text.strip()
 
     @modal.fastapi_endpoint(method="POST")
-    def redact(self, body: dict, authorization: str = ""):
+    def redact(self, body: dict, authorization: str = Header(default="")):
         _auth(authorization)
         return {"redactedText": self._generate(REDACT_SYSTEM, body["text"])}
 
     @modal.fastapi_endpoint(method="POST")
-    def fit_summary(self, body: dict, authorization: str = ""):
+    def fit_summary(self, body: dict, authorization: str = Header(default="")):
         _auth(authorization)
         user = f"CANDIDATE (redacted):\n{body['candidate']}\n\nROLE:\n{body['job']}"
         return {"summary": self._generate(SUMMARY_SYSTEM, user)}
 
     @modal.fastapi_endpoint(method="POST")
-    def refine(self, body: dict, authorization: str = ""):
+    def refine(self, body: dict, authorization: str = Header(default="")):
         _auth(authorization)
         system = REFINE_JD_SYSTEM if body.get("kind") == "job_description" else REFINE_PROFILE_SYSTEM
         return {"refined": self._generate(system, body["text"])}
 
     @modal.fastapi_endpoint(method="POST")
-    def extract(self, body: dict, authorization: str = ""):
+    def extract(self, body: dict, authorization: str = Header(default="")):
         _auth(authorization)
         import json
         raw = self._generate(EXTRACT_SYSTEM, body["text"])
