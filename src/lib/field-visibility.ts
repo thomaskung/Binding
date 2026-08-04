@@ -23,7 +23,10 @@ export const EMBEDDING_FIELD_KEYS = [
 ] as const;
 export type EmbeddingFieldKey = (typeof EMBEDDING_FIELD_KEYS)[number];
 
-export const DISPLAY_ONLY_FIELD_KEYS = ["headline", "location"] as const;
+// credentials is binary (visible/hidden): it feeds matching AND display, but
+// the UI only offers show/hide (hiding excludes it from both — see
+// publishProfile), so it lives here rather than in EMBEDDING_FIELD_KEYS.
+export const DISPLAY_ONLY_FIELD_KEYS = ["headline", "location", "credentials"] as const;
 export type DisplayOnlyFieldKey = (typeof DISPLAY_ONLY_FIELD_KEYS)[number];
 
 export type ProfileFieldKey = EmbeddingFieldKey | DisplayOnlyFieldKey;

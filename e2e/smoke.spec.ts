@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { widenMatchFilter } from "./match-helpers";
 
 /**
  * Walking-skeleton smoke: the full slice with stub AI against the local
@@ -62,7 +63,13 @@ test("full reveal slice", async ({ browser }) => {
   await expect(matchCard.getByText("Interested", { exact: true })).toBeVisible({ timeout: 15_000 });
 
   // --- Recruiter: reveal (100 -> 90 pts) ---
+  // Reveal now happens from the detail panel that pops out when a card is
+  // clicked. Widen the min-match filter (default 70%) so a mid-score seed
+  // match is never hidden, then open the interested candidate's panel.
   await recruiter.getByTestId("view-matches").click();
+  await widenMatchFilter(recruiter);
+  await recruiter.getByTestId("recruiter-match-card").filter({ hasText: "interested" }).first().click();
+  await expect(recruiter.getByTestId("candidate-panel")).toBeVisible();
   await recruiter.getByTestId("reveal-candidate").click();
   await expect(recruiter.getByTestId("revealed-name")).toHaveText("Demo Seeker", {
     timeout: 15_000,
@@ -75,6 +82,10 @@ test("full reveal slice", async ({ browser }) => {
   await recruiter.goto("/recruiter/jobs");
   await recruiter.getByRole("link", { name: "Backend Engineer, Payments" }).click();
   await recruiter.getByTestId("view-matches").click();
+  await widenMatchFilter(recruiter);
+  // Revealed candidate now shows their real name on the card; open its panel.
+  await recruiter.getByTestId("recruiter-match-card").filter({ hasText: "Demo Seeker" }).first().click();
+  await expect(recruiter.getByTestId("candidate-panel")).toBeVisible();
   await recruiter.getByTestId("open-thread").click();
   await recruiter.getByTestId("message-input").fill("Hi! Keen to chat about the payments role.");
   await recruiter.getByTestId("message-send").click();
