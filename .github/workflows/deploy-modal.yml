@@ -88,7 +88,7 @@ jobs:
             # find existing env var id(s) for this key in production/preview
             existing=$(curl -s "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}/env?teamId=${{ secrets.VERCEL_ORG_ID }}" \
               -H "Authorization: Bearer ${{ secrets.VERCEL_API_TOKEN }}" | \
-              jq -r --arg key "$name" '.envs[] | select(.key==$key and (("production" in .target) or ("preview" in .target))) | .id')
+              jq -r --arg key "$name" '.envs[] | select(.key == $key and ((.target | index("production")) or (.target | index("preview")))) | .id')
             for id in $existing; do
               curl -s -X DELETE "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}/env/$id?teamId=${{ secrets.VERCEL_ORG_ID }}" \
                 -H "Authorization: Bearer ${{ secrets.VERCEL_API_TOKEN }}" >/dev/null
