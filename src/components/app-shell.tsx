@@ -82,6 +82,13 @@ const ANNOUNCEMENT: Record<Role, string> = {
 
 const MOBILE_BREAKPOINT_PX = 768;
 
+// Module-level so writing a cookie isn't flagged as an in-component mutation
+// (react-hooks/immutability). Both the rail-state and role-switch cookies go
+// through here.
+function writeCookie(value: string): void {
+  document.cookie = value;
+}
+
 interface AppShellProps {
   isSeeker: boolean;
   isRecruiter: boolean;
@@ -135,7 +142,7 @@ export function AppShell({
   function toggleRail() {
     setRailOpen((v) => {
       const next = !v;
-      document.cookie = `rail_open=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+      writeCookie(`rail_open=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`);
       return next;
     });
   }
@@ -159,7 +166,7 @@ export function AppShell({
     if (next !== "seeker" && next !== "recruiter") return;
     if (next === role) return;
     const hasIt = next === "seeker" ? isSeeker : isRecruiter;
-    document.cookie = `job_active_role=${hasIt ? next : role}; path=/; max-age=31536000; samesite=lax`;
+    writeCookie(`job_active_role=${hasIt ? next : role}; path=/; max-age=31536000; samesite=lax`);
     router.push(hasIt ? `/${next}` : `/onboarding/${next}`);
   }
 
@@ -179,7 +186,7 @@ export function AppShell({
           <button
             type="button"
             onClick={toggleRail}
-            className="mb-5 flex w-full items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted"
+            className="mb-5 flex w-full items-center gap-3 rounded-lg px-2.5 py-2 hover:bg-muted"
             aria-label={railOpen ? "Collapse navigation" : "Expand navigation"}
           >
             <Icon name="hamburger" />
@@ -216,7 +223,7 @@ export function AppShell({
             type="button"
             data-testid="account-menu-toggle"
             onClick={() => setProfileOpen((v) => !v)}
-            className="flex w-full items-center gap-2.5 rounded-[10px] px-2 py-2 text-left hover:bg-muted"
+            className="flex w-full items-center gap-3 rounded-[10px] px-2.5 py-2 text-left hover:bg-muted"
           >
             <span className="flex size-[30px] flex-none items-center justify-center rounded-full bg-primary text-[13px] font-semibold text-primary-foreground">
               {initials(displayName)}
@@ -233,37 +240,61 @@ export function AppShell({
             )}
           </button>
 
-          {profileOpen && (
-            <div className="mt-1.5 flex flex-col gap-1.5 rounded-[10px] bg-muted p-2">
-              <span className="px-1 text-[11px] uppercase tracking-wider text-muted-foreground">
-                Switch mode
-              </span>
-              <Tabs orientation="vertical" value={role} onValueChange={switchMode}>
-                <TabsList className="w-full">
-                  <TabsTrigger value="seeker" className="w-full justify-start">
-                    Seeker
-                  </TabsTrigger>
-                  <TabsTrigger value="recruiter" className="w-full justify-start">
-                    Recruiter
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="enterprise"
-                    disabled
-                    data-testid="nav-enterprise-tab"
-                    className="w-full justify-start"
+          {profileOpen &&
+            (railOpen ? (
+              <div className="mt-1.5 flex flex-col gap-1.5 rounded-[10px] bg-muted p-2">
+                <span className="px-1 text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Switch mode
+                </span>
+                <Tabs orientation="vertical" value={role} onValueChange={switchMode}>
+                  <TabsList className="w-full">
+                    <TabsTrigger value="seeker" className="w-full justify-start">
+                      Seeker
+                    </TabsTrigger>
+                    <TabsTrigger value="recruiter" className="w-full justify-start">
+                      Recruiter
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="enterprise"
+                      disabled
+                      data-testid="nav-enterprise-tab"
+                      className="w-full justify-start"
+                    >
+                      Enterprise
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                {role === "seeker" && (
+                  <div className="px-1">
+                    <DevTierToggle tier={seekerTier} />
+                  </div>
+                )}
+                <SignOutButton />
+              </div>
+            ) : (
+              // Collapsed rail: icon-only switcher so mode-switching stays usable
+              // without overflowing the 64px column (founder "realign, not remove").
+              <div className="mt-1.5 flex flex-col items-center gap-1 overflow-hidden rounded-[10px] bg-muted p-1.5">
+                {(["seeker", "recruiter"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => switchMode(m)}
+                    title={`Switch to ${m === "seeker" ? "Seeker" : "Recruiter"}`}
+                    aria-label={`Switch to ${m === "seeker" ? "Seeker" : "Recruiter"}`}
+                    aria-pressed={role === m}
+                    className={cn(
+                      "flex size-9 items-center justify-center rounded-md text-[13px] font-semibold transition-colors",
+                      role === m
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:bg-background/60",
+                    )}
                   >
-                    Enterprise
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-              {role === "seeker" && (
-                <div className="px-1">
-                  <DevTierToggle tier={seekerTier} />
-                </div>
-              )}
-              <SignOutButton />
-            </div>
-          )}
+                    {m === "seeker" ? "S" : "R"}
+                  </button>
+                ))}
+              </div>
+            ))}
         </div>
       </aside>
 

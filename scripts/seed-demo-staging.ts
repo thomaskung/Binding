@@ -22,6 +22,8 @@
 
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+import { credentialsFloorSummary } from "../src/lib/credentials";
+import { seniorityBand } from "../src/lib/experience";
 
 // --- env ---------------------------------------------------------------
 const env: Record<string, string> = {};
@@ -62,30 +64,98 @@ async function embed(text: string): Promise<number[]> {
 }
 
 // --- curated pool -------------------------------------------------------
-type Seg = { region: "Hong Kong" | "Singapore"; location: string; skills: string[]; roleWords: string };
+type Seg = {
+  region: "Hong Kong" | "Singapore";
+  location: string;
+  roleWords: string;
+  skillPool: string[];
+  specializations: string[];
+  industriesPool: string[];
+};
 const SEGMENTS = {
   hkBackend: {
     region: "Hong Kong",
     location: "Central, Hong Kong",
-    skills: ["Go", "Postgres", "Kubernetes", "Distributed Systems", "Event-Driven Architecture"],
-    roleWords: "backend engineer on payments and settlement infrastructure — distributed systems, Go microservices, Postgres, Kubernetes, event-driven pipelines, ledger correctness at scale",
+    roleWords: "backend engineer on payments and settlement infrastructure",
+    skillPool: ["Go", "Postgres", "Kubernetes", "Distributed Systems", "Event-Driven Architecture", "gRPC", "Redis", "Kafka", "Terraform", "Observability", "CQRS", "Ledger Design", "Rust", "Python"],
+    specializations: ["payments & settlement", "fraud detection", "real-time risk scoring", "core banking ledgers", "market-data pipelines"],
+    industriesPool: ["Fintech", "Payments", "Crypto", "Banking", "Insurtech"],
   },
   sgBackend: {
     region: "Singapore",
     location: "Downtown Core, Singapore",
-    skills: ["Go", "Postgres", "Kubernetes", "Microservices", "Kafka"],
-    roleWords: "backend engineer for high-throughput financial services — microservices in Go, Postgres, Kubernetes, Kafka streaming, reliability and scale",
+    roleWords: "backend engineer for high-throughput financial services",
+    skillPool: ["Go", "Postgres", "Kubernetes", "Microservices", "Kafka", "gRPC", "Redis", "Elasticsearch", "Terraform", "Spark", "Flink", "Python", "Java", "Reliability Engineering"],
+    specializations: ["streaming data platforms", "trade processing", "high-throughput APIs", "clearing & reconciliation", "risk analytics"],
+    industriesPool: ["Fintech", "Payments", "Crypto", "Trading", "Wealthtech"],
   },
 } satisfies Record<string, Seg>;
-const SENIORITY: { band: string; years: string; salaryMin: number }[] = [
-  { band: "mid", years: "5 years", salaryMin: 90000 },
-  { band: "senior", years: "8 years", salaryMin: 120000 },
-  { band: "staff", years: "12 years", salaryMin: 150000 },
+
+const CREDENTIALS_POOL = [
+  "AWS Solutions Architect Professional",
+  "Certified Kubernetes Administrator (CKA)",
+  "CISSP",
+  "2 patents in distributed transaction processing",
+  "1 patent in fraud detection",
+  "won the FinTech HK Innovator award 2023",
+  "published author on distributed systems",
+  "Google Cloud Professional Architect",
+  "CFA Level II candidate",
 ];
+
 const PER_SEGMENT = 24; // > k=20
 
-function bio(seg: Seg, sen: (typeof SENIORITY)[number]): string {
-  return `${sen.years} experience as a ${seg.roleWords}. Core skills: ${seg.skills.join(", ")}. Shipped production systems for a regional financial platform; owned reliability and on-call for core services.`;
+// Deterministic per-candidate PRNG (no Math.random — reproducible seeds).
+function rng(seed: number): () => number {
+  let s = seed >>> 0 || 1;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+function pick<T>(arr: T[], r: () => number): T {
+  return arr[Math.floor(r() * arr.length)]!;
+}
+function sample<T>(arr: T[], n: number, r: () => number): T[] {
+  const copy = [...arr];
+  const out: T[] = [];
+  for (let i = 0; i < n && copy.length; i++) out.push(copy.splice(Math.floor(r() * copy.length), 1)[0]!);
+  return out;
+}
+
+interface Candidate {
+  years: number;
+  band: string;
+  skills: string[];
+  industries: string[];
+  specialization: string;
+  credentials: string;
+  credentialsSummary: string;
+  salaryMin: number;
+  bio: string;
+}
+
+/** Generate a UNIQUE candidate per (segment, index): varied years, skill mix,
+ * specialization, industries and credentials → distinct embeddings, so match
+ * ratios spread realistically instead of clustering. */
+function makeCandidate(seg: Seg, seedKey: number): Candidate {
+  const r = rng(seedKey);
+  const years = 2 + Math.floor(r() * 14); // 2–15
+  const band = seniorityBand(years);
+  const skills = sample(seg.skillPool, 5 + Math.floor(r() * 4), r); // 5–8
+  const specialization = pick(seg.specializations, r);
+  const industries = sample(seg.industriesPool, 1 + Math.floor(r() * 2), r);
+  const nCreds = Math.floor(r() * 3.4); // 0–3, skewed low
+  const creds = sample(CREDENTIALS_POOL, nCreds, r);
+  const credentials = creds.join("; ");
+  const credentialsSummary = credentialsFloorSummary(credentials);
+  const salaryMin = 80000 + years * 6000 + Math.floor(r() * 15000);
+  const bio =
+    `${years} years experience as a ${seg.roleWords}, focused on ${specialization}. ` +
+    `Core skills: ${skills.join(", ")}. ` +
+    `Shipped production systems for a regional financial platform; owned reliability and on-call for core services.` +
+    (credentialsSummary ? ` Recognitions: ${credentialsSummary}.` : "");
+  return { years, band, skills, industries, specialization, credentials, credentialsSummary, salaryMin, bio };
 }
 
 async function ensureUser(email: string): Promise<string> {
@@ -114,22 +184,26 @@ async function wipe() {
   console.log(`  deleted ${total} users`);
 }
 
-async function seedSeeker(email: string, name: string, seg: Seg, sen: (typeof SENIORITY)[number]) {
+async function seedSeeker(email: string, name: string, seg: Seg, cand: Candidate) {
   const id = await ensureUser(email);
-  const text = bio(seg, sen);
+  const text = cand.bio;
   const vec = await embed(text);
   const now = new Date().toISOString();
+  const role = cand.band === "staff" || cand.band === "executive" ? "Staff Engineer" : cand.band === "senior" ? "Senior Backend Engineer" : "Backend Engineer";
   await admin.from("profiles").upsert({
     id,
     is_seeker: true,
     display_name: name,
     visibility: "active",
     location: seg.location,
-    skills: seg.skills,
-    desired_roles: ["Backend Engineer", "Senior Software Engineer"],
-    industries: ["Fintech"],
-    seniority_band: sen.band,
-    dealbreaker_matrix: { min_salary: sen.salaryMin, currency: "USD", work_setups: ["remote", "hybrid"] },
+    skills: cand.skills,
+    desired_roles: [role, "Backend Engineer"],
+    industries: cand.industries,
+    seniority_band: cand.band,
+    years_experience: cand.years,
+    credentials: cand.credentials || null,
+    credentials_summary: cand.credentialsSummary || null,
+    dealbreaker_matrix: { min_salary: cand.salaryMin, currency: "USD", work_setups: ["remote", "hybrid"] },
     draft_text: text,
     published_text: text,
     last_profile_activity_at: now,
@@ -201,22 +275,23 @@ async function main() {
   const first = ["Wai", "Ka", "Mei", "Chun", "Hoi", "Sin", "Man", "Yan", "Tsz", "Lok", "Ho", "Kin", "Wing", "Ling", "Ming", "Fai", "Kwok", "Suet", "Yiu", "Chi", "Pui", "Ngai", "Hei", "Tin"];
   const last = ["Chan", "Wong", "Lee", "Cheung", "Lam", "Ng", "Ho", "Tang", "Tan", "Lim", "Koh", "Goh", "Ong", "Sim", "Teo", "Yeo", "Low", "Foo", "Chua", "Toh", "Wan", "Kwan", "Yip", "Lau"];
   let ni = 0;
-  async function pool(prefix: string, seg: Seg) {
+  async function pool(prefix: string, seg: Seg, seedBase: number) {
     for (let i = 0; i < PER_SEGMENT; i++) {
-      const sen = SENIORITY[i % SENIORITY.length]!;
+      const cand = makeCandidate(seg, seedBase + i);
       const name = `${first[ni % first.length]} ${last[(ni * 3) % last.length]}`;
       ni++;
-      await seedSeeker(`${prefix}${i + 1}@demo.local`, name, seg, sen);
+      await seedSeeker(`${prefix}${i + 1}@demo.local`, name, seg, cand);
       if ((i + 1) % 6 === 0) console.log(`  ${prefix}: ${i + 1}/${PER_SEGMENT}`);
     }
   }
   console.log("Seeding HK backend pool…");
-  await pool("hk", SEGMENTS.hkBackend);
+  await pool("hk", SEGMENTS.hkBackend, 1000);
   console.log("Seeding SG backend pool…");
-  await pool("sg", SEGMENTS.sgBackend);
+  await pool("sg", SEGMENTS.sgBackend, 2000);
 
   // --- demo seeker (hero candidate, HK senior backend) ---
-  const demoSeekerId = await seedSeeker("seeker@demo.local", "Demo Seeker", SEGMENTS.hkBackend, SENIORITY[1]!);
+  const demoCand = makeCandidate(SEGMENTS.hkBackend, 42);
+  const demoSeekerId = await seedSeeker("seeker@demo.local", "Demo Seeker", SEGMENTS.hkBackend, demoCand);
   console.log("  demo seeker seeded");
 
   // --- matches via RPC, mark ~60% interested (demo seeker stays surfaced) ---
@@ -224,12 +299,23 @@ async function main() {
   for (const jobId of jobIds) {
     const { data: cands, error } = await admin.rpc("match_candidates", { p_job_id: jobId, p_threshold: 0.55, p_top_n: 40 });
     if (error) throw new Error(`match_candidates: ${error.message}`);
-    const rows = ((cands ?? []) as { profile_id: string; score: number }[]).map((c) => ({ job_posting_id: jobId, profile_id: c.profile_id, score: c.score }));
+    // ~60% mark interested (demo seeker stays surfaced), with a staggered
+    // interested_at over the last ~2 weeks so "most recent" sort + relative
+    // time demo realistically.
+    const rows = ((cands ?? []) as { profile_id: string; score: number }[]).map((c, i) => {
+      const interested = c.profile_id !== demoSeekerId && i % 5 !== 4;
+      const daysAgo = (i * 37) % 15; // 0–14 days, spread
+      return {
+        job_posting_id: jobId,
+        profile_id: c.profile_id,
+        score: c.score,
+        status: interested ? "interested" : "surfaced",
+        interested_at: interested ? new Date(Date.now() - daysAgo * 86_400_000).toISOString() : null,
+      };
+    });
     if (!rows.length) { console.log(`  job ${jobId}: 0 matches`); continue; }
     await admin.from("matches").upsert(rows, { onConflict: "job_posting_id,profile_id", ignoreDuplicates: true });
     totalMatches += rows.length;
-    const interested = rows.filter((r, i) => r.profile_id !== demoSeekerId && i % 5 !== 4).map((r) => r.profile_id);
-    if (interested.length) await admin.from("matches").update({ status: "interested" }).eq("job_posting_id", jobId).eq("status", "surfaced").in("profile_id", interested);
   }
   console.log(`  ${totalMatches} matches`);
 

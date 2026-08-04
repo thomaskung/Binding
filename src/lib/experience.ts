@@ -17,6 +17,49 @@ export interface ExperienceEntry {
   industry: string | null;
 }
 
+// Tokens the LLM extractor emits for an ongoing role instead of the null the
+// prompt asks for (Qwen3 is inconsistent). Treated as "no end date" = present.
+const PRESENT_TOKENS = new Set(["present", "current", "now", "ongoing", "présent", "till date", "to date"]);
+
+/** Parse a loose date string into epoch ms, or null if unparseable. Accepts
+ * ISO, `YYYY` and `YYYY-MM` (padded to the 1st), which is what the LLM
+ * extractor and hand-authored seed data actually produce. Pure. */
+export function parseFlexibleDate(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const s = value.trim();
+  if (!s || PRESENT_TOKENS.has(s.toLowerCase())) return null;
+  let iso = s;
+  if (/^\d{4}$/.test(s)) iso = `${s}-01-01`;
+  else if (/^\d{4}-\d{2}$/.test(s)) iso = `${s}-01`;
+  const ms = new Date(iso).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/** Defensive normalizer for extractor/seed-derived work history before it
+ * reaches computeExperienceStats: coerces `"Present"`/blank/unparseable end
+ * dates to null and drops any entry whose START date can't be parsed (a NaN
+ * start would otherwise poison the interval merge — the exact bug the founder
+ * resume test surfaced when raw /extract output was fed in directly). In
+ * production computeExperienceStats gets clean `date`-typed rows from
+ * seeker_experience; this is defense-in-depth + the path the test harness
+ * and seed data go through. Pure. */
+export function normalizeExperienceDates(
+  entries: { startDate: string | null; endDate: string | null; industry: string | null }[],
+): ExperienceEntry[] {
+  const out: ExperienceEntry[] = [];
+  for (const e of entries) {
+    const start = parseFlexibleDate(e.startDate);
+    if (start === null) continue; // unparseable start → drop (can't place on timeline)
+    const end = parseFlexibleDate(e.endDate); // null = present / ongoing
+    out.push({
+      startDate: new Date(start).toISOString().slice(0, 10),
+      endDate: end === null ? null : new Date(end).toISOString().slice(0, 10),
+      industry: e.industry,
+    });
+  }
+  return out;
+}
+
 export interface ExperienceStats {
   totalYears: number;
   industryYears: number;
@@ -24,10 +67,11 @@ export interface ExperienceStats {
   avgTenureYears: number;
 }
 
-function toRange(entry: ExperienceEntry, now: Date): [number, number] {
-  const start = new Date(entry.startDate).getTime();
-  const end = entry.endDate ? new Date(entry.endDate).getTime() : now.getTime();
-  return [start, end];
+function toRange(entry: ExperienceEntry, now: Date): [number, number] | null {
+  const start = parseFlexibleDate(entry.startDate);
+  if (start === null) return null; // defensive: an unparseable start can't be placed
+  const end = parseFlexibleDate(entry.endDate) ?? now.getTime(); // null/blank = ongoing
+  return [start, Math.max(start, end)];
 }
 
 /** Sum of merged (non-overlapping) interval durations, in years. */
@@ -53,11 +97,13 @@ export function computeExperienceStats(
   entries: ExperienceEntry[],
   now: Date = new Date(),
 ): ExperienceStats {
-  if (entries.length === 0) {
+  const withRanges = entries
+    .map((e) => ({ ...e, range: toRange(e, now) }))
+    .filter((e): e is typeof e & { range: [number, number] } => e.range !== null);
+
+  if (withRanges.length === 0) {
     return { totalYears: 0, industryYears: 0, dominantIndustry: null, avgTenureYears: 0 };
   }
-
-  const withRanges = entries.map((e) => ({ ...e, range: toRange(e, now) }));
 
   const totalYears = mergedYears(withRanges.map((e) => e.range));
   const avgTenureYears =

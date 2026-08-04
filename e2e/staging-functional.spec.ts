@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { widenMatchFilter } from "./match-helpers";
 import {
   stagingAdminClient,
   ensureStagingUser,
@@ -192,6 +193,11 @@ test.describe("Staging functional — reveal mechanics", () => {
     await signIn(recruiter, pipelineRecruiterEmail);
     await recruiter.goto(`/recruiter/jobs/${pipelineJobId}`);
     await recruiter.getByTestId("view-matches").click();
+    // Reveal happens from the detail panel (pops out on card click); widen the
+    // min-match filter (default 70%) so the seeded match stays visible.
+    await widenMatchFilter(recruiter);
+    await recruiter.getByTestId("recruiter-match-card").filter({ hasText: "interested" }).first().click();
+    await expect(recruiter.getByTestId("candidate-panel")).toBeVisible();
     countAiCall(); // ai.fitSummary on reveal
     await recruiter.getByTestId("reveal-candidate").click();
     await expect(recruiter.getByTestId("revealed-name")).toHaveText(pipelineSeekerName, {
@@ -373,6 +379,9 @@ test.describe("Staging functional — maintenance & messaging", () => {
     await signIn(recruiter, pipelineRecruiterEmail);
     await recruiter.goto(`/recruiter/jobs/${pipelineJobId}`);
     await recruiter.getByTestId("view-matches").click();
+    await widenMatchFilter(recruiter);
+    await recruiter.getByTestId("recruiter-match-card").filter({ hasText: pipelineSeekerName }).first().click();
+    await expect(recruiter.getByTestId("candidate-panel")).toBeVisible();
     await recruiter.getByTestId("open-thread").click();
     await recruiter.getByTestId("message-input").fill("Hi! Keen to chat about the payments role.");
     await recruiter.getByTestId("message-send").click();

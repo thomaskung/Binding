@@ -1,3 +1,4 @@
+import { credentialsFloorSummary } from "@/lib/credentials";
 import type { AiProvider, ExtractedExperienceEntry, ExtractedProfileFields, JDTextOnly, RedactionResult } from "./types";
 
 /**
@@ -139,5 +140,10 @@ export const stubProvider: AiProvider = {
     if (!trimmed) return "";
     // Deterministic stub: restructure only what the user supplied — never invent.
     return `${trimmed.replace(/\.+$/, "")}.`;
+  },
+
+  async generalizeCredentials(rawCredentials: string): Promise<string> {
+    // The deterministic floor IS the stub output — safe by construction.
+    return credentialsFloorSummary(rawCredentials);
   },
 };

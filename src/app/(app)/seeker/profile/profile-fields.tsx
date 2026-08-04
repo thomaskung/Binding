@@ -84,6 +84,8 @@ export interface ProfileFieldsProps {
   industries: string[];
   referencesAvailable: boolean;
   shareSalary: boolean;
+  credentials: string;
+  credentialsSummary: string | null;
   fieldVisibility: FieldVisibilityMap;
   experience: ExperienceRow[];
   pointsBalance: number;
@@ -163,6 +165,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
   const [industriesText, setIndustriesText] = useState(props.industries.join(", "));
   const [referencesAvailable, setReferencesAvailable] = useState(props.referencesAvailable);
   const [shareSalary, setShareSalary] = useState(props.shareSalary);
+  const [credentials, setCredentials] = useState(props.credentials);
   const [minSalary, setMinSalary] = useState(props.minSalary?.toString() ?? "");
   const [workSetups, setWorkSetups] = useState<string[]>(props.workSetups);
   const [experience, setExperience] = useState<ExperienceRow[]>(props.experience);
@@ -203,6 +206,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
       if (referencesAvailable) fd.set("references_available", "on");
       if (shareSalary) fd.set("share_salary", "on");
       if (minSalary) fd.set("min_salary", minSalary);
+      fd.set("credentials", credentials);
       workSetups.forEach((s) => fd.append("work_setups", s));
       await saveDraft(fd);
       await saveExperience(experience);
@@ -486,6 +490,52 @@ export function ProfileFields(props: ProfileFieldsProps) {
 
           <Card>
             <CardHeader>
+              <CardTitle className="text-sm">Credentials</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {editing ? (
+                <div className="space-y-1.5">
+                  <Label className="text-xs" htmlFor="credentials">
+                    Awards, certifications, patents (free text)
+                  </Label>
+                  <Textarea
+                    id="credentials"
+                    value={credentials}
+                    onChange={(e) => setCredentials(e.target.value)}
+                    rows={3}
+                    placeholder="e.g. CISSP; AWS Solutions Architect Pro; 2 patents in fraud detection; won FinTech HK Innovator 2023"
+                    data-testid="credentials-input"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    We generalize this on publish so it can&apos;t fingerprint you — recruiters see a
+                    de-identified summary (e.g. &ldquo;patent-holder · cloud-certified · award
+                    winner&rdquo;), never the specifics. Hide it entirely below if you prefer.
+                  </p>
+                </div>
+              ) : internal ? (
+                <div className="space-y-1.5">
+                  <p className="text-sm whitespace-pre-wrap">
+                    {credentials || <span className="text-muted-foreground">None yet.</span>}
+                  </p>
+                  <p className="text-xs text-muted-foreground" data-testid="credentials-preview">
+                    Recruiters see:{" "}
+                    {fieldMode(fieldVisibility, "credentials") === "hidden"
+                      ? "hidden by you"
+                      : props.credentialsSummary || "generated when you publish"}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {fieldMode(fieldVisibility, "credentials") === "hidden"
+                    ? "Hidden by candidate."
+                    : props.credentialsSummary || "—"}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle className="text-sm">Work experience</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3.5">
@@ -715,6 +765,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
                           if (referencesAvailable) fd.set("references_available", "on");
                           if (next) fd.set("share_salary", "on");
                           if (minSalary) fd.set("min_salary", minSalary);
+                          fd.set("credentials", credentials);
                           workSetups.forEach((s) => fd.append("work_setups", s));
                           await saveDraft(fd);
                         });
@@ -770,6 +821,12 @@ export function ProfileFields(props: ProfileFieldsProps) {
                     label="References note"
                     mode={fieldMode(fieldVisibility, "references_available")}
                     onChange={(m) => setVisibility("references_available", m)}
+                  />
+                  <VisibilityControl
+                    fieldKey="credentials"
+                    label="Credentials"
+                    mode={fieldMode(fieldVisibility, "credentials")}
+                    onChange={(m) => setVisibility("credentials", m)}
                   />
                 </div>
 

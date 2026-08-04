@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { expect, test, type Page } from "@playwright/test";
 import { completeSeekerOnboarding } from "./seeker-onboarding";
+import { widenMatchFilter } from "./match-helpers";
 
 /**
  * Registration wizard + override-reveal flow, fully self-contained: fresh
@@ -120,7 +121,12 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   await seeker.getByRole("button", { name: "Save settings" }).click();
   await expect(seeker.getByText("Settings saved.")).toBeVisible();
 
+  // The reveal/override controls + unavailable state now live in the detail
+  // panel that opens when the candidate's card is clicked.
   await recruiter.getByTestId("view-matches").click();
+  await widenMatchFilter(recruiter);
+  await recruiter.getByTestId("recruiter-match-card").first().click();
+  await expect(recruiter.getByTestId("candidate-panel")).toBeVisible();
   await expect(recruiter.getByText(/Override unavailable: candidate currently unavailable/)).toBeVisible();
   await expect(recruiter.getByTestId("override-candidate")).toHaveCount(0);
 
@@ -136,6 +142,9 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
 
   // --- Recruiter override-reveals the non-opted-in candidate ---
   await recruiter.reload();
+  await widenMatchFilter(recruiter);
+  await recruiter.getByTestId("recruiter-match-card").first().click();
+  await expect(recruiter.getByTestId("candidate-panel")).toBeVisible();
   await recruiter.getByTestId("override-candidate").click();
   await expect(recruiter.getByTestId("revealed-name")).toHaveText("Sam Seeker", {
     timeout: 15_000,

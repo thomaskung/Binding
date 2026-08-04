@@ -91,6 +91,20 @@ against candidate profiles: clear responsibilities, concrete required skills,
 standard terminology, no fluff. Do NOT add requirements that aren't implied.
 Output only the improved text. /no_think"""
 
+CREDENTIALS_SYSTEM = """You generalize a candidate's credentials (awards,
+certifications, patents, publications) into a SHORT, de-identified summary for
+a recruiter — enough to signal strength, never enough to identify the person.
+RULES:
+- Keep the category and rough count/scale: "patent-holder", "2 patents",
+  "cloud-certified", "industry award winner", "published author".
+- REMOVE every specific: patent numbers, exact award names/titles, years,
+  issuing body names, URLs, employer names, any proper noun that fingerprints.
+- Never invent credentials the input doesn't state.
+- Output ONE line, categories separated by " · ", no commentary.
+Example: "Patent US10,123,456 for a fraud-detection graph algorithm; AWS SA
+Pro; won FinTech HK 2023 Innovator award" -> "patent-holder (fraud detection) ·
+cloud-certified · industry award winner" /no_think"""
+
 
 @app.cls(
     image=image,
@@ -144,7 +158,13 @@ class Qwen:
     @modal.fastapi_endpoint(method="POST")
     def refine(self, body: dict, authorization: str = Header(default="")):
         _auth(authorization)
-        system = REFINE_JD_SYSTEM if body.get("kind") == "job_description" else REFINE_PROFILE_SYSTEM
+        kind = body.get("kind")
+        if kind == "job_description":
+            system = REFINE_JD_SYSTEM
+        elif kind == "credentials":
+            system = CREDENTIALS_SYSTEM
+        else:
+            system = REFINE_PROFILE_SYSTEM
         return {"refined": self._generate(system, body["text"])}
 
     @modal.fastapi_endpoint(method="POST")

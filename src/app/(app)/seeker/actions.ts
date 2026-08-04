@@ -5,8 +5,14 @@ import { getAiProvider } from "@/lib/ai";
 import { AI_REFINE_CHAT_DAILY_CAP, countRefineChatCallsToday, logRefineChatCall } from "@/lib/ai-usage";
 import { requireRole } from "@/lib/auth";
 import { MAINTENANCE_CONSENT_VERSION, MARKET_SIGNALS_CONSENT_VERSION } from "@/lib/consent";
-import { computeExperienceStats, experienceFactsSentence, seniorityBand } from "@/lib/experience";
-import { filterFieldsForSurface, type FieldVisibilityMap } from "@/lib/field-visibility";
+import {
+  computeExperienceStats,
+  experienceFactsSentence,
+  normalizeExperienceDates,
+  seniorityBand,
+} from "@/lib/experience";
+import { fieldMode, filterFieldsForSurface, type FieldVisibilityMap } from "@/lib/field-visibility";
+import { redactKnownIdentifiers } from "@/lib/redact-known";
 import { parseCommaList } from "@/lib/jobs";
 import { isQuickActionInstruction } from "@/lib/profile";
 import { refreshMatchesForProfile } from "@/lib/matching";
@@ -45,6 +51,7 @@ export async function saveDraft(formData: FormData) {
       industries: parseCommaList(String(formData.get("industries") ?? "")),
       references_available: formData.get("references_available") === "on",
       share_salary: formData.get("share_salary") === "on",
+      credentials: String(formData.get("credentials") ?? "").trim() || null,
     })
     .eq("id", session.userId);
   if (error) throw new Error(`draft save failed: ${error.message}`);
@@ -119,7 +126,9 @@ export async function publishProfile() {
   const [{ data: profile, error }, { data: experience }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("draft_text, skills, desired_roles, industries, references_available, field_visibility")
+      .select(
+        "display_name, draft_text, skills, desired_roles, industries, references_available, field_visibility, credentials",
+      )
       .eq("id", session.userId)
       .single(),
     supabase
@@ -131,7 +140,15 @@ export async function publishProfile() {
     throw new Error("nothing to publish — write your profile first");
   }
 
-  const { redactedText } = await ai.redact(profile.draft_text);
+  // Hybrid redaction (G1): the LLM pass generalizes, then a deterministic pass
+  // strips the identifiers we already hold structured (real name + employer
+  // names) so recruiter-visible text can't leak them even when the small model
+  // under-redacts. See src/lib/redact-known.ts.
+  const llmRedacted = await ai.redact(profile.draft_text);
+  const { text: redactedText } = redactKnownIdentifiers(llmRedacted.redactedText, {
+    names: profile.display_name ? [profile.display_name] : [],
+    organizations: (experience ?? []).map((e) => e.company).filter((c): c is string => !!c),
+  });
 
   // Derived, aggregated facts from structured work history — never the raw
   // entries — blended into what gets embedded so matching benefits from
@@ -141,11 +158,13 @@ export async function publishProfile() {
   // "hidden" (excluded from both) — see src/lib/field-visibility.ts, the
   // single source of truth for which fields support which modes.
   const stats = computeExperienceStats(
-    (experience ?? []).map((e) => ({
-      startDate: e.start_date,
-      endDate: e.end_date,
-      industry: e.industry,
-    })),
+    normalizeExperienceDates(
+      (experience ?? []).map((e) => ({
+        startDate: e.start_date,
+        endDate: e.end_date,
+        industry: e.industry,
+      })),
+    ),
   );
   const fieldVisibility = (profile.field_visibility ?? {}) as FieldVisibilityMap;
   const rawFields = {
@@ -162,8 +181,20 @@ export async function publishProfile() {
     stats,
     filterFieldsForSurface(rawFields, fieldVisibility, "matching"),
   );
+  // Credentials: generalize free-text -> de-identified summary (recruiter card
+  // chip via match_candidates RPC). Folded into the MATCH embedding so strong
+  // credentials nudge ranking ("bonus points"), but NOT into displayText/
+  // redacted_text (the card renders credentials_summary as its own chip).
+  // If the seeker hid credentials, it feeds neither display nor matching.
+  const credentialsHidden = fieldMode(profile.field_visibility as FieldVisibilityMap, "credentials") === "hidden";
+  const credentialsSummary = credentialsHidden
+    ? ""
+    : await ai.generalizeCredentials(profile.credentials ?? "");
+
   const displayText = displayFacts ? `${redactedText}\n\n${displayFacts}` : redactedText;
-  const matchingText = matchingFacts ? `${redactedText}\n\n${matchingFacts}` : redactedText;
+  const matchingText = [redactedText, matchingFacts, credentialsSummary]
+    .filter((s) => s && s.trim())
+    .join("\n\n");
 
   const embedding = await ai.embed(matchingText);
 
@@ -191,6 +222,8 @@ export async function publishProfile() {
       published_text: profile.draft_text,
       last_profile_activity_at: new Date().toISOString(),
       seniority_band: seniorityBand(stats.totalYears),
+      years_experience: Math.round(stats.totalYears),
+      credentials_summary: credentialsSummary || null,
     })
     .eq("id", session.userId);
 
@@ -462,9 +495,14 @@ export async function toggleSeekerTier() {
 export async function respondToMatch(matchId: string, response: "interested" | "declined") {
   const session = await requireRole("seeker");
   const supabase = await createSupabaseServerClient();
+  // Stamp a durable declared-interest time (updated_at is clobbered by later
+  // status changes) so the recruiter list can sort by "most recent interest".
   const { error } = await supabase
     .from("matches")
-    .update({ status: response })
+    .update({
+      status: response,
+      interested_at: response === "interested" ? new Date().toISOString() : null,
+    })
     .eq("id", matchId)
     .eq("profile_id", session.userId)
     .eq("status", "surfaced");
