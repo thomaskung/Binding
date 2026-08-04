@@ -64,24 +64,24 @@ export async function ensureStagingUser(role: "seeker" | "recruiter"): Promise<{
 /**
  * Fill the login email and wait for the Continue button to enable. React 19
  * hydration can reset a controlled input right after fill (value snaps back to
- * "" and the button stays disabled) on cold staging instances — retry until the
- * value actually sticks.
+ * "" and the button stays disabled) on cold staging instances. The only signal
+ * that matters is the button enabling — keep refilling until React has the
+ * value, up to a generous budget.
  */
 async function fillEmailAndEnableContinue(page: Page, email: string) {
   const input = page.getByLabel("Work email");
   const continueBtn = page.getByRole("button", { name: "Continue with email" });
-  for (let attempt = 1; attempt <= 5; attempt++) {
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
     await input.fill(email);
-    // Wait for the input to actually hold the value AND the button to enable —
-    // a hydration reset clears both together.
     try {
-      await expect(input).toHaveValue(email, { timeout: 5_000 });
-      await expect(continueBtn).toBeEnabled({ timeout: 5_000 });
+      await expect(continueBtn).toBeEnabled({ timeout: 3_000 });
       return;
     } catch {
-      if (attempt === 5) throw new Error(`email fill did not stick after ${attempt} attempts`);
+      // hydration (or a slow re-render) reset the value — refill and retry
     }
   }
+  throw new Error(`email fill did not stick within 60s`);
 }
 
 export async function signIn(page: Page, email: string) {
