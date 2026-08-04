@@ -20,6 +20,7 @@ export interface EditableJob {
   location: string | null;
   employment_type: EmploymentType;
   salary_visibility: SalaryVisibility;
+  offers_equity: boolean;
   skills: string[];
   responsibilities: string[];
   requirements: string[];
@@ -33,6 +34,7 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
   const [salaryMin, setSalaryMin] = useState(job?.salary_min?.toString() ?? "");
   const [salaryMax, setSalaryMax] = useState(job?.salary_max?.toString() ?? "");
   const [visibility, setVisibility] = useState<SalaryVisibility>(job?.salary_visibility ?? "public");
+  const [offersEquity, setOffersEquity] = useState(job?.offers_equity ?? false);
   const [workSetups, setWorkSetups] = useState<string[]>(job?.work_setups ?? []);
   const [skillsText, setSkillsText] = useState((job?.skills ?? []).join(", "));
   const [description, setDescription] = useState(job?.description ?? "");
@@ -71,6 +73,7 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
     fd.set("skills", skillsText);
     fd.set("responsibilities", responsibilitiesText);
     fd.set("requirements", requirementsText);
+    fd.set("offers_equity", offersEquity ? "on" : "");
     if (salaryMin) fd.set("salary_min", salaryMin);
     if (salaryMax) fd.set("salary_max", salaryMax);
     workSetups.forEach((s) => fd.append("work_setups", s));
@@ -260,6 +263,15 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
                 : "Candidates see “Salary on request” and can ask during matching."}
             </p>
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={offersEquity}
+              onChange={(e) => setOffersEquity(e.target.checked)}
+              data-testid="job-offers-equity"
+            />
+            This role offers equity
+          </label>
         </CardContent>
       </Card>
 
