@@ -52,7 +52,7 @@ export async function completeTrainingProgram(programId: string): Promise<void> 
     throw new Error(`training completion failed: ${completionError.message}`);
   }
 
-  await rewardTrainingCompletion(admin, session.userId, programId, program.title);
+  await rewardTrainingCompletion(admin, session.userId, programId, program.title, tier);
   revalidatePath("/training");
 }
 

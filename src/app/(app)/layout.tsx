@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getBalance } from "@/lib/points";
 import { isStale } from "@/lib/profile";
 import { suggestionForRecruiter, suggestionForSeeker } from "@/lib/nav-suggestion";
+import { coerceRecruiterTier } from "@/lib/recruiter-tier";
 import { AppShell } from "@/components/app-shell";
 
 /** Shell wrapper for every authenticated in-app route (DESIGN.md-adjacent —
@@ -20,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("is_seeker, is_recruiter, display_name, company_name, seeker_tier, last_profile_activity_at")
+    .select("is_seeker, is_recruiter, display_name, company_name, seeker_tier, recruiter_tier, last_profile_activity_at")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -64,6 +65,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         displayName={profile?.display_name ?? ""}
         companyName={profile?.company_name ?? null}
         seekerTier={profile?.seeker_tier === "pro" ? "pro" : "free"}
+        recruiterTier={coerceRecruiterTier(profile?.recruiter_tier)}
         points={balance}
         cookieRole={cookieRole === "recruiter" || cookieRole === "seeker" ? cookieRole : null}
         initialRailOpen={railOpenCookie === "1"}

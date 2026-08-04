@@ -68,6 +68,7 @@ export interface ExperienceRow {
 export interface ProfileFieldsProps {
   displayName: string;
   email: string;
+  seekerTier?: "free" | "pro";
   draftText: string;
   publishedText: string | null;
   visibility: "active" | "paused";
@@ -249,7 +250,10 @@ export function ProfileFields(props: ProfileFieldsProps) {
     <main className="mx-auto max-w-[920px] space-y-6 px-6 py-14">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-1.5">
-          <h1 className="text-[30px] font-semibold leading-tight tracking-tight">Your profile</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-[30px] font-semibold leading-tight tracking-tight">Your profile</h1>
+            {props.seekerTier === "pro" && <Badge variant="outline">Pro</Badge>}
+          </div>
           <p className="text-[15px] text-muted-foreground">
             {internal
               ? "How your profile looks to you"

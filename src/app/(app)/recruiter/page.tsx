@@ -1,5 +1,7 @@
 import { requireRole } from "@/lib/auth";
+import { coerceRecruiterTier, recruiterTierLabel } from "@/lib/recruiter-tier";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { Badge } from "@binding/ui";
 import { PipelineList, type PipelineCard } from "./pipeline-list";
 
 /** Recruiter Dashboard (RecruiterMatchDashboard template): the aggregate
@@ -11,6 +13,13 @@ import { PipelineList, type PipelineCard } from "./pipeline-list";
 export default async function RecruiterDashboard() {
   const session = await requireRole("recruiter");
   const supabase = await createSupabaseServerClient();
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("recruiter_tier")
+    .eq("id", session.userId)
+    .maybeSingle();
+  const recruiterTier = coerceRecruiterTier(profile?.recruiter_tier);
 
   const { data: jobs } = await supabase
     .from("job_postings")
@@ -81,9 +90,14 @@ export default async function RecruiterDashboard() {
   return (
     <main className="mx-auto max-w-2xl space-y-6 px-6 py-14">
       <header className="flex flex-col gap-1.5">
-        <h1 className="text-[30px] font-semibold leading-tight tracking-tight">
-          Candidate matches
-        </h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-[30px] font-semibold leading-tight tracking-tight">
+            Candidate matches
+          </h1>
+          {recruiterTier !== "free" && (
+            <Badge variant="outline">{recruiterTierLabel(recruiterTier)}</Badge>
+          )}
+        </div>
         <p className="text-[15px] text-muted-foreground">
           {cards.length} candidate{cards.length === 1 ? "" : "s"} match your open roles
         </p>
