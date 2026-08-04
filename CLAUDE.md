@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Conventions
 
 - **Every feature ships with unit tests AND acceptance (Playwright e2e) tests** — standing instruction from the founder. Unit tests live in `tests/` (extract pure helpers to `src/lib/` to create a testable surface when pages are mostly RSC/redirect logic); e2e specs live in `e2e/`. Run the full e2e suite after UI-affecting changes and fine-tune until green.
-- **Strategy docs are versioned**: BUSINESS/DESIGN/VISION/LEGAL_REVIEW carry a `**Version X.Y** · Last updated …` header and a Revision History table at the bottom. When materially editing one, bump the version, update the date, and add a history row. MEMORY.md is exempt (inherently chronological).
+- **Strategy docs are versioned**: BUSINESS/DESIGN/VISION/LEGAL_REVIEW carry a `**Version X.Y** · Last updated …` header and a Revision History table at the bottom. When materially editing one, bump the version, update the date, and add a history row. **The Revision History is chronological ASCENDING — oldest row first, newest last. ALWAYS append the new row at the very BOTTOM of the table; never insert it above an existing row.** (After adding, verify the last data row is the one you just added.) MEMORY.md is exempt (inherently chronological).
 
 ## Commands
 
