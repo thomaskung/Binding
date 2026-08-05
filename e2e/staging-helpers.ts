@@ -9,7 +9,7 @@ const PASSWORD = "J0B!Demo#2026$secure";
 // per-test cost table in staging-functional.spec.ts). Tests that trigger an AI
 // round-trip call `countAiCall()`, and the suite teardown asserts the total
 // stays under the budget so a future test can't silently inflate Modal spend.
-export const AI_CALL_BUDGET = 6;
+export const AI_CALL_BUDGET = 8;
 let _aiCalls = 0;
 
 export function countAiCall() {

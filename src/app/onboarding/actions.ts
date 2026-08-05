@@ -74,6 +74,20 @@ export async function activateRecruiter(formData: FormData) {
   if (!companyName) throw new Error("company or agency name required");
   if (!tos) throw new Error("the terms must be accepted to continue");
 
+  // Server-side business-email gate (client-side check in signup-form is UX
+  // only — this is the enforcement layer). Reject consumer email domains.
+  const FREE_EMAIL_DOMAINS = new Set([
+    "gmail.com", "googlemail.com", "yahoo.com", "ymail.com",
+    "hotmail.com", "outlook.com", "live.com", "msn.com",
+    "aol.com", "aim.com", "icloud.com", "me.com", "mac.com",
+    "proton.me", "protonmail.com", "mail.com", "inbox.com",
+    "gmx.com", "gmx.de", "yandex.com",
+  ]);
+  const domain = user.email?.split("@")[1]?.toLowerCase();
+  if (domain && FREE_EMAIL_DOMAINS.has(domain)) {
+    throw new Error("Please use a business email address for recruiter accounts.");
+  }
+
   const { error } = await admin.from("profiles").upsert(
     {
       id: user.id,

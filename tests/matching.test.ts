@@ -55,6 +55,26 @@ describe("dealbreaker filter (mirrors match_candidates SQL — keep in sync)", (
   });
 });
 
+describe("matching constants (env-tunable thresholds)", () => {
+  it("MATCH_COSINE_THRESHOLD is a positive number ≤ 1", async () => {
+    const { MATCH_COSINE_THRESHOLD } = await import("@/lib/matching");
+    expect(MATCH_COSINE_THRESHOLD).toBeGreaterThan(0);
+    expect(MATCH_COSINE_THRESHOLD).toBeLessThanOrEqual(1);
+  });
+
+  it("MATCH_TOP_N is a positive integer", async () => {
+    const { MATCH_TOP_N } = await import("@/lib/matching");
+    expect(MATCH_TOP_N).toBeGreaterThan(0);
+    expect(Number.isInteger(MATCH_TOP_N)).toBe(true);
+  });
+
+  it("HIGH_MATCH_THRESHOLD is above the cosine threshold", async () => {
+    const { HIGH_MATCH_THRESHOLD, MATCH_COSINE_THRESHOLD } = await import("@/lib/matching");
+    expect(HIGH_MATCH_THRESHOLD).toBeGreaterThan(MATCH_COSINE_THRESHOLD);
+    expect(HIGH_MATCH_THRESHOLD).toBeLessThanOrEqual(1);
+  });
+});
+
 describe("matchBand (seeker-facing match-quality gate)", () => {
   it("pro seekers see the true band at every threshold", () => {
     expect(matchBand(0.9, "pro")).toBe("high");
