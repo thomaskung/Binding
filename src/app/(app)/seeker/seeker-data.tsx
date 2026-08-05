@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bind
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { expireStaleOverride, getBalance, OVERRIDE_COMPENSATION } from "@/lib/points";
 import { matchBand, type SeekerTier } from "@/lib/matching";
+import type { SalaryVisibility } from "@/lib/jobs";
 import { OverrideResponseButtons } from "./override-response";
 import type { SeekerMatchCard } from "./match-list";
 
@@ -22,7 +23,7 @@ export async function loadSeekerContext(userId: string) {
     supabase
       .from("matches")
       .select(
-        "id, status, score, created_at, job_postings(id, title, location, salary_min, salary_max, work_setups, profiles!job_postings_recruiter_id_fkey(company_name))",
+        "id, status, score, created_at, job_postings(id, title, location, salary_min, salary_max, salary_visibility, work_setups, profiles!job_postings_recruiter_id_fkey(company_name))",
       )
       .eq("profile_id", userId)
       .order("created_at", { ascending: false }),
@@ -77,13 +78,22 @@ export async function loadSeekerContext(userId: string) {
     const company = job
       ? (Array.isArray(job.profiles) ? job.profiles[0] : job.profiles)?.company_name
       : null;
+    // Salary is hidden by default: only a recruiter who opted into 'public'
+    // shares a figure. Fail closed — anything other than an explicit 'public'
+    // is treated as on_request, and the raw numbers are NEVER put on the card
+    // payload for on_request jobs (match-list is a client component, so leaving
+    // them in props would leak the range in devtools even if hidden visually).
+    const salaryVisibility: SalaryVisibility =
+      job?.salary_visibility === "public" ? "public" : "on_request";
+    const salaryShared = salaryVisibility === "public";
     return {
       id: match.id,
       title: job?.title ?? "Role",
       company: company ?? null,
       location: job?.location ?? null,
-      salaryMin: job?.salary_min ?? null,
-      salaryMax: job?.salary_max ?? null,
+      salaryMin: salaryShared ? (job?.salary_min ?? null) : null,
+      salaryMax: salaryShared ? (job?.salary_max ?? null) : null,
+      salaryVisibility,
       workSetups: job?.work_setups ?? [],
       status: match.status,
       band: matchBand(match.score, seekerTier),
@@ -109,8 +119,16 @@ export function OverrideBanners({ context }: { context: SeekerContext }) {
         const job = Array.isArray(reveal.job_postings) ? reveal.job_postings[0] : reveal.job_postings;
         const recruiter = Array.isArray(reveal.profiles) ? reveal.profiles[0] : reveal.profiles;
         return (
-          <Card key={reveal.id} className="border-primary" data-testid="pending-override-card">
+          <Card
+            key={reveal.id}
+            className="jb-fade bg-accent/40 ring-primary/40"
+            data-testid="pending-override-card"
+          >
             <CardHeader>
+              <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-primary">
+                <span className="inline-block size-1.5 rounded-full bg-primary" aria-hidden />
+                Reveal request
+              </div>
               <CardTitle className="text-lg">
                 {recruiter?.company_name ?? recruiter?.display_name ?? "A recruiter"} revealed your
                 profile
