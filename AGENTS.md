@@ -86,3 +86,44 @@
   No gate in local dev — middleware checks for these env vars before applying.
 - Account deletion implemented at `/account` — cascading delete with points ledger sanitization
   (DESIGN.md §11). Tested nightly as functional test #15.
+
+## Design & UI control via MCP (Claude Code ↔ Claude Design)
+
+Claude Code can **control and update** both the design surfaces. Two MCP servers cover it, plus a
+browser one for driving the live app. Reference:
+https://support.claude.com/en/articles/14604416-get-started-with-claude-design
+
+### 1. Claude Design MCP — the "Binding UI" project + design system
+- **What it controls**: the claude.ai/design project **"Binding UI"** (`projectId dc871eb6-…`, the
+  authoritative mockup source per CLAUDE.md) and the `@binding/ui` design-system kit.
+- **Connect it (once, user scope)** — makes it available in your own terminal going forward:
+  ```
+  claude mcp add --scope user --transport http claude-design https://api.anthropic.com/v1/design/mcp
+  ```
+  then `/design-login` to authenticate. Prereq: a Pro/Max/Team plan. (In a Claude Code session that
+  already exposes the DesignSync tool, the MCP is effectively connected for that session already.)
+- **Bidirectional round-trip**:
+  - **Code → Design**: `/design-sync` pushes the local `packages/ui` component kit **up** to the
+    "Binding UI" project so Claude Design builds start from the real components (one component at a
+    time; it does NOT carry app *screens*). See `.design-sync/NOTES.md` for the kit-sync mechanics
+    and gotchas (PKG_DIR-relative paths, 11-of-38 component scope, re-grade on `pkg`/`globalName` change).
+  - **Design → Code**: from Claude Design, "Handoff to Claude Code" ("Send to local coding agent" /
+    "Send to Claude Code Web") continues from existing work instead of starting from a screenshot.
+- **Namespace ground truth (IMPORTANT)**: `.design-sync/config.json` is authoritative —
+  `globalName:"BindingUI"`, `pkg:"@binding/ui"`. The live design-project bundle + `.dc.html`
+  templates still bind the OLD `window.JumpOnBoardUI`; the next `/design-sync` regenerates the bundle
+  as `BindingUI` and will require updating every template `JumpOnBoardUI.*`→`BindingUI.*` in the same
+  pass (a `globalName` change = full component re-grade). Do that migration **atomically** — kit
+  re-sync + rename-all-templates together — or the project is left half-migrated and broken.
+  (`NOTES.md`'s 2026-08-03 "identifiers stay JumpOnBoard on purpose" paragraph is stale — see MEMORY.md 2026-08-05.)
+- **Limitations** (per the support article): multi-person simultaneous editing is unreliable; import
+  quality is only as good as the source (a messy kit produces a messy design system).
+
+### 2. Browser control of the running app — `claude-in-chrome` MCP
+Drives a real Chrome tab to navigate/click/fill/screenshot/record. Two targets:
+- **Local**: `pnpm dev` (start local Supabase first: `pnpm db:start` → `pnpm db:reset`). Use for
+  fast iteration and demos of unshipped work.
+- **Vercel staging**: the deployed `main` build. Staging is gated by HTTP Basic Auth +
+  `x-staging-auth` shared secret — supply `STAGING_BASIC_AUTH` (browser httpCredentials) and the
+  `x-staging-auth` header (from `.env.local` / GH Actions secrets) so the browser reaches it without
+  tripping the gate. Use for testing the real deployed UI.

@@ -269,3 +269,37 @@ Format per entry: **Date** / **Decision** / **Context** / **Outcome-or-Lesson** 
 **Context**: Preparing the Cyberport Creative Micro Fund (CCMF) application (HK$100K, no matching requirement) surfaced a brand problem: the working name "JumpOnBoard" collided with an inactive `.com` holding and read as generic. The founder chose "Binding" (contract/bond metaphor matching the trust-minimizing broker positioning). Individual application (no HK opco yet; incorporation funded within the grant window).
 **Outcome/Lesson**: The CCMF application research (kept outside the repo; the earlier `docs/CCMF-Application-Binding.md` reference was dropped 2026-08-04 — the file was never committed) incorporates independent research subagents' findings — 3,799 licensed HK agencies, 28.6% gender pay gap, 13-30% placement fees, boutique legal costs HK$50-60K bundled, cloud stack ~HK$832/mo. Key strategic reframes from the reviewer pass: (1) emphasize the already-deployed working prototype over paper claims, (2) replace "$16-20B TAM" oversell with verifiable HK-specific numbers, (3) address the 20 hrs/week commitment transparently rather than hiding it, (4) frame social responsibility around measurable HK policy angles (gender pay gap, anti-discrimination, worker privacy). Founder covers budget overruns as capital injection — stated in the application as a positive signal.
 **Links**: BUSINESS.md §12/§9a (grant path), DESIGN.md §2f, .opencode/skills/pdf-reader/, scripts/pdf2md.mjs
+
+---
+
+## 2026-08-05 (strategy/design expansion pass — docs + design-sync cycle)
+
+**Decision**: Scoped a 14-item founder expansion request to a **docs + design-sync + design-MCP-setup cycle — no app code**. Feature designs (#1/#4/#6/#7/#8/#12/#13/#14) captured as DESIGN.md §13 subsections + design-project templates; enterprise (#10/#11) as BUSINESS.md §3a; competitor (#5) as COMPETITORS.md.
+**Context**: Investor/CCMF demo milestone + solo-founder bandwidth. Building six code workstreams at once before the demo was the wrong risk; documenting the designs (with code touch-points) de-risks the later build without diluting demo focus. Founder chose this explicitly after a multi-round grill.
+**Outcome/Lesson**: A design that names its own code touch-points (`salary_visibility` default, `match-list.tsx` leak, `extractJobFields`, `verified_actions`, `profile-fields.tsx` Privacy card) is a build map, not just prose — the next cycle starts from it. Docs-first was also the only safe order given the design-project namespace question below.
+**Links**: DESIGN.md §13, BUSINESS.md §3a/§6a, COMPETITORS.md
+
+**Decision**: Salary stealth hardened to a **two-sided default**: job `salary_visibility` default flips `public`→`on_request`, a coarse `band` mode is added, existing rows migrate to `on_request`, and the seeker side goes symmetric (`profiles.share_salary`→false, candidate salary-expectation withheld from recruiters even post-reveal).
+**Context**: "Salary stealthiness is our selling point," yet the code defaulted salary to public AND the seeker dashboard card leaked the raw range ignoring `salary_visibility` entirely (`match-list.tsx`/`seeker-data.tsx`). The recruiter card + `recruiter-match-dashboard` template also showed candidate salary-expectation, contradicting DESIGN §5's "withhold even post-reveal."
+**Outcome/Lesson**: A "selling point" that the default configuration actively undercuts is a bug, not a preference — the default must encode the value. Stealth is only credible if it's symmetric (neither side's number leaks by default).
+**Links**: DESIGN.md §13a/§5, BUSINESS.md §3 pillar 2
+
+**Decision**: Verified-skill matching is **recruiter-configurable per job** — a recruiter marks a skill as required-verified (filter) OR a weighted advantage (like "X a plus" in a JD) — implemented as a small capped bonus folded into the **single** cosine score, with the seeker band-cap invariant preserved (no seeker-visible differential; new invariant test required).
+**Context**: The founder wanted verified skills to raise matching priority, but matching is deliberately one cosine score with no prestige proxies, and the seeker-facing band-cap privacy invariant (DESIGN §2d) must not leak. A parallel scoring formula or a seeker-visible boost would break both.
+**Outcome/Lesson**: New signals get folded INTO the one score, never bolted alongside it; and any matching change must be re-checked against the band-cap invariant before it ships. Recruiter-configurability keeps it a JD preference (merit-based, tenure-not-prestige consistent), not a platform-imposed second axis.
+**Links**: DESIGN.md §13d, tests/reveal-invariants.test.ts
+
+**Decision**: The "check if our staff is being targeted" enterprise feature is permanently reframed to an **aggregate, consented Compensation-Advisory module** — pseudonymized staff vectors benchmarked against the external pool + k-anonymized market signals to advise on comp competitiveness/demand, **never identifying an individual employee**.
+**Context**: Disclosing that a named employee is job-hunting would destroy Binding's entire privacy proposition. There is no version of individual-flight-risk disclosure that survives the privacy-first positioning.
+**Outcome/Lesson**: When a requested feature's obvious form contradicts the core moat, reframe to the aggregate/consented shape or drop it — don't ship a privacy-corroding "just this once" exception. The vector-only, aggregate form is genuinely useful (comp advice) without the landmine.
+**Links**: BUSINESS.md §3a, DESIGN.md §2e/§2f
+
+**Decision**: Referral/invite acquisition loop adopted as the designed fix for the flywheel's missing top-of-funnel — both parties earn points on the invitee's **activation** (not on send), inside the closed-loop non-monetary points economy.
+**Context**: The 2026-08-05 audit found every wired earn-loop rewards existing users for staying (seed/reveal-comp/freshness/training); nothing brings a new user in. For a flywheel premised on compounding seeker acquisition, having zero viral component was the biggest structural hole.
+**Outcome/Lesson**: "Retention loops" and "acquisition loops" are different — a full set of engagement rewards can still leave acquisition entirely paid/manual. Earn-on-activation (not on-send) keeps the anti-farming rule that already governs the rest of the points economy.
+**Links**: BUSINESS.md §6a, DESIGN.md §13g
+
+**Decision**: Corrected a stale `.design-sync/NOTES.md` claim: the `JumpOnBoardUI`/`@jumponboard/ui` identifiers are **no longer** "kept on purpose" — `config.json` has since moved to `globalName:"BindingUI"`/`pkg:"@binding/ui"`, so the next `/design-sync` regenerates the bundle as `BindingUI` and templates must update `JumpOnBoardUI.*`→`BindingUI.*` (a `globalName` change = full re-grade).
+**Context**: NOTES.md (2026-08-03) said technical identifiers stay JumpOnBoard to avoid breaking `transpilePackages`/the bundle global; but the actual `config.json` was later changed to Binding. Acting on the stale note would have left real namespace drift between config and the live design bundle.
+**Outcome/Lesson**: Read the actual config before trusting a dated note about it — a "deliberate hold" can silently become real drift once the underlying file changes. Verify ground truth (`config.json`) over narrative (`NOTES.md`).
+**Links**: .design-sync/config.json, .design-sync/NOTES.md, DESIGN.md §13i
