@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { matchBand, passesDealbreakers } from "@/lib/matching";
+import { describe, expect, it, vi } from "vitest";
+import { findCandidatesForJob, matchBand, passesDealbreakers, refreshMatchesForJob, refreshMatchesForProfile } from "@/lib/matching";
 
 describe("dealbreaker filter (mirrors match_candidates SQL — keep in sync)", () => {
   const job = { salary_max: 120000, work_setups: ["remote", "hybrid"], offers_equity: false };
@@ -92,5 +92,102 @@ describe("matchBand (seeker-facing match-quality gate)", () => {
   it("free seekers still see normal and low uncapped", () => {
     expect(matchBand(0.7, "free")).toBe("normal");
     expect(matchBand(0.4, "free")).toBe("low");
+  });
+});
+
+describe("findCandidatesForJob", () => {
+  it("calls the RPC with threshold and top-n and returns candidates", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        { profile_id: "p-1", score: 0.9, redacted_text: "text" },
+        { profile_id: "p-2", score: 0.8, redacted_text: "text2" },
+      ],
+      error: null,
+    });
+    const mock = { rpc } as any;
+    const result = await findCandidatesForJob(mock, "job-1");
+    expect(rpc).toHaveBeenCalledWith("match_candidates", {
+      p_job_id: "job-1",
+      p_threshold: expect.any(Number),
+      p_top_n: expect.any(Number),
+    });
+    expect(result).toHaveLength(2);
+  });
+
+  it("returns empty array when data is null", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: null });
+    const result = await findCandidatesForJob({ rpc } as any, "job-1");
+    expect(result).toEqual([]);
+  });
+
+  it("throws on RPC error", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: { message: "rpc down" } });
+    await expect(findCandidatesForJob({ rpc } as any, "job-1")).rejects.toThrow(/match_candidates failed/);
+  });
+});
+
+describe("refreshMatchesForJob", () => {
+  it("returns 0 when no candidates surface", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: [], error: null });
+    const count = await refreshMatchesForJob({ rpc } as any, "job-1");
+    expect(count).toBe(0);
+  });
+
+  it("upserts surfaced candidates and returns the count", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        { profile_id: "p-1", score: 0.9 },
+        { profile_id: "p-2", score: 0.8 },
+      ],
+      error: null,
+    });
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const mock = {
+      rpc,
+      from: vi.fn().mockReturnValue({ upsert }),
+    } as any;
+    const count = await refreshMatchesForJob(mock, "job-1");
+    expect(count).toBe(2);
+    expect(upsert).toHaveBeenCalledWith(
+      [
+        { job_posting_id: "job-1", profile_id: "p-1", score: 0.9 },
+        { job_posting_id: "job-1", profile_id: "p-2", score: 0.8 },
+      ],
+      { onConflict: "job_posting_id,profile_id", ignoreDuplicates: true },
+    );
+  });
+
+  it("throws on upsert error", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: [{ profile_id: "p-1", score: 0.9 }], error: null });
+    const upsert = vi.fn().mockResolvedValue({ error: { message: "constraint" } });
+    const mock = { rpc, from: vi.fn().mockReturnValue({ upsert }) } as any;
+    await expect(refreshMatchesForJob(mock, "job-1")).rejects.toThrow(/match upsert failed/);
+  });
+});
+
+describe("refreshMatchesForProfile", () => {
+  it("upserts matching jobs for a candidate profile", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        { job_posting_id: "j-1", score: 0.9 },
+        { job_posting_id: "j-2", score: 0.8 },
+      ],
+      error: null,
+    });
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const mock = { rpc, from: vi.fn().mockReturnValue({ upsert }) } as any;
+    const count = await refreshMatchesForProfile(mock, "profile-1");
+    expect(count).toBe(2);
+    expect(rpc).toHaveBeenCalledWith("match_jobs_for_candidate", {
+      p_profile_id: "profile-1",
+      p_threshold: expect.any(Number),
+      p_top_n: expect.any(Number),
+    });
+  });
+
+  it("returns 0 when no jobs match", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: [], error: null });
+    const count = await refreshMatchesForProfile({ rpc } as any, "profile-1");
+    expect(count).toBe(0);
   });
 });

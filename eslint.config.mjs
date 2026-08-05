@@ -8,6 +8,7 @@ export default defineConfig([
     "modal_app/**",
     "playwright-report/**",
     "test-results/**",
+    "coverage/**",
     "next-env.d.ts",
     "ds-bundle/**",
     ".ds-sync/**",

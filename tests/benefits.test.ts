@@ -1,10 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   BENEFIT_EARN_EVENTS,
   BENEFIT_SPEND_EVENTS,
   BENEFIT_TIER_THRESHOLDS,
   benefitTier,
   benefitTierProgress,
+  getLifetimeBenefitPoints,
+  getLifetimeEarnedPoints,
+  getLifetimeSpentPoints,
 } from "@/lib/benefits";
 
 describe("benefitTier (read-only signal from lifetime EARNED points)", () => {
@@ -79,5 +82,77 @@ describe("BENEFIT_SPEND_EVENTS (recruiter/corporate side — allowlist, not a de
   it("shares no events with the seeker earn-side allowlist", () => {
     const overlap = BENEFIT_SPEND_EVENTS.filter((e) => (BENEFIT_EARN_EVENTS as readonly string[]).includes(e));
     expect(overlap).toHaveLength(0);
+  });
+});
+
+describe("getLifetimeEarnedPoints (allowlisted earn sum, non-negative)", () => {
+  it("sums only positive allowlisted earn events", async () => {
+    const inFn = vi.fn().mockResolvedValue({
+      data: [
+        { amount: 3 },   // reveal_compensation
+        { amount: 5 },   // verified_action
+        { amount: -10 }, // a spend that must NOT count
+        { amount: 2 },
+      ],
+      error: null,
+    });
+    const mock = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ in: inFn }) }),
+      }),
+    } as any;
+    expect(await getLifetimeEarnedPoints(mock, "p-1")).toBe(10);
+  });
+
+  it("returns 0 when no rows", async () => {
+    const inFn = vi.fn().mockResolvedValue({ data: [], error: null });
+    const mock = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ in: inFn }) }),
+      }),
+    } as any;
+    expect(await getLifetimeEarnedPoints(mock, "p-1")).toBe(0);
+  });
+});
+
+describe("getLifetimeSpentPoints (absolute sum of allowlisted debits)", () => {
+  it("sums the absolute value of negative spend events only", async () => {
+    const inFn = vi.fn().mockResolvedValue({
+      data: [
+        { amount: -10 }, // reveal_spend
+        { amount: -25 }, // override_spend
+        { amount: 5 },   // an earn that must NOT count
+        { amount: -15 },
+      ],
+      error: null,
+    });
+    const mock = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ in: inFn }) }),
+      }),
+    } as any;
+    expect(await getLifetimeSpentPoints(mock, "p-1")).toBe(50);
+  });
+});
+
+describe("getLifetimeBenefitPoints (per-role routing)", () => {
+  it("routes seekers to lifetime earned", async () => {
+    const inFn = vi.fn().mockResolvedValue({ data: [{ amount: 3 }], error: null });
+    const mock = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ in: inFn }) }),
+      }),
+    } as any;
+    expect(await getLifetimeBenefitPoints(mock, "p-1", "seeker")).toBe(3);
+  });
+
+  it("routes recruiters to lifetime spent", async () => {
+    const inFn = vi.fn().mockResolvedValue({ data: [{ amount: -10 }], error: null });
+    const mock = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ in: inFn }) }),
+      }),
+    } as any;
+    expect(await getLifetimeBenefitPoints(mock, "p-1", "recruiter")).toBe(10);
   });
 });
