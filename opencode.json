@@ -1,0 +1,61 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode-go/deepseek-v4-pro",
+  "agent": {
+    "plan": {
+      "model": "opencode-go/deepseek-v4-pro"
+    },
+    "build": {
+      "model": "opencode-go/deepseek-v4-flash"
+    },
+    "explore": {
+      "model": "opencode-go/deepseek-v4-flash",
+      "mode": "all"
+    },
+    "general": {
+      "model": "opencode-go/deepseek-v4-flash"
+    },
+    "advise": {
+      "model": "opencode-go/deepseek-v4-pro"
+    }
+  },
+  "permission": {
+    "edit": "allow",
+    "bash": {
+      "git status *": "allow",
+      "git diff *": "allow",
+      "git log *": "allow",
+      "git show *": "allow",
+      "git branch *": "allow",
+      "uv *": "allow",
+      "ruff *": "allow",
+      "mypy *": "allow",
+      "pytest *": "allow",
+      "python -m *": "allow",
+      "docker compose *": "allow",
+      "ls *": "allow",
+      "rg *": "allow",
+      "cat *": "allow",
+      "rm -rf *": "deny",
+      "rm -fr *": "deny",
+      "git push --force*": "deny",
+      "git push -f *": "deny",
+      "git reset --hard*": "deny",
+      "sudo *": "deny",
+      "chmod -R *": "deny",
+      "chown -R *": "deny",
+      "*": "ask"
+    },
+    "external_directory": {
+      "**/.env*": "deny",
+      "**/*.env.local": "deny",
+      "**/audit.log": "deny",
+      "**/*.pem": "deny",
+      "**/*.key": "deny",
+      "~": "allow",
+      "*": "ask"
+    },
+    "webfetch": "ask",
+    "websearch": "ask"
+  }
+}

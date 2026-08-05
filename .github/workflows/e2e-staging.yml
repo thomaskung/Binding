@@ -78,6 +78,28 @@ jobs:
             done
           done
       - run: npx playwright install chromium
+      - name: Re-warm Modal right before tests
+        # The earlier warm-up runs BEFORE `playwright install` (5+ min). Modal
+        # scale-to-zero (scaledown_window=120s) drops the LLM containers back
+        # to cold by the time the tests actually run, so test 5's publish
+        # (redact+embed) blows its 60s budget on a cold model load. Re-warm
+        # immediately before the suite so every endpoint is genuinely warm.
+        run: |
+          for url in \
+            "https://thomaskung--binding-embeddings-embedder-embed.modal.run" \
+            "https://thomaskung--binding-llm-qwen-redact.modal.run" \
+            "https://thomaskung--binding-llm-qwen-refine.modal.run" \
+            "https://thomaskung--binding-llm-qwen-extract.modal.run"; do
+            for i in $(seq 1 3); do
+              code=$(curl -s -m 120 -X POST "$url" \
+                -H "Authorization: Bearer ${{ secrets.MODAL_API_TOKEN }}" \
+                -H "Content-Type: application/json" \
+                -d '{"text":"warmup"}' -o /dev/null -w "%{http_code}" || echo "000")
+              echo "pre-test warm $url attempt $i -> $code"
+              [ "$code" = "200" ] && break
+              sleep 3
+            done
+          done
       - name: Run functional tests
         run: npx playwright test e2e/staging-functional.spec.ts --retries=1
         env:
