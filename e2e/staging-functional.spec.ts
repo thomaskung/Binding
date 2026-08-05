@@ -176,6 +176,18 @@ test.describe("Staging functional — matching pipeline", () => {
 
 test.describe("Staging functional — reveal mechanics", () => {
   test("8. Standard reveal deducts points from recruiter", async ({ browser }) => {
+    // Reset the pipeline recruiter's balance to the 100-pt seed so the reveal
+    // assertion (90 after spending 10) is deterministic even across a retry —
+    // otherwise a first-attempt reveal plus a retry reveal double-spends to 80.
+    const admin = stagingAdminClient();
+    await admin.from("points_ledger").delete().eq("profile_id", pipelineRecruiterId);
+    await admin.from("points_ledger").insert({
+      profile_id: pipelineRecruiterId,
+      event: "seed",
+      amount: 100,
+      note: "recruiter activation seed",
+    });
+
     const seekerCtx = await stagingContext(browser);
     const recruiterCtx = await stagingContext(browser);
     const seeker = await seekerCtx.newPage();
@@ -443,7 +455,9 @@ test.describe("Staging functional — dealbreaker & tier differentiation", () =>
     await recruiter.waitForURL(/\/recruiter\/jobs\/[0-9a-f-]+$/);
     countAiCall(); // ai.embed on publish
     await recruiter.getByTestId("publish-job").click();
-    await expect(recruiter.getByText("Published — matches refreshed.")).toBeVisible({ timeout: 60_000 });
+    // Modal embed cold-start can run long for a standalone job near the end of
+    // the suite — give it generous headroom.
+    await expect(recruiter.getByText("Published — matches refreshed.")).toBeVisible({ timeout: 120_000 });
 
     // Seeker with equity_required should see the match.
     const seekerCtx = await stagingContext(browser);
@@ -524,7 +538,7 @@ test.describe("Staging functional — dealbreaker & tier differentiation", () =>
     await recruiter.waitForURL(/\/recruiter\/jobs\/[0-9a-f-]+$/);
     countAiCall();
     await recruiter.getByTestId("publish-job").click();
-    await expect(recruiter.getByText("Published — matches refreshed.")).toBeVisible({ timeout: 60_000 });
+    await expect(recruiter.getByText("Published — matches refreshed.")).toBeVisible({ timeout: 120_000 });
 
     // View match card — should show generalized credential summary, not raw PII.
     await recruiter.getByTestId("view-matches").click();
@@ -571,16 +585,16 @@ test.describe("Staging functional — dealbreaker & tier differentiation", () =>
     await signIn(page, "seeker@demo.local");
 
     // Dashboard: Pro badge, no upsell card.
-    await expect(page.getByText("Pro")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Pro", { exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId("pro-upsell-card")).toHaveCount(0);
 
     // Profile page: Pro badge.
     await page.goto("/seeker/profile");
-    await expect(page.getByText("Pro")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Pro", { exact: true })).toBeVisible({ timeout: 10_000 });
 
     // Points page: Pro badge.
     await page.goto("/seeker/points");
-    await expect(page.getByText("Pro")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Pro", { exact: true })).toBeVisible({ timeout: 10_000 });
 
     // Clean up.
     await admin
