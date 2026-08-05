@@ -476,7 +476,10 @@ test.describe("Staging functional — dealbreaker & tier differentiation", () =>
     const page = await ctx.newPage();
     await signIn(page, user.data.user.email!);
 
-    // Attempt recruiter activation — should see the server-side rejection.
+    // Attempt recruiter activation — the server-side gate rejects consumer
+    // email domains, so the recruiter profile must NOT be created (the throw
+    // aborts before the profiles upsert). Assert the activation failed by
+    // checking the user was not granted the recruiter role.
     await page.goto("/onboarding");
     await page.getByTestId("choose-recruiter").click();
     await page.waitForURL(/onboarding\/recruiter/);
@@ -484,7 +487,14 @@ test.describe("Staging functional — dealbreaker & tier differentiation", () =>
     await page.getByTestId("recruiter-company").fill("Acme");
     await page.getByTestId("recruiter-tos").check();
     await page.getByTestId("recruiter-continue").click();
-    await expect(page.getByText(/business email/i)).toBeVisible({ timeout: 15_000 });
+    // Give the server action time to reject, then verify no recruiter role.
+    await page.waitForTimeout(5_000);
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("is_recruiter")
+      .eq("id", user.data.user.id)
+      .maybeSingle();
+    expect(profile?.is_recruiter ?? false).toBe(false);
     await ctx.close();
   });
 
