@@ -11,16 +11,18 @@
 ## Dev Setup
 
 - `pnpm install` (pnpm 11.5.2 — `corepack enable` first if missing)
-- Local Supabase required for dev: `pnpm db:start` → `pnpm db:reset` (Docker needed)
-- Keys go in `.env.local` from `pnpm db:start` output or `.env.example`
-- Demo logins: `seeker@demo.local` / `recruiter@demo.local`, password `J0B!Demo#2026$secure`
+- **No local Supabase, no Docker** (retired 2026-08-06). `pnpm dev` runs against the **hosted** Supabase project
+- Keys go in `.env.local` — copy `.env.example` and fill from the Supabase dashboard (Settings → API)
+- Sign in via magic link, or set `NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN=true` locally for the password tab
+- `pnpm dev` shares the hosted staging data — destructive experiments are not sandboxed; `pnpm seed:staging` restores the dataset
 - Codespace at `.devcontainer/` pre-installs pnpm, Supabase CLI, Modal CLI, Vercel CLI
 
 ## Testing
 
 - Unit tests: `pnpm test` (vitest, `tests/*.test.ts`, Node env)
 - Single file: `pnpm test -- tests/matching.test.ts`
-- E2E: `pnpm e2e` — must `pnpm db:reset` first, needs `NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN=true` in `.env.local`, runs serially (1 worker)
+- E2E: `pnpm e2e` — runs against **deployed staging** (no local mode). Needs the `E2E_*` secrets in `.env.local` (`playwright.config.ts` fails fast listing any missing); serial (1 worker). Specs create their own per-run users via the service-role key — no seeded logins. Also gates every PR in `ci.yml`
+- E2E cost: publish/reveal/extract/refine are **real Modal calls** on staging. Wrap them in `countAiCall()`; `AI_CALL_BUDGET` (`e2e/staging-helpers.ts`) is enforced in teardown
 - Staging E2E (password login + basic auth required, secrets from `.env.local`):
   ```
   E2E_BASE_URL=https://binding-staging.vercel.app \
@@ -60,8 +62,7 @@
 - Deploy: `modal deploy modal_app/embeddings.py` + `modal deploy modal_app/llm.py`
 - Endpoint URLs printed on deploy; set as Vercel env vars for `AI_PROVIDER=modal`
 
-**Supabase**
-- Local: `supabase start` / `supabase stop` / `supabase db reset`
+**Supabase** (hosted only — no local stack)
 - Hosted project ref: `qjqaeuzpsefawqwlfwlf` (region `ap-southeast-1`)
 - Link remote: `supabase login` or `SUPABASE_ACCESS_TOKEN` → `supabase link --project-ref qjqaeuzpsefawqwlfwlf`
 - Without link, push via pooler:
@@ -77,7 +78,7 @@
 - `127.0.0.1` and `localhost` are different origins to browsers; `allowedDevOrigins` set in next.config
 - Privacy invariant: candidate-derived data never reaches frontier APIs — enforced by `JDTextOnly` branded type + `tests/frontier-guardrail.test.ts`
 - AI defaults to `stub` (deterministic, zero cost, no network). Switch to `modal` only after Modal endpoints are deployed
-- Migrations edited in place must be verified: `pnpm db:reset` from zero
+- Migrations: **don't edit applied ones in place** — add a forward migration. `db push` only applies pending migrations against the live DB, so it can't prove a from-zero build and won't flag an edited migration that already ran. Verify schema-bearing changes against a **scratch** database (`supabase db push --db-url <scratch>`) before merge; keep version prefixes unique
 - TS pinned to 5.x, ESLint pinned to 9 — upgrading breaks eslint-config-next
 - Strategy docs (BUSINESS/DESIGN/VISION/LEGAL_REVIEW) are versioned — bump version, update date, add history row on material edits
 - Staging: `main` branch = Vercel deploy, Supabase hosted, Modal AI. Codespace for dev.
@@ -121,7 +122,7 @@ https://support.claude.com/en/articles/14604416-get-started-with-claude-design
 
 ### 2. Browser control of the running app — `claude-in-chrome` MCP
 Drives a real Chrome tab to navigate/click/fill/screenshot/record. Two targets:
-- **Local**: `pnpm dev` (start local Supabase first: `pnpm db:start` → `pnpm db:reset`). Use for
+- **Local**: `pnpm dev` (against hosted Supabase — no local stack to start). Use for
   fast iteration and demos of unshipped work.
 - **Vercel staging**: the deployed `main` build. Staging is gated by HTTP Basic Auth +
   `x-staging-auth` shared secret — supply `STAGING_BASIC_AUTH` (browser httpCredentials) and the

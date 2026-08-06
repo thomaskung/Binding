@@ -64,11 +64,16 @@ enabled = true
 schema_paths = []
 
 [db.seed]
-# If enabled, seeds the database after migrations during a db reset.
-enabled = true
-# Specifies an ordered list of seed files to load during db reset.
-# Supports glob patterns relative to supabase directory: "./seeds/*.sql"
-sql_paths = ["./seed.sql", "../test-data/smoke-seed.generated.sql"]
+# Disabled 2026-08-06: local Supabase was retired — staging is hosted Supabase +
+# Vercel, so there is no `supabase db reset` in the workflow to seed. The local
+# demo seed (supabase/seed.sql) was deleted with it. Hosted staging is seeded by
+# `pnpm seed:staging` (scripts/seed-staging.ts), which builds its dataset from
+# the test-data/ module — that directory is still the single source of truth for
+# the seed dataset and is intentionally kept.
+# This file's remaining job is `supabase db push` (migrations → hosted staging),
+# which CI runs on merge; see .github/workflows/deploy-staging.yml.
+enabled = false
+sql_paths = []
 
 [db.network_restrictions]
 # Enable management of network restrictions.

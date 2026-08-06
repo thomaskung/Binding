@@ -40,3 +40,45 @@ jobs:
       - run: pnpm typecheck
 
       - run: npx vitest run --coverage
+
+  # Playwright runs against the DEPLOYED staging app — local Supabase was
+  # retired (2026-08-06), so there is no local stack for CI to boot either.
+  # Every spec creates and cleans up its own per-run users via the service-role
+  # key (e2e/staging-helpers.ts), so concurrent runs don't collide.
+  #
+  # Skipped automatically on forks, where the staging secrets aren't available.
+  e2e:
+    needs: check
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install
+
+      - run: pnpm exec playwright install --with-deps chromium
+
+      - run: pnpm e2e
+        env:
+          E2E_BASE_URL: https://binding-staging.vercel.app
+          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          E2E_SERVICE_ROLE_KEY: ${{ secrets.E2E_SERVICE_ROLE_KEY }}
+          E2E_STAGING_BASIC_USER: ${{ secrets.E2E_STAGING_BASIC_USER }}
+          E2E_STAGING_BASIC_PW: ${{ secrets.E2E_STAGING_BASIC_PW }}
+          E2E_STAGING_SECRET: ${{ secrets.E2E_STAGING_SECRET }}
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-trace
+          path: test-results/
+          retention-days: 7

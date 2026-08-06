@@ -1,7 +1,16 @@
-# Smoke-test dataset (dev only)
+# Seed dataset (shared source of truth)
 
-A larger, static dataset layered on top of `supabase/seed.sql`'s two demo
-accounts: **50 seeker profiles + 20 job postings** across **20 role families
+> **Updated 2026-08-06:** local Supabase was retired, so this dataset is no
+> longer auto-loaded by `supabase db reset` (there is none), and
+> `supabase/seed.sql` — the two demo accounts it used to layer on top of — was
+> deleted. The directory is deliberately **kept** because it is still the single
+> source of truth for the seed dataset:
+> - `scripts/seed-staging.ts` imports `buildJobs` / `buildSeeker` / `SEEKER_COUNT`
+>   from `generate-smoke-seed.ts` (and reads `smoke-recruiters.json`) to seed
+>   **hosted staging** with real Modal embeddings — run it via `pnpm seed:staging`.
+> - `tests/test-data-seed.test.ts` guards the generated SQL artifact.
+
+A static dataset of **50 seeker profiles + 20 job postings** across **20 role families
 (10 tech, 10 finance)** and 8 fictional companies, with matches pre-computed
 via the real `match_candidates()` RPC. Every seeker carries the full
 recruiter-card surface (skills, industries, desired roles, seniority band,
@@ -10,9 +19,9 @@ varied values so the card and its match ratios don't all look the same.
 
 ## Why it exists
 
-`supabase/seed.sql` only seeds two accounts — enough to exercise one path,
-not enough to smoke-test list views, pagination, or the recruiter/seeker
-dashboards with a realistic amount of data.
+A couple of hand-made accounts is enough to exercise one path, but not enough to
+smoke-test list views, pagination, or the recruiter/seeker dashboards with a
+realistic amount of data — hence a generated dataset with breadth and variety.
 
 ## How it loads
 
@@ -41,10 +50,11 @@ hosted/production project.
 After editing any of the source JSON files:
 
 ```
-pnpm test-data:generate
-pnpm db:reset
+pnpm test-data:generate    # refresh smoke-seed.generated.sql (guarded by tests/test-data-seed.test.ts)
+pnpm seed:staging          # push the dataset to hosted staging (real Modal embeddings)
 ```
 
-All accounts share the password `J0B!Demo#2026$secure`. UUIDs are namespaced
-by prefix to avoid colliding with `supabase/seed.sql`'s demo accounts:
-`10000000-…` seekers, `20000000-…` recruiters, `30000000-…` jobs.
+All accounts share the password `J0B!Demo#2026$secure`. UUIDs stay namespaced by
+prefix — `10000000-…` seekers, `20000000-…` recruiters, `30000000-…` jobs — which
+also keeps them clear of the per-run `test-…@staging.local` users the e2e specs
+create.
