@@ -150,19 +150,24 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
   });
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-8">
-      <header className="flex items-start justify-between gap-6">
-        <div>
-          <h1 className="text-2xl font-medium tracking-tight">Matches — {job.title}</h1>
-          <p className="text-sm text-muted-foreground">
-            Candidates are pseudonymized until you reveal. Standard reveal (10
-            pts) needs candidate interest; override ({OVERRIDE_COST} pts)
-            reveals immediately — messaging unlocks only if they accept.
+    <main className="jb-fade mx-auto max-w-6xl space-y-6 px-6 py-14">
+      <header className="flex flex-wrap items-start justify-between gap-6">
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+            Job pipeline
+          </p>
+          <h1 className="font-heading text-[28px] font-medium leading-tight tracking-tight">
+            {job.title}
+          </h1>
+          <p className="max-w-2xl text-[13.5px] text-muted-foreground">
+            Candidates are pseudonymized until you reveal. Standard reveal (10 pts) needs candidate
+            interest; override ({OVERRIDE_COST} pts) reveals immediately — messaging unlocks only if
+            they accept.
           </p>
         </div>
         <div className="flex flex-col items-end gap-3">
           <Badge variant="secondary">{balance} pts</Badge>
-          <Button variant="ghost" render={<Link href={`/recruiter/jobs/${id}`} />}>
+          <Button variant="ghost" size="sm" render={<Link href={`/recruiter/jobs/${id}`} />}>
             ← Job
           </Button>
         </div>

@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@binding/ui";
-import { AuthNav } from "@/components/auth-nav";
+import { Button, Card, CardContent, Input, Label } from "@binding/ui";
 import { getSessionProfile } from "@/lib/auth";
 import { activateRecruiter } from "../actions";
+import { OnboardingChrome } from "../seeker/onboarding-chrome";
 
-/** Recruiter activation — step 1 of 3: name + company/agency (shown to
+/** Recruiter activation — step 1 of 3 (shared OnboardingChrome, same
+ * step-chrome as the seeker wizard): name + company/agency (shown to
  * candidates on jobs and threads — basic trust requirement) + ToS. Steps 2-3
  * (company details, first job post) live at /onboarding/recruiter/profile. */
 export default async function RecruiterOnboardingPage() {
@@ -13,18 +14,13 @@ export default async function RecruiterOnboardingPage() {
   if (session.isRecruiter) redirect("/recruiter");
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <AuthNav context="authenticated" />
-      <main className="flex flex-1 items-center justify-center p-8">
-        <Card className="w-full max-w-lg">
-        <CardHeader>
-          <CardTitle className="font-medium">Start hiring</CardTitle>
-          <CardDescription>
-            Step 1 of 3 — candidates always see who&apos;s contacting them, so company identity is
-            required.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+    <OnboardingChrome
+      current={1}
+      title="Start hiring"
+      description="Candidates always see who's contacting them, so company identity is required."
+    >
+      <Card>
+        <CardContent className="pt-6">
           <form action={activateRecruiter} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="display_name">Your name</Label>
@@ -53,7 +49,13 @@ export default async function RecruiterOnboardingPage() {
               </p>
             </div>
             <label className="flex items-start gap-2 text-sm">
-              <input type="checkbox" name="tos" data-testid="recruiter-tos" className="mt-1" required />
+              <input
+                type="checkbox"
+                name="tos"
+                data-testid="recruiter-tos"
+                className="mt-1 size-4 accent-primary"
+                required
+              />
               <span>
                 I accept the Terms of Service{" "}
                 <span className="text-xs text-muted-foreground">
@@ -66,8 +68,7 @@ export default async function RecruiterOnboardingPage() {
             </Button>
           </form>
         </CardContent>
-        </Card>
-      </main>
-    </div>
+      </Card>
+    </OnboardingChrome>
   );
 }

@@ -96,7 +96,7 @@ export function MatchList({
 
   if (cards.length === 0) {
     return (
-      <Card>
+      <Card className="jb-fade">
         <CardContent className="py-10 text-center text-muted-foreground">
           No matches yet. Publish the job (with an embedded JD) and check back as candidates join
           the pool.
@@ -106,9 +106,9 @@ export function MatchList({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="jb-fade space-y-4">
       {/* Filter + sort bar (one place for both) */}
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3">
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
           <SelectTrigger style={{ width: 150 }} data-testid="filter-status">
             <SelectValue>{STATUS_LABEL[statusFilter]}</SelectValue>
@@ -123,7 +123,9 @@ export function MatchList({
         </Select>
 
         <div className="flex min-w-40 flex-col gap-1">
-          <span className="text-xs text-muted-foreground">Min match {minPct}%</span>
+          <span className="text-[11px] font-medium text-muted-foreground">
+            Min match {minPct}%
+          </span>
           <Slider
             value={minPct}
             onValueChange={(v) => setMinPct(v as number)}
@@ -158,13 +160,13 @@ export function MatchList({
       </div>
 
       {visible.length === 0 ? (
-        <Card>
+        <Card className="jb-fade">
           <CardContent className="py-10 text-center text-muted-foreground">
             No candidates match this filter. Try lowering the minimum match.
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           {visible.map((card) => {
             const label =
               card.status === "revealed" && card.revealedName
@@ -185,67 +187,82 @@ export function MatchList({
                     onSelect(card.id);
                   }
                 }}
-                className={`cursor-pointer transition-colors hover:border-primary/50 ${
+                className={`jb-lift cursor-pointer ${
                   selectedId === card.id ? "border-primary ring-1 ring-primary" : ""
                 }`}
               >
-                <CardContent className="space-y-3 py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium" data-testid={card.status === "revealed" && card.revealedName ? "revealed-name" : "candidate-label"}>
+                <CardContent className="flex items-start gap-4">
+                  {/* Exact % match — recruiter-only (raw score never reaches
+                      seeker code). Soft-tint tile mirrors the mockup's score
+                      chip; accent-foreground keeps it AA in both themes. */}
+                  <div className="flex size-[52px] flex-none flex-col items-center justify-center rounded-xl bg-accent text-accent-foreground">
+                    <span className="jb-serif text-lg font-semibold leading-none" data-testid="match-pct">
+                      {Math.round(card.score * 100)}%
+                    </span>
+                    <span className="mt-0.5 text-[8px] font-semibold uppercase tracking-wide opacity-70">
+                      match
+                    </span>
+                  </div>
+
+                  <div className="min-w-0 flex-1 space-y-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p
+                        className="truncate font-heading text-[15px] font-semibold leading-snug tracking-tight"
+                        data-testid={
+                          card.status === "revealed" && card.revealedName
+                            ? "revealed-name"
+                            : "candidate-label"
+                        }
+                      >
                         {label}
                       </p>
-                      {interest && (
-                        <p className="text-xs text-muted-foreground">interested {interest}</p>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <Badge variant="outline" data-testid="match-pct">
-                        {Math.round(card.score * 100)}% match
+                      <Badge
+                        variant={
+                          card.status === "interested"
+                            ? "default"
+                            : card.status === "revealed"
+                              ? "secondary"
+                              : "outline"
+                        }
+                      >
+                        {statusBadge(card)}
                       </Badge>
-                      <span className="text-xs text-muted-foreground" data-testid="reveal-cost">
+                      <span
+                        className="ml-auto text-[12px] font-medium text-muted-foreground"
+                        data-testid="reveal-cost"
+                      >
                         reveal {card.revealCost} pts
                       </span>
                     </div>
-                  </div>
-
-                  {/* Strength chips */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {senChip && <Badge variant="secondary">{senChip}</Badge>}
-                    {card.region && <Badge variant="secondary">{card.region}</Badge>}
-                    {card.industries.slice(0, 1).map((ind) => (
-                      <Badge key={ind} variant="secondary">
-                        {ind}
-                      </Badge>
-                    ))}
-                    {card.skills.slice(0, 4).map((s) => (
-                      <Badge key={s} variant="outline">
-                        {s}
-                      </Badge>
-                    ))}
-                    {card.skills.length > 4 && (
-                      <Badge variant="outline">+{card.skills.length - 4}</Badge>
+                    {interest && (
+                      <p className="text-[12px] text-muted-foreground">interested {interest}</p>
                     )}
-                    {card.credentialsSummary && (
-                      <Badge variant="default" data-testid="credentials-chip">
-                        ★ {card.credentialsSummary}
-                      </Badge>
-                    )}
-                  </div>
 
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant={
-                        card.status === "interested"
-                          ? "default"
-                          : card.status === "revealed"
-                            ? "secondary"
-                            : "outline"
-                      }
-                    >
-                      {statusBadge(card)}
-                    </Badge>
-                    <span className="text-xs text-primary underline-offset-2 hover:underline">
+                    {/* Strength chips */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {senChip && <Badge variant="secondary">{senChip}</Badge>}
+                      {card.region && <Badge variant="secondary">{card.region}</Badge>}
+                      {card.industries.slice(0, 1).map((ind) => (
+                        <Badge key={ind} variant="secondary">
+                          {ind}
+                        </Badge>
+                      ))}
+                      {card.skills.slice(0, 4).map((s) => (
+                        <Badge key={s} variant="outline">
+                          {s}
+                        </Badge>
+                      ))}
+                      {card.skills.length > 4 && (
+                        <Badge variant="outline">+{card.skills.length - 4}</Badge>
+                      )}
+                      {card.credentialsSummary && (
+                        <Badge variant="default" data-testid="credentials-chip">
+                          ★ {card.credentialsSummary}
+                        </Badge>
+                      )}
+                    </div>
+
+                    <span className="text-xs font-medium text-primary underline-offset-2 hover:underline">
                       View details →
                     </span>
                   </div>

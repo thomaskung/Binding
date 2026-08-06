@@ -40,7 +40,7 @@ export default async function MaintenanceNudgePage() {
     : null;
 
   return (
-    <main className="mx-auto w-full max-w-[460px] px-5 py-14">
+    <main className="jb-fade mx-auto w-full max-w-[460px] px-5 py-14">
       <MaintenanceNudge
         stale={isStale(profile?.last_profile_activity_at ?? null)}
         latestRole={latestRole?.role ?? null}

@@ -29,7 +29,7 @@ export default async function TrainingPage() {
   const completedProgramIds = new Set((completions ?? []).map((c) => c.program_id));
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 p-8">
+    <main className="jb-fade mx-auto max-w-3xl space-y-6 px-6 py-14">
       <TrainingHome
         seekerTier={profile?.seeker_tier === "pro" ? "pro" : "free"}
         creditBalance={balance}

@@ -50,7 +50,7 @@ export function TrainingHome({ seekerTier, creditBalance, programs, assignments 
     const cost = seekerTier === "pro" ? 0 : p.creditCost;
     const canAfford = cost === 0 || creditBalance >= cost;
     return (
-      <Card size="sm" data-testid="training-program-card">
+      <Card size="sm" className="jb-lift" data-testid="training-program-card">
         <CardHeader>
           <CardTitle className="text-[15px]">{p.title}</CardTitle>
           <CardDescription>
@@ -94,7 +94,9 @@ export function TrainingHome({ seekerTier, creditBalance, programs, assignments 
     <>
       <header className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1.5">
-          <h1 className="text-[28px] font-semibold tracking-tight">Training</h1>
+          <h1 className="font-heading text-[28px] font-medium leading-tight tracking-tight">
+            Training
+          </h1>
           <p className="text-sm text-muted-foreground">
             Guided courses and AI quizzes — spend credits, build your profile
           </p>
@@ -107,7 +109,9 @@ export function TrainingHome({ seekerTier, creditBalance, programs, assignments 
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div>
-          <h3 className="mb-1 text-[15px] font-semibold tracking-tight">Career path</h3>
+          <h3 className="font-heading mb-1 text-[15px] font-medium tracking-tight">
+            Career path
+          </h3>
           <p className="mb-3.5 text-[13px] text-muted-foreground">
             Individual growth — skills, offers, and interview readiness
           </p>
@@ -122,13 +126,15 @@ export function TrainingHome({ seekerTier, creditBalance, programs, assignments 
         </div>
 
         <div>
-          <h3 className="mb-1 text-[15px] font-semibold tracking-tight">Compliance training</h3>
+          <h3 className="font-heading mb-1 text-[15px] font-medium tracking-tight">
+            Compliance training
+          </h3>
           <p className="mb-3.5 text-[13px] text-muted-foreground">
             Corporate — AML and security modules assigned by your organization
           </p>
           <div className="flex flex-col gap-3.5">
             {assignments.length > 0 && (
-              <Card size="sm" data-testid="assigned-training-card">
+              <Card size="sm" className="jb-lift" data-testid="assigned-training-card">
                 <CardHeader>
                   <CardTitle className="text-[15px]">Assigned by your employer</CardTitle>
                   <CardDescription>Licensed programs, no credits involved.</CardDescription>

@@ -49,17 +49,17 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
   const visibility = (job.salary_visibility ?? "public") as SalaryVisibility;
 
   return (
-    <main className="mx-auto max-w-3xl space-y-8 p-8 pb-24">
+    <main className="jb-fade mx-auto max-w-3xl space-y-8 p-8 pb-24">
       <Button variant="outline" size="sm" render={<Link href="/seeker/matches" />}>
         ← Back to matches
       </Button>
 
       <header className="flex items-start gap-4">
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-secondary text-xl font-bold text-secondary-foreground">
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-accent text-xl font-bold text-accent-foreground">
           {company.charAt(0).toUpperCase()}
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h1 className="text-2xl font-bold tracking-tight">{job.title}</h1>
+          <h1 className="font-heading text-2xl font-bold tracking-tight">{job.title}</h1>
           <p className="text-sm text-muted-foreground">
             {company} · {job.location ?? "Location not specified"}
           </p>

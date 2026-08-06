@@ -32,7 +32,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 function PartnerCard({ partner, unlocked }: { partner: Partner; unlocked: boolean }) {
   const [revealed, setRevealed] = useState(false);
   return (
-    <Card size="sm" data-testid="benefit-partner-card">
+    <Card size="sm" className="jb-lift" data-testid="benefit-partner-card">
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-[15px]">{partner.partner_name}</CardTitle>
@@ -91,10 +91,19 @@ export function BenefitsCatalog({ tier, lifetimePoints, metricKind, partners }: 
 
   return (
     <>
-      <Card>
+      <header className="mb-1">
+        <h1 className="font-heading text-[28px] font-medium leading-tight tracking-tight">
+          Benefits &amp; loyalty
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Perks earned by staying active — free at your tier, or redeemed with reward points.
+        </p>
+      </header>
+
+      <Card className="jb-lift">
         <CardHeader>
           <div className="mb-1 flex items-center gap-2.5">
-            <CardTitle className="text-xl">Benefits &amp; discounts</CardTitle>
+            <CardTitle className="text-xl">Loyalty ladder</CardTitle>
             <Badge data-testid="benefit-tier-badge">Tier {tier}</Badge>
           </div>
           <CardDescription>

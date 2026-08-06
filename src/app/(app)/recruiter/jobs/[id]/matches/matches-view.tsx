@@ -35,7 +35,7 @@ export function MatchesView({ cards }: { cards: RecruiterMatchCard[] }) {
           {selected ? (
             <CandidatePanel card={selected} onClose={close} />
           ) : (
-            <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+            <div className="jb-fade rounded-xl border border-dashed p-8 text-center text-[13.5px] text-muted-foreground">
               Select a candidate to see their strengths and reveal options.
             </div>
           )}

@@ -26,7 +26,7 @@ export default async function EditJobPage({ params }: { params: Promise<{ id: st
   if (!job) notFound();
 
   return (
-    <main className="mx-auto max-w-3xl p-8">
+    <main className="jb-fade mx-auto max-w-3xl px-6 py-14">
       <JobDetail job={job as EditableJob} matchCount={count ?? 0} />
     </main>
   );

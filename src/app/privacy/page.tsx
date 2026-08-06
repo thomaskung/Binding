@@ -6,14 +6,16 @@
  */
 export default function PrivacyNoticePage() {
   return (
-    <main className="mx-auto w-full max-w-[720px] px-5 py-14">
-      <h1 className="text-2xl font-semibold">Privacy Notice</h1>
+    <main className="jb-fade mx-auto w-full max-w-[720px] px-5 py-14">
+      <h1 className="font-heading text-[28px] font-medium leading-tight tracking-tight">
+        Privacy Notice
+      </h1>
       <p className="mt-2 text-sm text-muted-foreground">
         Draft — pending legal review. Last updated 28 July 2026.
       </p>
 
       <section className="mt-8 space-y-3 text-sm leading-relaxed">
-        <h2 className="text-lg font-semibold">What we collect and why</h2>
+        <h2 className="font-heading text-lg font-medium">What we collect and why</h2>
         <p>
           Binding processes your resume and career data to match you with job opportunities.
           Your raw resume is stored privately — only you can access it. Recruiters only ever see a
@@ -22,7 +24,7 @@ export default function PrivacyNoticePage() {
           this as a disclosed, ongoing risk with layered controls rather than claiming anonymity.
         </p>
 
-        <h2 className="text-lg font-semibold">Your consents</h2>
+        <h2 className="font-heading text-lg font-medium">Your consents</h2>
         <p>
           At signup you consent to (1) AI processing and redaction of your resume data and (2)
           automated AI matching (profiling) between your pseudonymized profile and job postings —
@@ -32,7 +34,7 @@ export default function PrivacyNoticePage() {
           at any time.
         </p>
 
-        <h2 className="text-lg font-semibold">Automated matching, human control</h2>
+        <h2 className="font-heading text-lg font-medium">Automated matching, human control</h2>
         <p>
           AI never changes your profile on its own: every AI-drafted update is suggest-and-approve
           — nothing is committed without your explicit approval. Matching is automated; disclosure
@@ -40,14 +42,14 @@ export default function PrivacyNoticePage() {
           in an append-only access log.
         </p>
 
-        <h2 className="text-lg font-semibold">Access, correction, deletion</h2>
+        <h2 className="font-heading text-lg font-medium">Access, correction, deletion</h2>
         <p>
           You can access and correct your data in the app. For a full data access, correction, or
           deletion request, contact privacy@getbinding.com — we respond within the statutory
           windows of Hong Kong&apos;s PDPO and Singapore&apos;s PDPA.
         </p>
 
-        <h2 className="text-lg font-semibold">Subprocessors and data location</h2>
+        <h2 className="font-heading text-lg font-medium">Subprocessors and data location</h2>
         <p>
           Primary storage is in AWS ap-east-1 (Hong Kong) via Supabase. AI redaction and embedding
           run on Modal in the Asia-Pacific region. Cross-border transfers are covered by data
@@ -80,7 +82,7 @@ export default function PrivacyNoticePage() {
           </tbody>
         </table>
 
-        <h2 className="text-lg font-semibold">What we never do</h2>
+        <h2 className="font-heading text-lg font-medium">What we never do</h2>
         <p>
           We never sell or share individual personal data. Aggregate market signals are produced
           only from separately opted-in profiles, only over cohorts of at least 20 people, and

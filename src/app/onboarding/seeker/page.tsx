@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Input, Label, Separator } from "@binding/ui";
+import { Button, Card, CardContent, CardFooter, Input, Label, Separator } from "@binding/ui";
 import { getSessionProfile } from "@/lib/auth";
 import { activateSeeker } from "../actions";
 import { OnboardingChrome } from "./onboarding-chrome";
@@ -14,14 +14,14 @@ export default async function SeekerOnboardingPage() {
   if (session.isSeeker) redirect("/seeker");
 
   return (
-    <OnboardingChrome current={1}>
+    <OnboardingChrome
+      current={1}
+      title="Before we start"
+      description="A quick consent check — this comes before anything else."
+    >
       <form action={activateSeeker}>
         <Card>
-          <CardHeader>
-            <CardTitle>Before we start</CardTitle>
-            <CardDescription>A quick consent check — this comes before anything else.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 pt-6">
             <div className="space-y-1.5">
               <Label htmlFor="display_name">Full name</Label>
               <Input
@@ -37,7 +37,13 @@ export default async function SeekerOnboardingPage() {
               </p>
             </div>
             <label className="flex items-start gap-2.5 text-sm leading-snug">
-              <input type="checkbox" name="tos" data-testid="onboard-tos" className="mt-0.5" required />
+              <input
+                type="checkbox"
+                name="tos"
+                data-testid="onboard-tos"
+                className="mt-0.5 size-4 accent-primary"
+                required
+              />
               <span>
                 I agree to the Terms of Service and Privacy Policy{" "}
                 <span className="text-xs text-muted-foreground">
@@ -50,7 +56,7 @@ export default async function SeekerOnboardingPage() {
                 type="checkbox"
                 name="processing_consent"
                 data-testid="onboard-consent"
-                className="mt-0.5"
+                className="mt-0.5 size-4 accent-primary"
                 required
               />
               <span>
@@ -64,7 +70,7 @@ export default async function SeekerOnboardingPage() {
                 type="checkbox"
                 name="profiling_consent"
                 data-testid="onboard-profiling"
-                className="mt-0.5"
+                className="mt-0.5 size-4 accent-primary"
                 required
               />
               <span>
@@ -78,7 +84,7 @@ export default async function SeekerOnboardingPage() {
                 type="checkbox"
                 name="maintenance_consent"
                 data-testid="onboard-maintenance"
-                className="mt-0.5"
+                className="mt-0.5 size-4 accent-primary"
               />
               <span>
                 Optional: I consent to continuous AI resume maintenance — periodic check-ins that

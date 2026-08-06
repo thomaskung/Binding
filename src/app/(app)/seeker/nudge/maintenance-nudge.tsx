@@ -137,7 +137,7 @@ export function MaintenanceNudge({
               <span className="block text-xs uppercase tracking-wider text-muted-foreground">
                 Current experience
               </span>
-              <div className="rounded-[10px] bg-secondary px-3 py-2.5 text-sm leading-normal text-muted-foreground">
+              <div className="rounded-xl bg-muted px-3 py-2.5 text-sm leading-normal text-muted-foreground">
                 {latestExperienceLine}
               </div>
               <Separator />
@@ -154,7 +154,7 @@ export function MaintenanceNudge({
             />
           ) : (
             <div
-              className="rounded-[10px] border border-border px-3 py-2.5 text-sm leading-normal"
+              className="rounded-xl border border-ring/20 bg-accent px-3 py-2.5 text-sm leading-normal text-accent-foreground"
               data-testid="nudge-suggestion"
             >
               {suggestion}

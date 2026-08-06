@@ -44,7 +44,7 @@ export function SignupForm({ intent }: { intent: SignupIntent | null }) {
 
   if (!intent) {
     return (
-      <Card className="w-full">
+      <Card className="jb-fade w-full">
         <CardHeader>
           <CardTitle className="font-medium">Create your Binding account</CardTitle>
           <CardDescription>
@@ -82,7 +82,7 @@ export function SignupForm({ intent }: { intent: SignupIntent | null }) {
   }
 
   return (
-    <Card className="w-full">
+    <Card className="jb-fade w-full">
       <CardHeader>
         <CardTitle className="font-medium">Create your Binding account</CardTitle>
         <CardDescription>

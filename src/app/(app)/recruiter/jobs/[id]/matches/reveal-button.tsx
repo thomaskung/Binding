@@ -25,7 +25,7 @@ export function RevealButton({ matchId, cost = 10 }: { matchId: string; cost?: n
       >
         Reveal candidate ({cost} pts)
       </Button>
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <p className="jb-fade text-sm text-destructive">{error}</p>}
     </div>
   );
 }
@@ -61,9 +61,9 @@ export function OverrideButton({
         >
           Reveal now ({cost} pts — hasn&apos;t opted in)
         </Button>
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="jb-fade text-sm text-destructive">{error}</p>}
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[12px] text-muted-foreground">
         {refund} pts refund if they decline or don&apos;t respond in 7 days. Candidate is compensated
         either way.
       </p>

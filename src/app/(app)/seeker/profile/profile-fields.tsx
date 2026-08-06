@@ -44,6 +44,17 @@ import {
 
 const WORK_SETUPS = ["onsite", "hybrid", "remote"] as const;
 
+const PRIVACY_FIELD_KEYS: ProfileFieldKey[] = [
+  "headline",
+  "location",
+  "skills",
+  "desired_roles",
+  "industries",
+  "references_available",
+  "credentials",
+];
+const PRIVACY_FIELD_COUNT = PRIVACY_FIELD_KEYS.length;
+
 const MODE_LABEL: Record<FieldVisibilityMode, string> = {
   visible: "Visible",
   matching_only: "Matching only",
@@ -115,23 +126,30 @@ function datesLabel(start: string, end: string | null): string {
 function VisibilityControl({
   fieldKey,
   label,
+  rawValue,
   mode,
   onChange,
 }: {
   fieldKey: ProfileFieldKey;
   label: string;
+  rawValue: string;
   mode: FieldVisibilityMode;
   onChange: (mode: FieldVisibilityMode) => void;
 }) {
   const modes = availableModesFor(fieldKey);
   const hint = MODE_HINT[mode];
   return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-sm">{label}</span>
+    <div className="flex items-center justify-between gap-4 border-b border-border/60 py-2 last:border-b-0">
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {label}
+        </div>
+        <div className="truncate text-sm">{rawValue || "—"}</div>
+      </div>
       <div className="flex flex-col items-end gap-1">
         <select
           aria-label={`${label} visibility`}
-          className="rounded-md border px-2 py-1 text-xs"
+          className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium"
           value={mode}
           onChange={(e) => onChange(e.target.value as FieldVisibilityMode)}
         >
@@ -172,6 +190,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
   const [workSetups, setWorkSetups] = useState<string[]>(props.workSetups);
   const [equityRequired, setEquityRequired] = useState(props.equityRequired);
   const [experience, setExperience] = useState<ExperienceRow[]>(props.experience);
+  const [showAllExperience, setShowAllExperience] = useState(false);
   const [fieldVisibility, setFieldVisibility] = useState<FieldVisibilityMap>(
     props.fieldVisibility ?? {},
   );
@@ -223,6 +242,10 @@ export function ProfileFields(props: ProfileFieldsProps) {
   const desiredRolesList = desiredRolesText.split(",").map((s) => s.trim()).filter(Boolean);
   const industriesList = industriesText.split(",").map((s) => s.trim()).filter(Boolean);
 
+  const visibleFieldCount = PRIVACY_FIELD_KEYS.filter(
+    (k) => fieldMode(fieldVisibility, k) === "visible",
+  ).length;
+
   // External view derives through the same per-field visibility filter the
   // publish path uses — hidden/matching_only choices apply immediately here.
   const external = filterFieldsForSurface(
@@ -250,14 +273,16 @@ export function ProfileFields(props: ProfileFieldsProps) {
   const salaryShown = internal || (shareSalary && minSalary);
 
   return (
-    <main className="mx-auto max-w-[920px] space-y-6 px-6 py-14">
+    <main className="jb-fade mx-auto max-w-[960px] space-y-6 px-6 py-10">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-3">
-            <h1 className="text-[30px] font-semibold leading-tight tracking-tight">Your profile</h1>
+            <h1 className="font-heading text-[28px] font-medium leading-tight tracking-tight">
+              Your profile
+            </h1>
             {props.seekerTier === "pro" && <Badge variant="outline">Pro</Badge>}
           </div>
-          <p className="text-[15px] text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {internal
               ? "How your profile looks to you"
               : "How recruiters see you when a match is revealed"}
@@ -298,22 +323,50 @@ export function ProfileFields(props: ProfileFieldsProps) {
 
       {status && <p className="text-sm text-muted-foreground">{status}</p>}
 
+      {!editing && (
+        <Card className="jb-lift" data-testid="profile-identity-banner">
+          <CardContent className="flex flex-col gap-3 pt-6">
+            {shownHeadline && (
+              <span className="text-xs font-semibold uppercase tracking-wider text-primary">
+                {shownHeadline}
+              </span>
+            )}
+            <div className="flex flex-wrap items-baseline justify-between gap-3">
+              <h2 className="font-heading text-2xl font-semibold tracking-tight">
+                {displayName || "—"}
+              </h2>
+              {internal && (
+                <span className="text-[13px] text-muted-foreground">
+                  {[props.email, phone].filter(Boolean).join(" · ")}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {shownLocation && (
+                <span className="text-[13px] text-muted-foreground">{shownLocation}</span>
+              )}
+              <Badge className="bg-accent text-accent-foreground" variant="secondary">
+                {props.visibility === "active" ? "Actively looking" : "Not looking"}
+              </Badge>
+              {workSetups.map((s) => (
+                <Badge key={s} variant="outline" className="capitalize">
+                  {s}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-[280px_1fr]">
         {/* Left column */}
         <div className="flex flex-col gap-4">
-          <Card>
+          <Card className="jb-lift">
             <CardContent className="pt-6">
               <div className="flex flex-col items-center gap-3 text-center">
                 <div className="flex size-[76px] items-center justify-center rounded-full bg-secondary text-2xl font-semibold text-secondary-foreground">
                   {initialsOf(displayName)}
                 </div>
-                {!editing && (
-                  <div className="flex flex-col gap-0.5">
-                    <div className="text-lg font-semibold tracking-tight">{displayName}</div>
-                    <div className="text-sm text-muted-foreground">{shownHeadline || "—"}</div>
-                    <div className="text-[13px] text-muted-foreground">{shownLocation || "—"}</div>
-                  </div>
-                )}
               </div>
               {editing && (
                 <div className="mt-3.5 flex flex-col gap-2.5 text-left">
@@ -363,7 +416,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="jb-lift">
             <CardHeader>
               <CardTitle className="text-sm">Resume</CardTitle>
             </CardHeader>
@@ -394,7 +447,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
           </Card>
 
           {internal && (
-            <Card>
+            <Card className="jb-lift">
               <CardHeader>
                 <CardTitle className="text-sm">Points balance</CardTitle>
                 <CardAction>
@@ -418,7 +471,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
 
         {/* Right column */}
         <div className="flex flex-col gap-4">
-          <Card>
+          <Card className="jb-lift">
             <CardHeader>
               <CardTitle className="text-sm">Salary &amp; availability</CardTitle>
             </CardHeader>
@@ -469,7 +522,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="jb-lift">
             <CardHeader>
               <CardTitle className="text-sm">Skills</CardTitle>
             </CardHeader>
@@ -501,7 +554,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="jb-lift">
             <CardHeader>
               <CardTitle className="text-sm">Credentials</CardTitle>
             </CardHeader>
@@ -547,7 +600,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="jb-lift">
             <CardHeader>
               <CardTitle className="text-sm">Work experience</CardTitle>
             </CardHeader>
@@ -558,7 +611,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
                     {experience.length === 0 && (
                       <span className="text-sm text-muted-foreground">No entries yet.</span>
                     )}
-                    {experience.map((job, i) => (
+                    {(showAllExperience ? experience : experience.slice(0, 3)).map((job, i) => (
                       <div key={job.id ?? i} className="flex flex-col gap-0.5">
                         <span className="text-sm font-semibold">{job.role || "—"}</span>
                         <span className="text-[13px] text-muted-foreground">
@@ -567,6 +620,15 @@ export function ProfileFields(props: ProfileFieldsProps) {
                         </span>
                       </div>
                     ))}
+                    {experience.length > 3 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowAllExperience((v) => !v)}
+                      >
+                        {showAllExperience ? "Show fewer" : `Show all ${experience.length} roles`}
+                      </Button>
+                    )}
                   </>
                 ) : (
                   <>
@@ -646,7 +708,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="jb-lift">
             <CardHeader>
               <CardTitle className="text-sm">Preferences</CardTitle>
             </CardHeader>
@@ -794,54 +856,87 @@ export function ProfileFields(props: ProfileFieldsProps) {
           </Card>
 
           {internal && (
-            <Card>
+            <Card className="jb-lift">
               <CardHeader>
                 <CardTitle className="text-sm">Privacy</CardTitle>
+                <CardAction>
+                  <span className="text-xs text-muted-foreground">
+                    {visibleFieldCount} of {PRIVACY_FIELD_COUNT} visible
+                  </span>
+                </CardAction>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-3">
+                <div>
                   <VisibilityControl
                     fieldKey="headline"
                     label="Headline"
+                    rawValue={headline}
                     mode={fieldMode(fieldVisibility, "headline")}
                     onChange={(m) => setVisibility("headline", m)}
                   />
                   <VisibilityControl
                     fieldKey="location"
                     label="Location (region)"
+                    rawValue={location}
                     mode={fieldMode(fieldVisibility, "location")}
                     onChange={(m) => setVisibility("location", m)}
                   />
                   <VisibilityControl
                     fieldKey="skills"
                     label="Skills"
+                    rawValue={skillsList.join(", ")}
                     mode={fieldMode(fieldVisibility, "skills")}
                     onChange={(m) => setVisibility("skills", m)}
                   />
                   <VisibilityControl
                     fieldKey="desired_roles"
                     label="Desired roles"
+                    rawValue={desiredRolesList.join(", ")}
                     mode={fieldMode(fieldVisibility, "desired_roles")}
                     onChange={(m) => setVisibility("desired_roles", m)}
                   />
                   <VisibilityControl
                     fieldKey="industries"
                     label="Target industries"
+                    rawValue={industriesList.join(", ")}
                     mode={fieldMode(fieldVisibility, "industries")}
                     onChange={(m) => setVisibility("industries", m)}
                   />
                   <VisibilityControl
                     fieldKey="references_available"
                     label="References note"
+                    rawValue={referencesAvailable ? "Available on request" : "Not offered"}
                     mode={fieldMode(fieldVisibility, "references_available")}
                     onChange={(m) => setVisibility("references_available", m)}
                   />
                   <VisibilityControl
                     fieldKey="credentials"
                     label="Credentials"
+                    rawValue={credentials}
                     mode={fieldMode(fieldVisibility, "credentials")}
                     onChange={(m) => setVisibility("credentials", m)}
                   />
+                </div>
+
+                <div className="flex items-center gap-2.5 rounded-lg bg-muted px-3 py-2.5 text-xs text-muted-foreground">
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="flex-none text-primary"
+                  >
+                    <rect x="3" y="11" width="18" height="10" rx="2" />
+                    <path d="M7 11V7a5 5 0 0110 0v4" />
+                  </svg>
+                  <span>
+                    Name &amp; contact stay hidden until you accept a reveal — that rule can&apos;t
+                    be turned off.
+                  </span>
                 </div>
 
                 <Separator />
@@ -921,7 +1016,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
                     >
                       <span
                         className={
-                          "absolute top-0.5 size-5 rounded-full bg-white shadow transition-[left] " +
+                          "absolute top-0.5 size-5 rounded-full bg-primary-foreground shadow transition-[left] " +
                           (maintenanceConsented ? "left-[18px]" : "left-0.5")
                         }
                       />
@@ -971,7 +1066,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
                     >
                       <span
                         className={
-                          "absolute top-0.5 size-5 rounded-full bg-white shadow transition-[left] " +
+                          "absolute top-0.5 size-5 rounded-full bg-primary-foreground shadow transition-[left] " +
                           (marketSignalsOptedIn ? "left-[18px]" : "left-0.5")
                         }
                       />

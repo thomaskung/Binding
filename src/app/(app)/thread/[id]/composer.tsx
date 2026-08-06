@@ -10,7 +10,7 @@ export function MessageComposer({ threadId }: { threadId: string }) {
 
   return (
     <form
-      className="flex gap-2 pt-4"
+      className="flex gap-2 border-t border-border pt-4"
       action={() =>
         startTransition(async () => {
           await sendMessage(threadId, body);

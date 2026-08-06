@@ -43,25 +43,31 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
   const backHref = reveal?.recruiter_id === session.userId ? "/recruiter" : "/seeker";
 
   return (
-    <main className="mx-auto max-w-2xl space-y-6 p-8">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-medium">
-            Conversation — {job?.title ?? "role"}
-            {recruiterProfile?.company_name ? ` · ${recruiterProfile.company_name}` : ""}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Contact details stay off-thread unless the candidate shares them.
-            Keep the conversation here — that&apos;s the deal.
-          </p>
+    <main className="jb-fade mx-auto max-w-2xl space-y-6 px-6 py-14">
+      <header className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="flex size-11 flex-none items-center justify-center rounded-xl bg-accent font-heading text-base font-semibold text-accent-foreground">
+            {(recruiterProfile?.company_name ?? job?.title ?? "?").charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+              Conversation
+            </p>
+            <h1 className="font-heading text-[22px] font-medium leading-tight tracking-tight">
+              {job?.title ?? "Role"}
+            </h1>
+            {recruiterProfile?.company_name && (
+              <p className="text-sm text-muted-foreground">{recruiterProfile.company_name}</p>
+            )}
+          </div>
         </div>
-        <Button variant="ghost" render={<Link href={backHref} />}>
+        <Button variant="ghost" size="sm" render={<Link href={backHref} />}>
           ← Back
         </Button>
       </header>
 
       {reveal?.fit_summary && (
-        <Card>
+        <Card className="jb-lift">
           <CardHeader>
             <CardTitle className="text-sm">AI fit summary</CardTitle>
             <CardDescription>{reveal.fit_summary}</CardDescription>
@@ -69,8 +75,12 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
         </Card>
       )}
 
-      <Card>
+      <Card className="jb-lift">
         <CardContent className="space-y-3 py-6">
+          <div className="mx-auto max-w-sm rounded-lg bg-muted px-4 py-2 text-center text-[11px] leading-relaxed text-muted-foreground">
+            Contact details stay off-thread unless the candidate shares them — keep the
+            conversation here, that&apos;s the deal.
+          </div>
           {(messages ?? []).length === 0 ? (
             <p className="text-center text-sm text-muted-foreground">
               No messages yet — say hello.
@@ -82,7 +92,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
                 className={`flex ${m.sender_id === session.userId ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
+                  className={`max-w-[75%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed ${
                     m.sender_id === session.userId
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted"

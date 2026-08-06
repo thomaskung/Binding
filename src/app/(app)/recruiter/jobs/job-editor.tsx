@@ -2,11 +2,29 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { Badge, Button, Card, CardContent, CardHeader, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea } from "@binding/ui";
+import {
+  AIDocumentCanvas,
+  type AIDocumentSuggestion,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Textarea,
+} from "@binding/ui";
 import { EMPLOYMENT_TYPE_LABEL, EMPLOYMENT_TYPES, type EmploymentType, type SalaryVisibility } from "@/lib/jobs";
 import { closeJob, publishJob, refineJobText, saveJob } from "../actions";
 
 const WORK_SETUPS = ["onsite", "hybrid", "remote"] as const;
+
+const JD_QUICK_ACTIONS = ["Tighten wording", "More inclusive language", "Add impact metrics", "Shorten"];
 
 export interface EditableJob {
   id: string;
@@ -33,7 +51,9 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
   const [employmentType, setEmploymentType] = useState<EmploymentType>(job?.employment_type ?? "fulltime");
   const [salaryMin, setSalaryMin] = useState(job?.salary_min?.toString() ?? "");
   const [salaryMax, setSalaryMax] = useState(job?.salary_max?.toString() ?? "");
-  const [visibility, setVisibility] = useState<SalaryVisibility>(job?.salary_visibility ?? "public");
+  // Stealth ("on_request") is the default for new postings — salary visibility
+  // is opt-in-to-public, not opt-out (privacy invariant: hidden by default).
+  const [visibility, setVisibility] = useState<SalaryVisibility>(job?.salary_visibility ?? "on_request");
   const [offersEquity, setOffersEquity] = useState(job?.offers_equity ?? false);
   const [workSetups, setWorkSetups] = useState<string[]>(job?.work_setups ?? []);
   const [skillsText, setSkillsText] = useState((job?.skills ?? []).join(", "));
@@ -43,7 +63,8 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
   );
   const [requirementsText, setRequirementsText] = useState((job?.requirements ?? []).join("\n"));
 
-  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<AIDocumentSuggestion[]>([]);
+  const [askValue, setAskValue] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -80,13 +101,43 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
     return fd;
   }
 
-  function refine() {
+  // refineJobText only takes the JD text itself (no free-text instruction
+  // param on the server action) — the quick-action label / ask text drives
+  // the suggestion's title in the UI, but is never spliced into the text
+  // sent for refinement.
+  function refine(suggestionTitle: string) {
+    if (!description.trim()) return;
     startTransition(async () => {
       setStatus("Refining JD…");
-      const refined = await refineJobText(description);
-      setSuggestion(refined);
+      const before = description;
+      const refined = await refineJobText(before);
+      // The rail is 336px wide — truncate the "before" preview (only ever
+      // display copy; the full `before` text is never sent anywhere and
+      // `after` — what actually gets applied — stays untruncated).
+      const beforePreview = before.length > 160 ? `${before.slice(0, 160)}…` : before;
+      setSuggestions((prev) => [
+        { id: `refine-${Date.now()}`, title: suggestionTitle, before: beforePreview, after: refined, status: "pending" },
+        ...prev,
+      ]);
       setStatus(null);
     });
+  }
+
+  function applySuggestion(id: string) {
+    const target = suggestions.find((s) => s.id === id);
+    if (!target) return;
+    setDescription(target.after);
+    setSuggestions((prev) => prev.map((s) => (s.id === id ? { ...s, status: "applied" } : s)));
+  }
+
+  function dismissSuggestion(id: string) {
+    setSuggestions((prev) => prev.map((s) => (s.id === id ? { ...s, status: "dismissed" } : s)));
+  }
+
+  function askAi() {
+    if (!askValue.trim()) return;
+    refine(askValue.trim());
+    setAskValue("");
   }
 
   function saveDraft() {
@@ -107,8 +158,8 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="sticky top-0 z-10 -mx-8 flex items-center justify-between gap-6 border-b bg-background px-8 py-4">
+    <div className="jb-fade space-y-6">
+      <div className="sticky top-0 z-10 -mx-8 flex items-center justify-between gap-6 border-b border-border bg-background/95 px-8 py-4 backdrop-blur-sm">
         <div className="flex min-w-0 items-center gap-3">
           <Button variant="ghost" size="sm" render={<Link href="/recruiter/jobs" />}>
             ← Cancel
@@ -131,8 +182,11 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
       </div>
 
       {!job && (
-        <div>
-          <h1 className="mb-1.5 text-[28px] font-semibold leading-tight tracking-tight">
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+            New posting
+          </p>
+          <h1 className="font-heading text-[28px] font-medium leading-tight tracking-tight">
             Create a job posting
           </h1>
           <p className="text-[15px] text-muted-foreground">
@@ -141,9 +195,11 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
         </div>
       )}
 
-      <Card>
+      <Card className="jb-lift">
         <CardHeader>
-          <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Basics</h2>
+          <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            Basics
+          </h2>
           <p className="text-sm text-muted-foreground">The essentials candidates see first.</p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -217,9 +273,11 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="jb-lift">
         <CardHeader>
-          <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Compensation</h2>
+          <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            Salary &amp; visibility
+          </h2>
           <p className="text-sm text-muted-foreground">Set a range and choose whether it&apos;s public.</p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -246,23 +304,40 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label>Salary visibility</Label>
-            <Select value={visibility} onValueChange={(v) => setVisibility(v as SalaryVisibility)}>
-              <SelectTrigger style={{ width: "100%" }}>
-                <SelectValue>{visibility === "public" ? "Show publicly" : "On request only"}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="public">Show publicly</SelectItem>
-                <SelectItem value="on_request">On request only</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {visibility === "public"
-                ? "The salary range is shown on the posting."
-                : "Candidates see “Salary on request” and can ask during matching."}
-            </p>
+
+          {/* Prominent, defaults-to-hidden salary visibility control — stealth
+              is the default posture (privacy invariant), public is the
+              explicit opt-in via this switch. */}
+          <div className="flex items-center justify-between gap-4 rounded-xl bg-muted px-4 py-3.5">
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-sm font-semibold">Show salary band to candidates</span>
+              <span className="text-[13px] leading-normal text-muted-foreground">
+                {visibility === "public"
+                  ? "The salary range is shown on the posting."
+                  : "Hidden by default — candidates see “Salary on request” and can ask during matching."}
+              </span>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={visibility === "public"}
+              aria-label="Show salary band to candidates"
+              data-testid="job-salary-visibility-toggle"
+              onClick={() => setVisibility((v) => (v === "public" ? "on_request" : "public"))}
+              className={
+                "relative h-6 w-10 flex-none rounded-full transition-colors " +
+                (visibility === "public" ? "bg-primary" : "bg-secondary")
+              }
+            >
+              <span
+                className={
+                  "absolute top-0.5 size-5 rounded-full bg-primary-foreground shadow transition-[left] " +
+                  (visibility === "public" ? "left-[18px]" : "left-0.5")
+                }
+              />
+            </button>
           </div>
+
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -275,9 +350,11 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="jb-lift">
         <CardHeader>
-          <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Skills</h2>
+          <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            Skills
+          </h2>
           <p className="text-sm text-muted-foreground">Used to match candidates to this role.</p>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -304,65 +381,43 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              About the role
-            </h2>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={pending || !description.trim()}
-              onClick={refine}
-            >
-              Refine with AI
-            </Button>
-          </div>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            About the role
+          </h2>
           <p className="text-sm text-muted-foreground">A short summary of what this person will own.</p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Textarea
-            data-testid="job-description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Describe the team, the mission, and what success looks like…"
-            rows={6}
-            required
-          />
-          {suggestion !== null && (
-            <div className="grid grid-cols-2 gap-4 rounded-md border p-4">
-              <div>
-                <p className="mb-2 text-sm font-medium">Current</p>
-                <p className="text-sm whitespace-pre-wrap text-muted-foreground">{description}</p>
-              </div>
-              <div>
-                <p className="mb-2 text-sm font-medium">AI suggestion</p>
-                <p className="text-sm whitespace-pre-wrap">{suggestion}</p>
-                <div className="mt-3 flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setDescription(suggestion);
-                      setSuggestion(null);
-                    }}
-                  >
-                    Accept
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setSuggestion(null)}>
-                    Reject
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+        <AIDocumentCanvas
+          canvasTitle="Job post canvas"
+          docText={description}
+          onDocTextChange={setDescription}
+          docPlaceholder="Describe the team, the mission, and what success looks like…"
+          docTestId="job-description"
+          introText={
+            suggestions.some((s) => s.status === "pending")
+              ? "Apply a suggestion below, or ask for something specific."
+              : "I can tighten this JD, sharpen impact language, or match your team's tone — try a quick action or ask for something specific."
+          }
+          quickActions={JD_QUICK_ACTIONS}
+          onQuickAction={refine}
+          suggestions={suggestions}
+          onApplySuggestion={applySuggestion}
+          onDismissSuggestion={dismissSuggestion}
+          askValue={askValue}
+          onAskChange={setAskValue}
+          onAskSubmit={askAi}
+          askPlaceholder="Ask AI to rewrite…"
+          saved={status === "Saved."}
+          busy={pending}
+          askTestId="job-description-ask"
+          sendTestId="job-description-ask-send"
+        />
+      </div>
 
-      <Card>
+      <Card className="jb-lift">
         <CardHeader>
-          <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             What they&apos;ll do
           </h2>
           <p className="text-sm text-muted-foreground">One responsibility per line.</p>
@@ -377,9 +432,11 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="jb-lift">
         <CardHeader>
-          <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Requirements</h2>
+          <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            Requirements
+          </h2>
           <p className="text-sm text-muted-foreground">One requirement per line.</p>
         </CardHeader>
         <CardContent>

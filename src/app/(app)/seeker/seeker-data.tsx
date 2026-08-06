@@ -1,4 +1,3 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@binding/ui";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { expireStaleOverride, getBalance, OVERRIDE_COMPENSATION } from "@/lib/points";
 import { matchBand, type SeekerTier } from "@/lib/matching";
@@ -119,30 +118,14 @@ export function OverrideBanners({ context }: { context: SeekerContext }) {
         const job = Array.isArray(reveal.job_postings) ? reveal.job_postings[0] : reveal.job_postings;
         const recruiter = Array.isArray(reveal.profiles) ? reveal.profiles[0] : reveal.profiles;
         return (
-          <Card
-            key={reveal.id}
-            className="jb-fade bg-accent/40 ring-primary/40"
-            data-testid="pending-override-card"
-          >
-            <CardHeader>
-              <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-primary">
-                <span className="inline-block size-1.5 rounded-full bg-primary" aria-hidden />
-                Reveal request
-              </div>
-              <CardTitle className="text-lg">
-                {recruiter?.company_name ?? recruiter?.display_name ?? "A recruiter"} revealed your
-                profile
-              </CardTitle>
-              <CardDescription>
-                For the role: {job?.title ?? "a job"}. You earned {OVERRIDE_COMPENSATION} pts for the
-                reveal — accept to open the conversation, or decline (they cannot override you again
-                for 30 days). Expires 7 days after the reveal.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <OverrideResponseButtons revealId={reveal.id} />
-            </CardContent>
-          </Card>
+          <div key={reveal.id} className="jb-fade" data-testid="pending-override-card">
+            <OverrideResponseButtons
+              revealId={reveal.id}
+              recruiterLabel={recruiter?.company_name ?? recruiter?.display_name ?? "A recruiter"}
+              jobTitle={job?.title ?? "a job"}
+              compensation={OVERRIDE_COMPENSATION}
+            />
+          </div>
         );
       })}
     </>

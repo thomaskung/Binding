@@ -37,7 +37,7 @@ export default async function BenefitsPage() {
   ]);
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 p-8">
+    <main className="jb-fade mx-auto max-w-3xl space-y-6 px-6 py-14">
       <BenefitsCatalog
         tier={benefitTier(lifetimePoints)}
         lifetimePoints={lifetimePoints}
