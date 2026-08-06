@@ -1,4 +1,7 @@
 import { expect, test } from "@playwright/test";
+import { publishMatchingProfile } from "./match-helpers";
+import { completeSeekerOnboarding } from "./seeker-onboarding";
+import { ensureStagingUser, signIn, stagingContext, uniqueLabel } from "./staging-helpers";
 
 /**
  * Layer-0 no-tracker posture (DESIGN.md §2f): resume-handling pages must
@@ -6,36 +9,59 @@ import { expect, test } from "@playwright/test";
  * cross-origin anything. This is the enforceable slice of the CSP posture
  * (full nonce-CSP via middleware is deferred hardening, pre-public-launch).
  *
- * Uses the seeded demo seeker (supabase/seed.sql) — run `pnpm db:reset`
- * first, like the rest of the suite.
+ * Runs against hosted staging — no seeded DB, no `seeker@demo.local`. Setup
+ * (creating the account, onboarding, publishing a profile so the resume page
+ * has real "already published" content to render — matching what the old
+ * seeded-demo-seeker fixture gave us for free) happens in an UNTRACKED
+ * context so its own network chatter (Modal calls, Supabase writes) never
+ * pollutes the capture. A second, TRACKED context then repeats the exact
+ * capture window the original had: login -> resume page load -> profile page
+ * load.
+ *
+ * Modal AI cost: 2 round-trips (`ai.redact` + `ai.embed` via
+ * `publishMatchingProfile` during setup) — counted internally by that
+ * helper. Onboarding uses the free wizard-skip path (0 AI calls).
  */
+test("resume-handling pages make no third-party requests", async ({ browser, baseURL }) => {
+  test.setTimeout(300_000);
 
-const SEEKER = { email: "seeker@demo.local", password: "J0B!Demo#2026$secure" };
+  const firstPartyHosts = new Set(
+    [baseURL, process.env.E2E_SUPABASE_URL]
+      .filter((v): v is string => Boolean(v))
+      .map((v) => new URL(v).host),
+  );
 
-test("resume-handling pages make no third-party requests", async ({ page, baseURL }) => {
-  const origin = new URL(baseURL ?? "http://localhost:3000").host;
+  const user = await ensureStagingUser("seeker");
+
+  // --- Untracked setup: get a fresh seeker onboarded and published so the
+  // resume page has real content to render, without that setup traffic
+  // (Modal, Supabase, onboarding lambdas) counting toward the capture. ---
+  const setupCtx = await stagingContext(browser);
+  const setupPage = await setupCtx.newPage();
+  await signIn(setupPage, user.email);
+  await completeSeekerOnboarding(setupPage, { name: uniqueLabel("No Tracker Seeker") });
+  await publishMatchingProfile(setupPage);
+  await setupCtx.close();
+
+  // --- Tracked capture: fresh context/page, listener attached BEFORE any
+  // navigation — covers /login itself, then the resume page (now showing the
+  // published/redacted profile) and the profile page. ---
+  const ctx = await stagingContext(browser);
+  const page = await ctx.newPage();
   const thirdParty: string[] = [];
   page.on("request", (req) => {
-    const host = new URL(req.url()).host;
-    if (host !== origin) thirdParty.push(req.url());
+    const url = new URL(req.url());
+    if (url.protocol !== "http:" && url.protocol !== "https:") return; // data:/blob:/about: etc.
+    if (!firstPartyHosts.has(url.host)) thirdParty.push(req.url());
   });
 
-  await page.goto("/login");
-  await page.getByLabel("Work email").fill(SEEKER.email);
-  await page.getByRole("button", { name: "Continue with email" }).click();
-  await page.getByLabel("Password").fill(SEEKER.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL(/\/(seeker|recruiter|onboarding)/);
+  await signIn(page, user.email);
 
   await page.goto("/seeker/profile/resume");
-  await expect(page.getByTestId("redacted-preview")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("redacted-preview")).toBeVisible({ timeout: 60_000 });
   await page.goto("/seeker/profile");
   await page.waitForLoadState("networkidle");
 
-  // Local Supabase (ports on localhost/127.0.0.1) is first-party
-  // infrastructure — everything else is a violation.
-  const violations = thirdParty.filter(
-    (url) => !/^https?:\/\/(localhost|127\.0\.0\.1)[:/]/.test(url),
-  );
-  expect(violations).toEqual([]);
+  expect(thirdParty).toEqual([]);
+  await ctx.close();
 });

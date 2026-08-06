@@ -1,15 +1,54 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { expect, type Browser, type Page } from "@playwright/test";
 
-const TEST_RUN_ID = Date.now().toString(36);
+export const TEST_RUN_ID = Date.now().toString(36);
 const PASSWORD = "J0B!Demo#2026$secure";
 
-// Modal budget guardrail: the staging functional suite is deliberately lean on
-// AI calls (5 publish/reveal/extract calls for the whole run — see the
-// per-test cost table in staging-functional.spec.ts). Tests that trigger an AI
-// round-trip call `countAiCall()`, and the suite teardown asserts the total
-// stays under the budget so a future test can't silently inflate Modal spend.
-export const AI_CALL_BUDGET = 8;
+let _labelCounter = 0;
+
+/**
+ * Collision-safe label for anything a spec writes into a shared, never-reset
+ * staging DB — job titles, seeker/recruiter display names, company names,
+ * etc. Appends the module-wide TEST_RUN_ID plus an incrementing counter, so
+ * every call within one Playwright *process* is guaranteed unique, even two
+ * requested in the same millisecond. Prefer this over hand-rolled
+ * `Date.now()` suffixes — two of those in the same millisecond DO collide.
+ *
+ * Uniqueness is per-process, not per-run: playwright.config.ts pins
+ * `workers: 1`, so today there is exactly one process per suite invocation
+ * and labels are unique suite-wide. If that ever changes to >1 worker,
+ * TEST_RUN_ID (Date.now() at module load) could repeat across workers
+ * started in the same millisecond — revisit then (e.g. add pid/worker index).
+ *
+ * Use it for anything a later assertion filters/searches by (e.g.
+ * `.filter({ hasText: name })`) — never reuse a fixed literal like "Pip
+ * Seeker" across specs that might run concurrently against the same DB.
+ */
+export function uniqueLabel(prefix: string): string {
+  _labelCounter++;
+  return `${prefix} ${TEST_RUN_ID}-${_labelCounter}`;
+}
+
+// Modal budget guardrail. Tests that trigger a Modal round-trip call
+// `countAiCall()`; the teardown asserts the total stays within budget so a new
+// test can't silently inflate real Modal spend. The counter is module state
+// shared across every spec file in the worker — which works because
+// playwright.config.ts pins `workers: 1, fullyParallel: false`. If parallel
+// workers are ever introduced, this becomes per-worker and the ceiling below
+// stops meaning what it says.
+//
+// Raised 8 → 25 on 2026-08-06, when the whole suite moved to hosted staging:
+// local runs used AI_PROVIDER=stub (free), so every one of these is now a real
+// paid call. 25 is the measured total, not a guess:
+//   converted specs .......... 18  (smoke 4, override 5, maintenance-nudge 5,
+//                                   field-visibility 2, no-third-party 2;
+//                                   app-shell/signup/recruiter-wizard/
+//                                   training-benefits/market-intel = 0)
+//   staging-functional ....... 7
+//   staging-uat .............. 0   (navigate + screenshot only)
+// Keep it a tight ceiling: if a change pushes the real total up, re-measure and
+// justify the new number here rather than bumping it to make a run go green.
+export const AI_CALL_BUDGET = 25;
 let _aiCalls = 0;
 
 export function countAiCall() {
