@@ -303,3 +303,22 @@ Format per entry: **Date** / **Decision** / **Context** / **Outcome-or-Lesson** 
 **Context**: NOTES.md (2026-08-03) said technical identifiers stay JumpOnBoard to avoid breaking `transpilePackages`/the bundle global; but the actual `config.json` was later changed to Binding. Acting on the stale note would have left real namespace drift between config and the live design bundle.
 **Outcome/Lesson**: Read the actual config before trusting a dated note about it — a "deliberate hold" can silently become real drift once the underlying file changes. Verify ground truth (`config.json`) over narrative (`NOTES.md`).
 **Links**: .design-sync/config.json, .design-sync/NOTES.md, DESIGN.md §13i
+
+---
+
+## 2026-08-05 (brand theme reversed; new authoritative mockup)
+
+**Decision**: The authoritative UIUX mockup is now **`Binding.dc.html` in the "Binding UI" project `b7e905dd`** (the founder's final-product design). Binding DS `dc871eb6` is demoted from design authority to the component/template library that gets synced *to* match it. The brand theme reverses from monochrome back to **purple accent+primary + Newsreader serif headings + jb-lift/jb-fade motion**.
+**Context**: The founder judged Binding UI to look materially better than both the Binding DS templates and staging, and declared `Binding.dc.html` the final product. Measured against the file: purple `--jb` appears 215× (79 text/links, 23 solid CTA fills, 40 soft tint) and the near-black DS primary is never used — so "purple = accent only" was factually wrong (my initial read from `a{color:var(--jb)}`); purple is the **primary** too. Newsreader `jb-serif` 27×, fade/lift throughout.
+**Outcome/Lesson**: **Why monochrome existed matters, and it wasn't an aesthetic judgment** — DESIGN.md 1.9 removed purple/serif *to obey the then-authoritative mockup* (`dc871eb6`, itself monochrome). So this flip is the SAME rule ("follow the authoritative mockup") applied to a new, better mockup — not a reversal of principle. Recording that distinction is what stops a future session from ping-ponging the palette every time someone prefers a different mock. Second lesson: verify a token's real usage (grep the counts) before summarizing its role from one CSS line — I nearly shipped an accent-only theme that wouldn't have matched the design the founder approved.
+**Links**: CLAUDE.md, DESIGN.md §13j (+2.10), packages/ui/src/theme.css, branch `feat/binding-ui-restyle`
+
+**Decision**: Accepted three deliberate deviations from the mockup's literal CSS, all a11y-driven: `--primary` darkened `oklch(0.52 0.16 264)`→`0.45 0.17 264` (white-on-primary ~7.7:1); `--accent` mode-aware (dark mode does NOT use the near-white `0.96` tint); `--ring` **opaque** instead of the mockup's `/.22` alpha.
+**Context**: shadcn/Base-UI components re-apply `ring-ring/50` and the base layer uses `outline-ring/50`, so a `.22` base composites to ~`.11` — an effectively invisible focus ring (WCAG 2.4.7). The near-white accent tint would hide hovered text and `::selection` on dark backgrounds.
+**Outcome/Lesson**: "Match the mockup" stops at accessibility. A design file carries no contrast or focus-visibility guarantees, and composited alpha (base token × component alpha) is easy to miss — check the *rendered* value, not the token. Deviations are documented inline in `theme.css` so a future sync doesn't "correct" them back.
+**Links**: packages/ui/src/theme.css, DESIGN.md §13j
+
+**Decision**: Restyling is **presentational + interaction-pattern only** — the mockup is a styling reference, never a privacy authority. Server actions, data model, and privacy logic stay untouched; anything the mockup shows that the product forbids gets stripped or adapted.
+**Context**: `Binding.dc.html` displays `92% match` on seeker surfaces and salary ranges — both violate shipped invariants (seekers get bands only; salary hidden by default). During the validation slice this caught a **real leak**: `on_request` salaries were only *visually* hidden, so the raw figures still shipped in client-component props. Now nulled at the source in `seeker-data.tsx`, with all seeker salary rendering through `salaryDisplay()`.
+**Outcome/Lesson**: A redesign pass is a good time to re-audit invariants, not just re-skin — porting a design file forces you to look at every field a screen actually sends to the client. "Hidden in the UI" is not hidden; check the props/payload.
+**Links**: DESIGN.md §13a/§13j, src/app/(app)/seeker/seeker-data.tsx, src/lib/jobs.ts

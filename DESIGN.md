@@ -1,6 +1,6 @@
 # DESIGN.md — Binding (formerly JumpOnBoard) Technical Architecture
 
-**Version 2.9** · Last updated 2026-08-05 · Revision history at the end of this document.
+**Version 2.10** · Last updated 2026-08-06 · Revision history at the end of this document.
 
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [VISION.md](./VISION.md) (goals/metrics). This document describes how the product is actually built. Status: walking-skeleton MVP implemented (see §12 for what's built vs. deferred and where the MVP diverges from the target architecture below).
 
@@ -546,6 +546,53 @@ theme, path-segment routing). Real gaps found this pass:
   AI job-post authoring, enterprise. Authored this pass.
 - Deferred serif-removal kit delta (NOTES.md) still unsynced — folded into this pass's kit re-sync.
 
+### 13j. Brand theme reversed — monochrome → purple/serif (founder directive 2026-08-05)
+
+**What changed.** `Binding.dc.html` in the **"Binding UI" project `b7e905dd`** is now the
+authoritative final-product mockup, and the app + design system are being rebuilt to match it. Its
+theme is the *richer* brand — purple accent used pervasively (`--jb: oklch(0.52 0.16 264)`, 215
+occurrences: 79 as text/links, 23 as solid CTA fills, 40 as soft tint), **Newsreader** serif headings
+(`jb-serif`, 27×), Geist body, and `jb-fade`/`jb-lift` micro-interactions. The mockup never uses a
+near-black primary at all.
+
+**This deliberately reverses §1.9's monochrome reversion.** Recording *why monochrome was originally
+adopted*, so this doesn't ping-pong: in 1.9 (2026-07-26) the founder directed strict adherence to the
+then-authoritative Claude Design mockup (`dc871eb6`), which was itself monochrome — so purple +
+Newsreader + jb-lift/jb-fade were removed **to match that mockup**, not because monochrome was judged
+better on its own merits. The 2026-08-05 flip is the same rule (*follow the authoritative mockup*)
+applied to a **new, better mockup** — not a reversal of the underlying principle. If the authoritative
+mockup changes again, the theme follows it again; the principle is stable even when the palette isn't.
+
+**Implemented tokens** (`packages/ui/src/theme.css`, both `:root` and `.dark`):
+- `--primary: oklch(0.45 0.17 264)` — **AA-darkened** from the mockup's `0.52 0.16` so white-on-primary
+  clears 4.5:1 (measures ~7.7:1). Primary CTAs/active states are purple (matching the mockup), not near-black.
+- `--accent` = soft purple tint (`oklch(0.96 0.02 264)` light) — **mode-aware deviation**: dark mode uses
+  `oklch(0.29 0.03 264)`, because the literal near-white tint would render hovered text and `::selection`
+  invisible against the dark foreground.
+- `--ring: oklch(0.52 0.16 264)` **opaque** — deliberate deviation from the mockup's `/.22` alpha:
+  Button/base layers re-apply `ring-ring/50`, so a `.22` base composites to ~`.11` (an effectively
+  invisible focus ring, WCAG 2.4.7). Opaque base + component alpha follows shadcn convention.
+- `--font-heading` = Newsreader (restored; applied to page h1/h2 **and** `CardTitle`/`DialogTitle`),
+  `--font-sans` leads with Geist. Sidebar/rail tokens mirrored to the purple set.
+- `jb-lift` / `jb-fade` utilities, both disabled under `prefers-reduced-motion: reduce`.
+- **Fonts self-hosted** via `next/font/google` in `src/app/layout.tsx` — never a `fonts.googleapis.com`
+  link, which would break the zero-third-party assertion (`e2e/no-third-party.spec.ts`, §2f Layer 0).
+
+**The mockup is a styling reference, NOT a privacy authority.** It shows things the product forbids
+(e.g. `92% match` on seeker surfaces, salary ranges). Porting rule: adopt layout/theme, strip/adapt
+anything violating the invariants — seekers see the qualitative band only with no differential signal
+for a capped match (§2d), job salary hidden by default via `salaryDisplay()` (§13a), candidate
+salary-expectation never shown to recruiters even post-reveal (§5), "Promoted" label retained (§4a),
+raw résumé owner-only (§5). All server actions, the data model, and privacy logic stay unchanged —
+this is presentational + interaction-pattern work.
+
+**Build state**: kit theme + self-hosted fonts + the seeker/recruiter dashboard validation slice are
+**built** (branch `feat/binding-ui-restyle`); the remaining ~23 routes, the three new
+`@binding/ui` composites (RevealRequestCard, CreditLedger, AIDocumentCanvas — sourced from the Binding
+UI project's own `ds-patterns/`, which its README asks to push back into the DS), the Binding DS
+template re-theme, and the mockup-only screens (export/PDF, pipeline-health, external ledger) are
+**pending**.
+
 ---
 
 ## Revision History
@@ -573,3 +620,4 @@ theme, path-segment routing). Real gaps found this pass:
 | 2.7 | 2026-08-04 | **Dynamic reveal pricing (first cut) + recruiter-dashboard label fix + staging data hygiene** (founder feedback on the live demo). §4a: match-quality multiplier now BUILT for standard reveals — `matchPriceMultiplier`/`revealCostForScore` in `points.ts` (×1/×1.5/×2 tiers on the cosine), charged in `revealCandidate` and shown on the card/button via the same helper (price shown == price spent); per-role base + volume discount + override-path scaling remain roadmap. Fixed observation #3's second surface: the `/recruiter` aggregate dashboard (`pipeline-list.tsx`) still rendered the literal "Pseudonymized candidate" — now uses the descriptive label + strength chips like the per-job matches page. Tracked staging seeder (`scripts/seed-staging.ts`, real Modal embeddings, 50 seekers/20 jobs tech+finance, shares the dataset definition with the local smoke seed; wipes both `@smoke.local`/`@demo.local` seed domains). |
 | 2.8 | 2026-08-04 | Dynamic reveal pricing extended to the **override** path (§4a). `overrideRevealCandidate` charges the match-scaled cost and locks the proportionally-scaled engagement-premium refund on `reveal_requests.premium_refund` (migration 0021), so both refund paths (candidate decline in `respondToOverride` / 7-day `expireStaleOverride`) return exactly the scaled premium — kept-base + refund reconstruct the scaled total at every tier. Override card cost + button (cost & refund copy) now reflect the scaled amounts. |
 | 2.9 | 2026-08-05 | **2026-08-05 design pass (docs+design-sync cycle, no app code)** — new §13 records founder-directed feature designs with code touch-points for a later build: 13a salary stealth deepened (default `public`→`on_request`, new `band` mode, existing-row migration, seeker `share_salary`→false + drop recruiter-visible salary-expectation, close the seeker-dashboard `match-list.tsx` leak — reconciles the standing §5 "withhold even post-reveal" contradiction); 13b AI job-post authoring 3 modes (`extractJobFields`/`generateJob`, recruiter parity with the seeker resume flow); 13c fewer-fields AI-first + progressive-disclosure principle (bounded by suggest-and-approve / never-silently-maintain); 13d skill assessment (auto-scored MCQ, founder-reviewed bank, `verified_actions` write) with recruiter-configurable per-job verified-skill filter/advantage folded into the single cosine score + a new band-cap invariant test; 13e Security+Privacy as two pages (toggles move out of the profile card); 13f adaptive-dashboard + feature-widget grid both roles; 13g referral/invite acquisition loop (closes the BUSINESS §6a flywheel gap — no acquisition loop exists today); 13h OAuth Google-first; 13i UI gap analysis (namespace drift now real — config moved to `BindingUI`; recruiter template salary-expectation leak; new-job-post public-salary default; missing templates). Companion to BUSINESS.md 2.2 + new COMPETITORS.md 1.0. |
+| 2.10 | 2026-08-06 | **Brand theme reversed: monochrome → purple + Newsreader serif** (founder directive; new §13j). The authoritative UIUX mockup moved to **`Binding.dc.html` in the "Binding UI" project `b7e905dd`** (the founder's final-product design); Binding DS `dc871eb6` is demoted to the component/template library that gets synced *to* match it. §1.9's monochrome reversion is reversed — and §13j records *why* monochrome existed (it mirrored the then-authoritative mockup, not an independent judgment), so the governing principle ("follow the authoritative mockup") stays stable even as the palette changes. Implemented in `packages/ui/src/theme.css`: purple `--primary` **AA-darkened** to `oklch(0.45 0.17 264)` (~7.7:1 white-on-primary), mode-aware soft-purple `--accent` (dark mode deviates from the literal near-white tint so hover/`::selection` stay visible), **opaque** `--ring` (the mockup's `/.22` would composite to ~`.11` under `ring-ring/50` → invisible focus, WCAG 2.4.7), Newsreader `--font-heading` restored on page h1/h2 + Card/Dialog titles, Geist `--font-sans`, `jb-lift`/`jb-fade` gated on `prefers-reduced-motion`, sidebar tokens on-brand. Fonts **self-hosted** via `next/font` (a CDN link would break `e2e/no-third-party.spec.ts`). Seeker/recruiter dashboards restyled as the validation slice, including a real privacy fix: `on_request` salaries are now nulled **at the source** in `seeker-data.tsx` (previously only visually hidden, so the figures still shipped in client props) and all seeker salary rendering routes through `salaryDisplay()`. Remaining routes, the 3 new `@binding/ui` composites, DS-template re-theme, and mockup-only screens (export/PDF, pipeline-health, external ledger) are pending on branch `feat/binding-ui-restyle`. |
