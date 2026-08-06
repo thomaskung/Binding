@@ -9,7 +9,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  check:
+  dependency-review:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,7 +17,12 @@ jobs:
       - name: Dependency review
         uses: actions/dependency-review-action@v4
         with:
-          fail-on-severity: critical,high
+          fail-on-severity: high
+
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
         with:
