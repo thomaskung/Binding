@@ -1,4 +1,3 @@
-import * as React from "react"
 import { Sparkles, ShieldCheck } from "lucide-react"
 
 import { cn } from "./utils"

@@ -30,25 +30,37 @@ export function uniqueLabel(prefix: string): string {
 }
 
 // Modal budget guardrail. Tests that trigger a Modal round-trip call
-// `countAiCall()`; the teardown asserts the total stays within budget so a new
-// test can't silently inflate real Modal spend. The counter is module state
-// shared across every spec file in the worker — which works because
-// playwright.config.ts pins `workers: 1, fullyParallel: false`. If parallel
-// workers are ever introduced, this becomes per-worker and the ceiling below
-// stops meaning what it says.
+// `countAiCall()`; `assertAiCallBudget()` asserts the total so a new test can't
+// silently inflate real Modal spend. The counter is module state shared across
+// every spec file in the worker — which works because playwright.config.ts pins
+// `workers: 1, fullyParallel: false`. If parallel workers are ever introduced,
+// this becomes per-worker and the ceiling below stops meaning what it says.
 //
-// Raised 8 → 25 on 2026-08-06, when the whole suite moved to hosted staging:
-// local runs used AI_PROVIDER=stub (free), so every one of these is now a real
-// paid call. 25 is the measured total, not a guess:
-//   converted specs .......... 18  (smoke 4, override 5, maintenance-nudge 5,
-//                                   field-visibility 2, no-third-party 2;
-//                                   app-shell/signup/recruiter-wizard/
-//                                   training-benefits/market-intel = 0)
-//   staging-functional ....... 7
-//   staging-uat .............. 0   (navigate + screenshot only)
+// Asserted from `e2e/zz-ai-budget.spec.ts`, which sorts LAST so it observes the
+// whole suite. (Previously the only assertion lived in staging-functional's
+// `test.afterAll`, which fires at the end of THAT file and therefore could never
+// see staging-uat's calls — the suite spent 27 while the check saw 24 and passed
+// green. A per-file hook cannot guard a whole suite; don't move it back.)
+//
+// Raised 8 → 27 on 2026-08-06, when the whole suite moved to hosted staging:
+// local runs used AI_PROVIDER=stub (free), so every one of these is now a REAL
+// PAID call, and ci.yml runs the full suite on every PR. Measured, file by file:
+//   field-visibility ......... 2   (publishMatchingProfile: redact+embed)
+//   maintenance-nudge ........ 5   (publish 2 + draft 1 + republish 2)
+//   no-third-party ........... 2   (publishMatchingProfile)
+//   override ................. 5   (job embed 1 + onboarding-with-resume 3 + fitSummary 1)
+//   smoke .................... 4   (publish 2 + job embed 1 + fitSummary 1)
+//   staging-functional ....... 6   (tests 5/6/8/11/18; the rest reuse the
+//                                   pipeline's existing profile+job)
+//   staging-uat .............. 3   (scenario 1 only: publish 2 + job embed 1;
+//                                   scenarios 3/5/7 reuse that fixture free)
+//   app-shell, signup, recruiter-onboarding-wizard, training-benefits,
+//   market-intel-dimensions .. 0   (wizard-skip onboarding / SQL-only RPCs)
+//   ------------------------------
+//   TOTAL .................... 27
 // Keep it a tight ceiling: if a change pushes the real total up, re-measure and
 // justify the new number here rather than bumping it to make a run go green.
-export const AI_CALL_BUDGET = 25;
+export const AI_CALL_BUDGET = 27;
 let _aiCalls = 0;
 
 export function countAiCall() {
@@ -166,17 +178,4 @@ export async function stagingContext(browser: Browser) {
     },
   });
   return ctx;
-}
-
-export function createAiCallCounter(limit = 3) {
-  let count = 0;
-  return {
-    inc() {
-      count++;
-      if (count > limit) throw new Error(`AI call limit (${limit}) exceeded`);
-    },
-    get count() {
-      return count;
-    },
-  };
 }

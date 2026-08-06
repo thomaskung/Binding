@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   Button,
   Card,
@@ -40,7 +39,6 @@ interface Props {
  * display_name/company_name through untouched so step 1's values survive
  * (saveRecruiterProfile overwrites both on every call). */
 export function RecruiterOnboardingWizard(props: Props) {
-  const router = useRouter();
   const [step, setStep] = useState<"company" | "job">("company");
   const [recruiterTitle, setRecruiterTitle] = useState(props.recruiterTitle);
   const [companyIndustry, setCompanyIndustry] = useState(props.companyIndustry);
