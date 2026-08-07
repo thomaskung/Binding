@@ -101,11 +101,24 @@ jobs:
 
       - run: pnpm exec playwright install --with-deps chromium
 
-      # smoke.spec.ts plus the same 5 Modal-free specs from the PR gate
-      # (ci.yml, job `e2e`) — cheap enough to run after every merge while
-      # still exercising a real publish/reveal journey through Modal.
-      - name: Run smoke + Modal-free specs against staging
-        run: npx playwright test e2e/smoke.spec.ts e2e/app-shell.spec.ts e2e/signup.spec.ts e2e/recruiter-onboarding-wizard.spec.ts e2e/training-benefits.spec.ts e2e/market-intel-dimensions.spec.ts
+      # smoke.spec.ts runs ALONE, in its own `playwright test` invocation, so
+      # its globalSetup warm-up (E2E_WARM_MODAL=1) fires immediately before
+      # the ONE test that actually needs Modal — nothing else can run first
+      # and eat into the 120s scaledown_window.
+      #
+      # This used to be one command listing smoke.spec.ts FIRST alongside the
+      # 5 Modal-free specs, which looks like it should work but doesn't:
+      # Playwright ignores the order files are listed on the CLI and runs
+      # discovered spec files in its own (alphabetical) order regardless.
+      # smoke.spec.ts sorts after app-shell/market-intel-dimensions/
+      # recruiter-onboarding-wizard/signup, so it actually ran 12th of 13
+      # tests — by then the warm-up from ~4 minutes earlier (2m45s of
+      # sequential warm-up calls + 11 preceding tests) had already cooled
+      # back down, and the test's redact+embed call blew its 90s budget.
+      # Confirmed from two real CI failures on 2026-08-07 (runs 31156056325,
+      # 31159384735) before splitting this into two invocations.
+      - name: Run smoke against staging (Modal-warmed, runs alone)
+        run: npx playwright test e2e/smoke.spec.ts
         env:
           E2E_BASE_URL: https://binding-staging.vercel.app
           E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
@@ -124,6 +137,20 @@ jobs:
           # MODAL_API_TOKEN is required, not optional, for this job.
           MODAL_API_TOKEN: ${{ secrets.MODAL_API_TOKEN }}
           E2E_WARM_MODAL: '1'
+
+      # The 5 Modal-free specs from the PR gate (ci.yml, job `e2e`), run
+      # separately and without E2E_WARM_MODAL — they never touch Modal, so
+      # there's nothing to warm and no reason to pay for another globalSetup
+      # warm-up pass.
+      - name: Run Modal-free specs against staging
+        run: npx playwright test e2e/app-shell.spec.ts e2e/signup.spec.ts e2e/recruiter-onboarding-wizard.spec.ts e2e/training-benefits.spec.ts e2e/market-intel-dimensions.spec.ts
+        env:
+          E2E_BASE_URL: https://binding-staging.vercel.app
+          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          E2E_SERVICE_ROLE_KEY: ${{ secrets.E2E_SERVICE_ROLE_KEY }}
+          E2E_STAGING_BASIC_USER: staging
+          E2E_STAGING_BASIC_PW: ${{ secrets.E2E_STAGING_BASIC_PW }}
+          E2E_STAGING_SECRET: ${{ secrets.E2E_STAGING_SECRET }}
 
       - uses: actions/upload-artifact@v4
         if: failure()
