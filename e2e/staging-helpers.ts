@@ -1,5 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { expect, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 export const TEST_RUN_ID = Date.now().toString(36);
 const PASSWORD = "J0B!Demo#2026$secure";
@@ -29,12 +31,38 @@ export function uniqueLabel(prefix: string): string {
   return `${prefix} ${TEST_RUN_ID}-${_labelCounter}`;
 }
 
+/**
+ * Guard for module-level `let` fixtures shared across tests in one spec file
+ * (e.g. `let pipelineSeekerEmail = ""` set in an early test, read by later
+ * ones). Playwright discards the worker process after a test failure and
+ * starts a fresh one, which re-imports the spec module and resets every
+ * such `let` back to its initializer — so a later test can silently receive
+ * `""` instead of the value an earlier (now-forgotten) test produced. Call
+ * this at the point of use so the failure names the real fixture and points
+ * at the real cause, instead of surfacing 90s later as a mystery UI timeout.
+ */
+export function requireFixture(value: string | null | undefined, name: string): string {
+  if (!value || !value.trim()) {
+    throw new Error(
+      `${name} is empty — a shared test fixture was not initialised. Playwright ` +
+        "discards the worker process after a test failure, which resets module-level " +
+        "state in spec files.",
+    );
+  }
+  return value;
+}
+
 // Modal budget guardrail. Tests that trigger a Modal round-trip call
 // `countAiCall()`; `assertAiCallBudget()` asserts the total so a new test can't
-// silently inflate real Modal spend. The counter is module state shared across
-// every spec file in the worker — which works because playwright.config.ts pins
-// `workers: 1, fullyParallel: false`. If parallel workers are ever introduced,
-// this becomes per-worker and the ceiling below stops meaning what it says.
+// silently inflate real Modal spend. The counter is DISK-BACKED (one line
+// appended per call to `aiCounterFile()`), not module state: Playwright
+// discards the worker process after a test failure and starts a fresh one,
+// which re-imports every spec module and resets module-level `let`s —
+// including a naive in-memory counter — back to zero. `workers: 1` only
+// guarantees one *process at a time*, not one process for the whole run, so
+// it does NOT make a module-level counter suite-wide; a file on disk survives
+// the restart that a JS variable doesn't. `e2e/global-setup.ts` deletes the
+// file once at the start of the run so every invocation starts at zero.
 //
 // Asserted from `e2e/zz-ai-budget.spec.ts`, which sorts LAST so it observes the
 // whole suite. (Previously the only assertion lived in staging-functional's
@@ -61,16 +89,46 @@ export function uniqueLabel(prefix: string): string {
 // Keep it a tight ceiling: if a change pushes the real total up, re-measure and
 // justify the new number here rather than bumping it to make a run go green.
 export const AI_CALL_BUDGET = 27;
-let _aiCalls = 0;
+
+/** Resolves the on-disk counter file path. Exported so `global-setup.ts` can
+ * delete the same file at the start of a run without duplicating the literal. */
+export function aiCounterFile(): string {
+  return process.env.E2E_AI_COUNTER_FILE ?? path.join(process.cwd(), "test-results", "ai-calls.log");
+}
 
 export function countAiCall() {
-  _aiCalls++;
+  // Retried attempts are NOT counted against the budget. The nightly runs
+  // `npx playwright test --retries=1`, so one flaky Modal-touching test
+  // re-spends its calls on the second attempt — override and maintenance-nudge
+  // are 5 calls each. Counting those would let a transient staging hiccup trip
+  // the ceiling and read as "someone added Modal round-trips", which is the
+  // exact false signal this guard exists to avoid. The budget measures what the
+  // SUITE COSTS BY DESIGN; retry spend is real money but it is runtime noise,
+  // not a code regression, so it belongs in the log rather than the assertion.
+  //
+  // `test.info()` throws when called outside a running test, so this is
+  // best-effort: if we cannot tell, we count (fail toward enforcing the budget).
+  try {
+    if (test.info().retry > 0) return;
+  } catch {
+    // Not inside a test — fall through and count.
+  }
+
+  const file = aiCounterFile();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  // Sync append: a worker that crashes/exits immediately after the Modal call
+  // that triggered this must not lose the write, so no buffered/async I/O.
+  fs.appendFileSync(file, "1\n");
 }
 
 export function assertAiCallBudget(): void {
-  if (_aiCalls > AI_CALL_BUDGET) {
+  const file = aiCounterFile();
+  const calls = fs.existsSync(file)
+    ? fs.readFileSync(file, "utf8").split("\n").filter((line) => line.trim().length > 0).length
+    : 0;
+  if (calls > AI_CALL_BUDGET) {
     throw new Error(
-      `Modal AI call budget exceeded: ${_aiCalls} > ${AI_CALL_BUDGET}. ` +
+      `Modal AI call budget exceeded: ${calls} > ${AI_CALL_BUDGET}. ` +
         "Trim AI round-trips in the staging functional suite.",
     );
   }
@@ -144,6 +202,20 @@ async function fillEmailAndEnableContinue(page: Page, email: string) {
 }
 
 export async function signIn(page: Page, email: string) {
+  // Fail fast, before any page interaction: a blank email means a shared
+  // module-level fixture (e.g. `let pipelineSeekerEmail = ""`) was never set —
+  // most often because Playwright discarded the worker after an earlier test
+  // failed and restarted it, re-importing the spec module and resetting that
+  // `let` to its initializer. Without this check the symptom is a 90s hang in
+  // fillEmailAndEnableContinue waiting for a Continue button that can never
+  // enable for an empty input — do not "simplify" this away.
+  if (!email || !email.trim()) {
+    throw new Error(
+      "signIn called with an empty email — a shared test fixture was not " +
+        "initialised. Playwright discards the worker process after a test " +
+        "failure, which resets module-level state in spec files.",
+    );
+  }
   await page.goto("/login");
   await fillEmailAndEnableContinue(page, email);
   const continueBtn = page.getByRole("button", { name: "Continue with email" });
@@ -157,6 +229,14 @@ export async function signIn(page: Page, email: string) {
  * invalid-credentials error). Used after account deletion to prove the
  * account is gone. */
 export async function signInExpectFailure(page: Page, email: string) {
+  // See the matching check in `signIn` above — same failure mode, same fix.
+  if (!email || !email.trim()) {
+    throw new Error(
+      "signInExpectFailure called with an empty email — a shared test fixture " +
+        "was not initialised. Playwright discards the worker process after a " +
+        "test failure, which resets module-level state in spec files.",
+    );
+  }
   await page.goto("/login");
   await fillEmailAndEnableContinue(page, email);
   const continueBtn = page.getByRole("button", { name: "Continue with email" });
@@ -168,14 +248,38 @@ export async function signInExpectFailure(page: Page, email: string) {
 }
 
 export async function stagingContext(browser: Browser) {
+  const headers: Record<string, string> = {
+    "x-staging-auth": env("E2E_STAGING_SECRET"),
+  };
+
+  // Vercel Deployment Protection. PREVIEW deployments in this project sit
+  // behind Vercel SSO — verified 2026-08-07: every request to a preview URL
+  // 302s to https://vercel.com/sso-api, BEFORE Next.js middleware runs, so
+  // neither the basic-auth credentials nor `x-staging-auth` below ever get a
+  // chance to apply. Playwright cannot complete that SSO flow.
+  //
+  // The documented escape hatch is Protection Bypass for Automation: generate
+  // the secret in Vercel (Project Settings -> Deployment Protection) and send
+  // it as this header. `x-vercel-set-bypass-cookie` makes Vercel set a cookie
+  // on the first response so client-side navigations and subresource requests
+  // stay bypassed too — without it only the top-level document carrying the
+  // header is let through.
+  //
+  // Only sent when the secret is present, so production-target runs (which
+  // are not protected) are unaffected. The PR gate in ci.yml targets a preview
+  // and therefore REQUIRES this secret; see CLAUDE.md.
+  const bypass = env("E2E_VERCEL_BYPASS_SECRET");
+  if (bypass) {
+    headers["x-vercel-protection-bypass"] = bypass;
+    headers["x-vercel-set-bypass-cookie"] = "true";
+  }
+
   const ctx = await browser.newContext({
     httpCredentials: {
       username: env("E2E_STAGING_BASIC_USER", "staging"),
       password: env("E2E_STAGING_BASIC_PW"),
     },
-    extraHTTPHeaders: {
-      "x-staging-auth": env("E2E_STAGING_SECRET"),
-    },
+    extraHTTPHeaders: headers,
   });
   return ctx;
 }

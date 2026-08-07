@@ -125,14 +125,14 @@ test.describe("UAT: Dealbreaker matrix (§3 pillar 2)", () => {
 
 test.describe("UAT: Consent-first reveal (§3 pillar 3, §4)", () => {
   test("Candidate must actively express interest before recruiter reveals", async ({ browser }) => {
+    test.skip(
+      !sharedSeekerEmail || !sharedJobId || !sharedRecruiterEmail || !sharedSeekerName,
+      "pipeline fixture unavailable — an earlier test failed and Playwright reset module state",
+    );
     const seekerCtx = await stagingContext(browser);
     const recruiterCtx = await stagingContext(browser);
     const seeker = await seekerCtx.newPage();
     const recruiter = await recruiterCtx.newPage();
-
-    if (!sharedSeekerEmail || !sharedJobId) {
-      throw new Error("scenario 1 did not run — shared fixture unavailable");
-    }
 
     // Seeker sees the shared match on the dashboard and actively opts in —
     // the consent gate a recruiter reveal depends on.
@@ -181,14 +181,14 @@ test.describe("UAT: Closed-loop points economy (§3, §7, §11)", () => {
 
 test.describe("UAT: Retention moat (§3 pillar 4)", () => {
   test("Per-role reveal scoping and in-app messaging", async ({ browser }) => {
+    test.skip(
+      !sharedSeekerEmail || !sharedRecruiterEmail || !sharedJobId,
+      "pipeline fixture unavailable — an earlier test failed and Playwright reset module state",
+    );
     const seekerCtx = await stagingContext(browser);
     const recruiterCtx = await stagingContext(browser);
     const seeker = await seekerCtx.newPage();
     const recruiter = await recruiterCtx.newPage();
-
-    if (!sharedSeekerEmail || !sharedRecruiterEmail || !sharedJobId) {
-      throw new Error("scenario 1 did not run — shared fixture unavailable");
-    }
 
     await signIn(seeker, sharedSeekerEmail);
     await signIn(recruiter, sharedRecruiterEmail);
@@ -232,9 +232,10 @@ test.describe("UAT: Free vs Pro differentiation (§7)", () => {
 
 test.describe("UAT: Dark pool value (§6, §3 pillar 6)", () => {
   test("Profile freshness nudge and suggest-and-approve maintenance", async ({ browser }) => {
-    if (!sharedSeekerId || !sharedSeekerEmail) {
-      throw new Error("scenario 1 did not run — shared fixture unavailable");
-    }
+    test.skip(
+      !sharedSeekerId || !sharedSeekerEmail,
+      "pipeline fixture unavailable — an earlier test failed and Playwright reset module state",
+    );
 
     const ctx = await stagingContext(browser);
     const page = await ctx.newPage();

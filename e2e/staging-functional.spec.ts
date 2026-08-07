@@ -36,6 +36,14 @@ let pipelineRecruiterId = "";
 let pipelineJobTitle = "";
 let pipelineJobId = "";
 
+// NOTE: deliberately NOT using test.describe.configure({ mode: "serial" })
+// here. Serial mode would skip every subsequent test in the file after any
+// one failure — including tests 10-15, which are fully independent of the
+// pipeline fixture and would otherwise still pass. The `test.skip(...)`
+// guards on the individual pipeline-dependent tests below give the same
+// "don't fail misleadingly on stale module state" protection without
+// sacrificing that unrelated coverage.
+
 test.afterAll(() => {
   assertAiCallBudget();
 });
@@ -103,6 +111,7 @@ test.describe("Staging functional — consent & profiling", () => {
 
 test.describe("Staging functional — matching pipeline", () => {
   test("5. Seeker publishes profile and trigger matching", async ({ browser }) => {
+    test.setTimeout(180_000);
     const ctx = await stagingContext(browser);
     const page = await ctx.newPage();
     const user = await ensureStagingUser("seeker");
@@ -124,8 +133,10 @@ test.describe("Staging functional — matching pipeline", () => {
     countAiCall(); // ai.embed
     await page.getByTestId("publish-profile").click();
     // Modal redact+embed can cold-start (the CI warm-up only hits the embedder)
-    // — give the round-trip generous headroom.
-    await expect(page.getByTestId("redacted-preview")).toBeVisible({ timeout: 60_000 });
+    // — give the round-trip generous headroom. (Raised 60s -> 90s after a real
+    // staging timeout; test.setTimeout(180_000) above gives this room under
+    // playwright.config.ts's 120s default test cap.)
+    await expect(page.getByTestId("redacted-preview")).toBeVisible({ timeout: 90_000 });
 
     await ctx.close();
   });
@@ -134,6 +145,7 @@ test.describe("Staging functional — matching pipeline", () => {
     const ctx = await stagingContext(browser);
     const page = await ctx.newPage();
     const user = await ensureStagingUser("recruiter");
+    if (!user.id) throw new Error(`ensureStagingUser returned no id for ${user.email} (email collision)`);
     pipelineRecruiterEmail = user.email;
     pipelineRecruiterId = user.id;
 
@@ -165,6 +177,7 @@ test.describe("Staging functional — matching pipeline", () => {
   });
 
   test("7. Match pipeline shows qualitative band, not raw score", async ({ browser }) => {
+    test.skip(!pipelineSeekerEmail, "pipeline fixture unavailable — an earlier test failed and Playwright reset module state");
     const ctx = await stagingContext(browser);
     const page = await ctx.newPage();
     await signIn(page, pipelineSeekerEmail);
@@ -182,6 +195,15 @@ test.describe("Staging functional — matching pipeline", () => {
 
 test.describe("Staging functional — reveal mechanics", () => {
   test("8. Standard reveal deducts points from recruiter", async ({ browser }) => {
+    test.skip(
+      !pipelineSeekerEmail ||
+        !pipelineSeekerId ||
+        !pipelineSeekerName ||
+        !pipelineRecruiterEmail ||
+        !pipelineRecruiterId ||
+        !pipelineJobId,
+      "pipeline fixture unavailable — an earlier test failed and Playwright reset module state",
+    );
     // Reset both pipeline ledgers so the reveal outcome is deterministic even
     // across a retry (otherwise a first-attempt reveal + retry reveal would
     // double-spend the recruiter and double-compensate the seeker, breaking the
@@ -258,6 +280,7 @@ test.describe("Staging functional — reveal mechanics", () => {
   });
 
   test("9. Reveal compensates seeker regardless of outcome", async ({ browser }) => {
+    test.skip(!pipelineSeekerEmail, "pipeline fixture unavailable — an earlier test failed and Playwright reset module state");
     test.setTimeout(180_000);
     const ctx = await stagingContext(browser);
     const page = await ctx.newPage();
@@ -415,6 +438,10 @@ test.describe("Staging functional — account lifecycle", () => {
 
 test.describe("Staging functional — maintenance & messaging", () => {
   test("16. Staleness nudge surfaces on stale profile", async ({ browser }) => {
+    test.skip(
+      !pipelineSeekerEmail || !pipelineSeekerId,
+      "pipeline fixture unavailable — an earlier test failed and Playwright reset module state",
+    );
     test.setTimeout(180_000);
     // Reuse the already-published pipeline seeker (no extra AI round-trip).
     const admin = stagingAdminClient();
@@ -432,6 +459,10 @@ test.describe("Staging functional — maintenance & messaging", () => {
   });
 
   test("17. In-app messaging works post-reveal", async ({ browser }) => {
+    test.skip(
+      !pipelineSeekerEmail || !pipelineRecruiterEmail || !pipelineJobId || !pipelineSeekerName,
+      "pipeline fixture unavailable — an earlier test failed and Playwright reset module state",
+    );
     test.setTimeout(180_000);
     const recruiterCtx = await stagingContext(browser);
     const seekerCtx = await stagingContext(browser);
@@ -466,6 +497,10 @@ test.describe("Staging functional — maintenance & messaging", () => {
 
 test.describe("Staging functional — dealbreaker & tier differentiation", () => {
   test("18. Equity dealbreaker filters matches when candidate requires it", async ({ browser }) => {
+    test.skip(
+      !pipelineSeekerEmail || !pipelineSeekerId || !pipelineRecruiterEmail,
+      "pipeline fixture unavailable — an earlier test failed and Playwright reset module state",
+    );
     const admin = stagingAdminClient();
     // Require equity on the pipeline seeker's dealbreaker matrix. Reuses the
     // profile published in test 5 — no second Modal redact+embed round-trip.
@@ -561,6 +596,10 @@ test.describe("Staging functional — dealbreaker & tier differentiation", () =>
   });
 
   test("20. Credentials de-identified on recruiter match card", async ({ browser }) => {
+    test.skip(
+      !pipelineSeekerId || !pipelineRecruiterEmail || !pipelineJobId || !pipelineSeekerName,
+      "pipeline fixture unavailable — an earlier test failed and Playwright reset module state",
+    );
     const admin = stagingAdminClient();
     // Set credentials + credentials_summary directly on the pipeline seeker
     // (already published in test 5). match_candidates (the RPC the

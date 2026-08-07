@@ -30,6 +30,7 @@ if (missing.length > 0 && !process.env.PW_SKIP_ENV_CHECK) {
 
 export default defineConfig({
   testDir: "./e2e",
+  globalSetup: "./e2e/global-setup.ts",
   // Generous: staging is a cold-startable Vercel deployment and the journey
   // specs legitimately run 50s+ when healthy (plus Modal cold starts).
   timeout: 120_000,

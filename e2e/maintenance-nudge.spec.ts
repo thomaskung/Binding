@@ -38,6 +38,15 @@ import {
  */
 
 test("stale profile nudges, and approving the draft clears staleness", async ({ browser }) => {
+  // This spec drives FIVE real Modal round-trips (publish 2 + draft 1 +
+  // republish 2), and `publishMatchingProfile` alone waits up to 90s for
+  // redact+embed. playwright.config.ts caps tests at 120s globally, so without
+  // this raise a single cold publish would blow the whole test's budget before
+  // the nudge loop even starts — a worse failure mode than the 60s wait it
+  // replaced, because the error would point at the test timeout rather than at
+  // the slow Modal call.
+  test.setTimeout(300_000);
+
   const ctx = await stagingContext(browser);
   const page = await ctx.newPage();
 

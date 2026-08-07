@@ -60,8 +60,11 @@ export async function publishMatchingProfile(
   countAiCall(); // ai.embed
   await page.getByTestId("publish-profile").click();
   // Modal redact+embed can cold-start — generous headroom, matching
-  // staging-functional.spec.ts's budget for the same round-trip.
-  await expect(page.getByTestId("redacted-preview")).toBeVisible({ timeout: 60_000 });
+  // staging-functional.spec.ts's budget for the same round-trip. (Raised
+  // 60s -> 90s after a real staging timeout; callers need
+  // test.setTimeout(180_000) or higher to stay under playwright.config.ts's
+  // 120s default test cap.)
+  await expect(page.getByTestId("redacted-preview")).toBeVisible({ timeout: 90_000 });
 }
 
 /**

@@ -1,7 +1,11 @@
 name: Staging Cleanup
 on:
+  # Daily, not weekly: ci.yml's PR gate now runs e2e on every push and each
+  # run creates its own @staging.local users (e2e/staging-helpers.ts). At a
+  # weekly cadence those would accumulate for up to 7 days between sweeps
+  # instead of 1.
   schedule:
-    - cron: '0 4 * * 0'
+    - cron: '0 4 * * *'
   workflow_dispatch:
 
 jobs:

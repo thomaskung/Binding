@@ -86,6 +86,7 @@ test("mode switcher exposes a disabled Enterprise tab", async ({ browser }) => {
   const user = await ensureStagingUser("seeker");
   await signIn(page, user.email);
   await completeSeekerOnboarding(page, { name: uniqueLabel("Mode Seeker") });
+  await expandRail(page);
 
   await page.getByTestId("account-menu-toggle").click();
   const enterpriseTab = page.getByTestId("nav-enterprise-tab");

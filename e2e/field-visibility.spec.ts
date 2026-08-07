@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { completeSeekerOnboarding } from "./seeker-onboarding";
 import { publishMatchingProfile } from "./match-helpers";
-import { ensureStagingUser, signIn, stagingContext } from "./staging-helpers";
+import { ensureStagingUser, signIn, stagingContext, uniqueLabel } from "./staging-helpers";
 
 /**
  * Seeker Profile tab's per-field visibility (Phase 2B, src/lib/field-visibility.ts):
@@ -28,12 +28,13 @@ import { ensureStagingUser, signIn, stagingContext } from "./staging-helpers";
 test("hidden and matching_only fields are excluded from what recruiters see; visible fields still show", async ({
   browser,
 }) => {
+  test.setTimeout(180_000);
   const ctx = await stagingContext(browser);
   const page = await ctx.newPage();
   const user = await ensureStagingUser("seeker");
 
   await signIn(page, user.email);
-  await completeSeekerOnboarding(page, { name: "Vic Visibility" });
+  await completeSeekerOnboarding(page, { name: uniqueLabel("Vic Visibility") });
 
   await page.goto("/seeker/profile");
   await page.getByRole("button", { name: "Edit profile" }).click();
@@ -42,16 +43,16 @@ test("hidden and matching_only fields are excluded from what recruiters see; vis
   await page.locator("#industries").fill("Fintech");
   await page.locator("#desired_roles").fill("Backend Engineer");
   await page.getByRole("button", { name: "Save changes" }).click();
-  await expect(page.getByText("Profile fields saved.")).toBeVisible();
+  await expect(page.getByText("Profile fields saved.")).toBeVisible({ timeout: 30_000 });
 
   // Per-field visibility lives in the Privacy card (always active, not
   // gated behind edit mode). Each change persists via a server action —
   // wait for the committed-write signal after each one, or navigating away
   // can cancel the in-flight save.
   await page.getByLabel("Skills visibility").selectOption("hidden");
-  await expect(page.getByText("Visibility updated.")).toBeVisible();
+  await expect(page.getByText("Visibility updated.")).toBeVisible({ timeout: 30_000 });
   await page.getByLabel("Target industries visibility").selectOption("matching_only");
-  await expect(page.getByText("Visibility updated.")).toBeVisible();
+  await expect(page.getByText("Visibility updated.")).toBeVisible({ timeout: 30_000 });
 
   // Belt-and-suspenders settle check before publishing: the "Visibility
   // updated." toast is a shared status string reused by both selects (it's

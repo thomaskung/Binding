@@ -58,7 +58,10 @@ test("resume-handling pages make no third-party requests", async ({ browser, bas
   await signIn(page, user.email);
 
   await page.goto("/seeker/profile/resume");
-  await expect(page.getByTestId("redacted-preview")).toBeVisible({ timeout: 60_000 });
+  // Raised 60s -> 90s after a real staging timeout; this test's
+  // test.setTimeout(300_000) above gives ample room under playwright.config.ts's
+  // 120s default test cap.
+  await expect(page.getByTestId("redacted-preview")).toBeVisible({ timeout: 90_000 });
   await page.goto("/seeker/profile");
   await page.waitForLoadState("networkidle");
 

@@ -75,3 +75,59 @@ jobs:
           modal token set --token-id "${{ secrets.MODAL_TOKEN_ID }}" --token-secret "${{ secrets.MODAL_TOKEN_SECRET }}"
           modal deploy modal_app/embeddings.py
           modal deploy modal_app/llm.py
+
+  # Post-merge smoke: nothing previously ran against staging between a merge
+  # landing and the 3am nightly (e2e-staging.yml), so a broken merge could sit
+  # undetected for up to a day. This catches it within minutes, and is also
+  # the only job that actually proves the deploy works end to end — `vercel`
+  # above only confirms the CLI deploy command exited 0, not that the app
+  # loads or that a real journey (publish → reveal) still functions.
+  smoke:
+    runs-on: ubuntu-latest
+    needs: vercel
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install
+
+      - run: pnpm exec playwright install --with-deps chromium
+
+      # smoke.spec.ts plus the same 5 Modal-free specs from the PR gate
+      # (ci.yml, job `e2e`) — cheap enough to run after every merge while
+      # still exercising a real publish/reveal journey through Modal.
+      - name: Run smoke + Modal-free specs against staging
+        run: npx playwright test e2e/smoke.spec.ts e2e/app-shell.spec.ts e2e/signup.spec.ts e2e/recruiter-onboarding-wizard.spec.ts e2e/training-benefits.spec.ts e2e/market-intel-dimensions.spec.ts
+        env:
+          E2E_BASE_URL: https://binding-staging.vercel.app
+          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          E2E_SERVICE_ROLE_KEY: ${{ secrets.E2E_SERVICE_ROLE_KEY }}
+          # Literal, matching e2e-staging.yml and ci.yml: an unset secret
+          # renders as "", and staging-helpers.ts's env() only falls back on
+          # null/undefined (`??`), so "" would win over the "staging" default
+          # and every request would 401 at the basic-auth gate.
+          E2E_STAGING_BASIC_USER: staging
+          E2E_STAGING_BASIC_PW: ${{ secrets.E2E_STAGING_BASIC_PW }}
+          E2E_STAGING_SECRET: ${{ secrets.E2E_STAGING_SECRET }}
+          # smoke.spec.ts hits Modal (a real publish/reveal round trip) —
+          # warm the endpoints first, same reasoning as the nightly's
+          # globalSetup pass in e2e-staging.yml. There's no curl warm-up step
+          # here (unlike the nightly), so globalSetup is the ONLY warm path —
+          # MODAL_API_TOKEN is required, not optional, for this job.
+          MODAL_API_TOKEN: ${{ secrets.MODAL_API_TOKEN }}
+          E2E_WARM_MODAL: '1'
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-trace-smoke
+          path: test-results/
+          retention-days: 7
