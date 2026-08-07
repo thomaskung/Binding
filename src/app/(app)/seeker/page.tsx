@@ -4,7 +4,6 @@ import {
   Badge,
   Button,
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardFooter,
@@ -15,18 +14,12 @@ import {
 } from "@binding/ui";
 import { requireRole } from "@/lib/auth";
 import { isStale } from "@/lib/profile";
+import { salaryDisplay } from "@/lib/jobs";
 import { loadSeekerContext, OverrideBanners } from "./seeker-data";
 import { MatchResponseButtons } from "./match-response";
 
 const BAND_LABEL = { high: "High match", normal: "Normal match", low: "Low match" } as const;
 const BAND_VARIANT = { high: "default", normal: "secondary", low: "outline" } as const;
-
-function salaryLine(min: number | null, max: number | null): string {
-  if (min == null && max == null) return "Salary on request";
-  const fmt = (n: number) => `$${n.toLocaleString()}`;
-  if (min != null && max != null) return `${fmt(min)} – ${fmt(max)}`;
-  return `${fmt((min ?? max)!)}+`;
-}
 
 /** Adaptive seeker dashboard (SeekerDashboard template): a leading module
  * that changes by profile state — A incomplete (progress + upload CTA),
@@ -73,24 +66,31 @@ export default async function SeekerDashboard({
     : null;
 
   const visibleCards = cards.filter((c) => c.status !== "declined").sort((a, b) => a.rank - b.rank);
+  const firstName = profile?.display_name?.trim().split(/\s+/)[0] ?? null;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5 px-5 py-8">
-      <header className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h1 className="text-[26px] font-semibold tracking-tight">Dashboard</h1>
-          {seekerTier === "pro" && <Badge variant="outline">Pro</Badge>}
+    <div className="jb-fade mx-auto max-w-2xl space-y-5 px-5 py-8">
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="font-heading text-[28px] font-medium leading-tight tracking-tight">
+              {firstName ? `Welcome back, ${firstName}` : "Dashboard"}
+            </h1>
+            {seekerTier === "pro" && <Badge variant="outline">Pro</Badge>}
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Your profile is live and pseudonymized. Here&apos;s what&apos;s moving.
+          </p>
         </div>
         <Button variant="ghost" size="sm" render={<Link href="/seeker/points" />}>
           Points →
         </Button>
       </header>
-      <p className="-mt-4 text-sm text-muted-foreground">Your matches and profile at a glance.</p>
 
       {seekerTier === "free" && (
-        <Card data-testid="pro-upsell-card">
+        <Card className="jb-lift bg-accent/40 ring-primary/30" data-testid="pro-upsell-card">
           <CardHeader>
-            <CardTitle>Unlock more with Pro</CardTitle>
+            <CardTitle className="text-primary">Unlock more with Pro</CardTitle>
             <CardDescription>
               High-match badges, free training programs, and unlimited AI resume rewrites.
             </CardDescription>
@@ -107,7 +107,7 @@ export default async function SeekerDashboard({
 
       {!published && (
         <>
-          <Card>
+          <Card className="jb-lift">
             <CardHeader>
               <CardTitle>Finish your profile</CardTitle>
               <CardDescription>Add your resume so we can start matching you to roles</CardDescription>
@@ -132,7 +132,7 @@ export default async function SeekerDashboard({
       )}
 
       {stale && (
-        <Card data-testid="stale-nudge-card">
+        <Card className="jb-lift" data-testid="stale-nudge-card">
           <CardHeader>
             <CardTitle>
               Your profile hasn&apos;t moved{staleSinceMonth ? ` since ${staleSinceMonth}` : " in a while"}
@@ -170,42 +170,53 @@ export default async function SeekerDashboard({
               </p>
             )}
             {visibleCards.map((m) => (
-              <Card key={m.id} size="sm" data-testid="dashboard-match-card">
-                <CardHeader>
-                  <CardTitle>
-                    <Link href={`/seeker/matches/${m.id}`} className="hover:underline">
-                      {m.title}
-                    </Link>
-                  </CardTitle>
-                  <CardDescription>
-                    {[m.company, m.location].filter(Boolean).join(" · ") || "—"}
-                  </CardDescription>
-                  <CardAction>
-                    <Badge variant={BAND_VARIANT[m.band]}>{BAND_LABEL[m.band]}</Badge>
-                  </CardAction>
-                </CardHeader>
-                <CardContent>
-                  <span className="text-sm text-muted-foreground">
-                    {salaryLine(m.salaryMin, m.salaryMax)}
-                  </span>
-                </CardContent>
-                {!paused && m.status === "surfaced" && (
-                  <CardFooter>
-                    <MatchResponseButtons matchId={m.id} />
-                  </CardFooter>
-                )}
-                {!paused && m.status !== "surfaced" && (
-                  <CardFooter className="flex items-center gap-2">
-                    <Badge variant="outline">
-                      {m.status.charAt(0).toUpperCase() + m.status.slice(1)}
-                    </Badge>
-                    {m.status === "revealed" && m.threadId && (
-                      <Button size="sm" variant="outline" render={<Link href={`/thread/${m.threadId}`} />}>
-                        Open conversation
-                      </Button>
+              <Card key={m.id} size="sm" className="jb-lift" data-testid="dashboard-match-card">
+                <div className="flex gap-4 px-4">
+                  <div className="flex size-12 flex-none items-center justify-center rounded-xl bg-accent font-heading text-base font-semibold text-accent-foreground">
+                    {(m.company ?? m.title).charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={`/seeker/matches/${m.id}`}
+                        className="font-heading text-sm font-medium leading-snug text-foreground hover:underline"
+                      >
+                        {m.title}
+                      </Link>
+                      <Badge variant={BAND_VARIANT[m.band]}>{BAND_LABEL[m.band]}</Badge>
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {[
+                        m.company,
+                        m.location,
+                        salaryDisplay(m.salaryMin, m.salaryMax, m.salaryVisibility),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || "—"}
+                    </p>
+                    {!paused && m.status === "surfaced" && (
+                      <div className="pt-1">
+                        <MatchResponseButtons matchId={m.id} />
+                      </div>
                     )}
-                  </CardFooter>
-                )}
+                    {!paused && m.status !== "surfaced" && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <Badge variant="outline">
+                          {m.status.charAt(0).toUpperCase() + m.status.slice(1)}
+                        </Badge>
+                        {m.status === "revealed" && m.threadId && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            render={<Link href={`/thread/${m.threadId}`} />}
+                          >
+                            Open conversation
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </Card>
             ))}
           </div>

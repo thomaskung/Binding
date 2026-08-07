@@ -1,66 +1,67 @@
 import Link from "next/link";
 import { cn } from "@binding/ui";
 
-const STEPS = ["Consent", "Resume", "Dealbreakers"] as const;
+const STEP_COUNT = 3;
 
-/** Shared chrome for the seeker onboarding wizard (SeekerOnboarding
- * template): logo row with a skip link, and the numbered three-step
- * progress indicator. `current` is 1-based; steps below it render ✓. */
+/** Shared chrome for the onboarding wizards (seeker + recruiter both use
+ * this — OnboardingPage/RecruiterOnboarding templates share the same
+ * step-chrome): a top bar (logo, optional skip link, dot progress) and a
+ * "Step N of 3" eyebrow + serif title + description above the wizard's own
+ * card content. `current` is 1-based. */
 export function OnboardingChrome({
   current,
+  title,
+  description,
   skipHref,
+  skipTestId = "wizard-skip",
   children,
 }: {
   current: 1 | 2 | 3;
+  title: string;
+  description: string;
   skipHref?: string;
+  skipTestId?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-muted px-5 pb-20 pt-10">
-      <div className="mx-auto flex max-w-[640px] flex-col gap-5">
-        <div className="flex items-center justify-between gap-3">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="inline-block size-5 rounded-md bg-primary" />
-            <span className="text-sm font-semibold tracking-tight">Binding</span>
-          </Link>
+    <div className="jb-fade min-h-screen bg-muted">
+      <header className="flex h-[60px] flex-none items-center justify-between border-b border-border bg-background px-5 sm:px-10">
+        <Link href="/" className="flex items-center gap-2">
+          <span className="inline-block size-6 rounded-md bg-primary" />
+          <span className="text-sm font-semibold tracking-tight">Set up your profile</span>
+        </Link>
+        <div className="flex items-center gap-4">
           {skipHref && (
             <Link
               href={skipHref}
-              data-testid="wizard-skip"
+              data-testid={skipTestId}
               className="text-[13px] text-muted-foreground hover:underline"
             >
               You can skip and finish later
             </Link>
           )}
+          <div className="flex items-center gap-1.5" aria-hidden>
+            {Array.from({ length: STEP_COUNT }, (_, i) => i + 1).map((n) => (
+              <span
+                key={n}
+                className={cn("h-1 w-6 rounded-full", n <= current ? "bg-primary" : "bg-border")}
+              />
+            ))}
+          </div>
         </div>
+      </header>
 
-        <div className="flex items-center gap-2">
-          {STEPS.map((label, i) => {
-            const n = i + 1;
-            const done = n < current;
-            const active = n === current;
-            return (
-              <div key={label} className="contents">
-                {i > 0 && <div className="-mt-4 h-px flex-[0.6] bg-border" />}
-                <div className="flex flex-1 flex-col items-center gap-1.5">
-                  <div
-                    className={cn(
-                      "flex size-[26px] items-center justify-center rounded-md text-[13px]",
-                      done && "bg-primary font-medium text-primary-foreground",
-                      active && "border-[1.5px] border-primary font-semibold",
-                      !done && !active && "border-[1.5px] border-border text-muted-foreground",
-                    )}
-                  >
-                    {done ? "✓" : n}
-                  </div>
-                  <span className="text-xs text-muted-foreground">{label}</span>
-                </div>
-              </div>
-            );
-          })}
+      <div className="flex justify-center px-5 py-10 sm:py-14">
+        <div className="w-full max-w-[600px]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+            Step {current} of {STEP_COUNT}
+          </p>
+          <h1 className="font-heading mt-2 text-[27px] font-medium leading-tight tracking-tight">
+            {title}
+          </h1>
+          <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted-foreground">{description}</p>
+          <div className="mt-6">{children}</div>
         </div>
-
-        {children}
       </div>
     </div>
   );

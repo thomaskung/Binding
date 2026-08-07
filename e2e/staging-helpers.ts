@@ -1,15 +1,66 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { expect, type Browser, type Page } from "@playwright/test";
 
-const TEST_RUN_ID = Date.now().toString(36);
+export const TEST_RUN_ID = Date.now().toString(36);
 const PASSWORD = "J0B!Demo#2026$secure";
 
-// Modal budget guardrail: the staging functional suite is deliberately lean on
-// AI calls (5 publish/reveal/extract calls for the whole run — see the
-// per-test cost table in staging-functional.spec.ts). Tests that trigger an AI
-// round-trip call `countAiCall()`, and the suite teardown asserts the total
-// stays under the budget so a future test can't silently inflate Modal spend.
-export const AI_CALL_BUDGET = 8;
+let _labelCounter = 0;
+
+/**
+ * Collision-safe label for anything a spec writes into a shared, never-reset
+ * staging DB — job titles, seeker/recruiter display names, company names,
+ * etc. Appends the module-wide TEST_RUN_ID plus an incrementing counter, so
+ * every call within one Playwright *process* is guaranteed unique, even two
+ * requested in the same millisecond. Prefer this over hand-rolled
+ * `Date.now()` suffixes — two of those in the same millisecond DO collide.
+ *
+ * Uniqueness is per-process, not per-run: playwright.config.ts pins
+ * `workers: 1`, so today there is exactly one process per suite invocation
+ * and labels are unique suite-wide. If that ever changes to >1 worker,
+ * TEST_RUN_ID (Date.now() at module load) could repeat across workers
+ * started in the same millisecond — revisit then (e.g. add pid/worker index).
+ *
+ * Use it for anything a later assertion filters/searches by (e.g.
+ * `.filter({ hasText: name })`) — never reuse a fixed literal like "Pip
+ * Seeker" across specs that might run concurrently against the same DB.
+ */
+export function uniqueLabel(prefix: string): string {
+  _labelCounter++;
+  return `${prefix} ${TEST_RUN_ID}-${_labelCounter}`;
+}
+
+// Modal budget guardrail. Tests that trigger a Modal round-trip call
+// `countAiCall()`; `assertAiCallBudget()` asserts the total so a new test can't
+// silently inflate real Modal spend. The counter is module state shared across
+// every spec file in the worker — which works because playwright.config.ts pins
+// `workers: 1, fullyParallel: false`. If parallel workers are ever introduced,
+// this becomes per-worker and the ceiling below stops meaning what it says.
+//
+// Asserted from `e2e/zz-ai-budget.spec.ts`, which sorts LAST so it observes the
+// whole suite. (Previously the only assertion lived in staging-functional's
+// `test.afterAll`, which fires at the end of THAT file and therefore could never
+// see staging-uat's calls — the suite spent 27 while the check saw 24 and passed
+// green. A per-file hook cannot guard a whole suite; don't move it back.)
+//
+// Raised 8 → 27 on 2026-08-06, when the whole suite moved to hosted staging:
+// local runs used AI_PROVIDER=stub (free), so every one of these is now a REAL
+// PAID call, and ci.yml runs the full suite on every PR. Measured, file by file:
+//   field-visibility ......... 2   (publishMatchingProfile: redact+embed)
+//   maintenance-nudge ........ 5   (publish 2 + draft 1 + republish 2)
+//   no-third-party ........... 2   (publishMatchingProfile)
+//   override ................. 5   (job embed 1 + onboarding-with-resume 3 + fitSummary 1)
+//   smoke .................... 4   (publish 2 + job embed 1 + fitSummary 1)
+//   staging-functional ....... 6   (tests 5/6/8/11/18; the rest reuse the
+//                                   pipeline's existing profile+job)
+//   staging-uat .............. 3   (scenario 1 only: publish 2 + job embed 1;
+//                                   scenarios 3/5/7 reuse that fixture free)
+//   app-shell, signup, recruiter-onboarding-wizard, training-benefits,
+//   market-intel-dimensions .. 0   (wizard-skip onboarding / SQL-only RPCs)
+//   ------------------------------
+//   TOTAL .................... 27
+// Keep it a tight ceiling: if a change pushes the real total up, re-measure and
+// justify the new number here rather than bumping it to make a run go green.
+export const AI_CALL_BUDGET = 27;
 let _aiCalls = 0;
 
 export function countAiCall() {
@@ -127,17 +178,4 @@ export async function stagingContext(browser: Browser) {
     },
   });
   return ctx;
-}
-
-export function createAiCallCounter(limit = 3) {
-  let count = 0;
-  return {
-    inc() {
-      count++;
-      if (count > limit) throw new Error(`AI call limit (${limit}) exceeded`);
-    },
-    get count() {
-      return count;
-    },
-  };
 }

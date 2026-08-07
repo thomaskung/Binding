@@ -1,4 +1,5 @@
 import { requireRole } from "@/lib/auth";
+import { REVEAL_COST, revealCostForScore } from "@/lib/points";
 import { coerceRecruiterTier, recruiterTierLabel } from "@/lib/recruiter-tier";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { Badge } from "@binding/ui";
@@ -104,14 +105,23 @@ export default async function RecruiterDashboard() {
       region: strength?.region ?? null,
       credentialsSummary: strength?.credentials_summary ?? null,
       threadId: reveal?.status === "accepted" ? (thread?.id ?? null) : null,
+      // Only the opt-in-gated standard path is priced here (interested =
+      // candidate opted in). Mirrors revealCandidate's charge exactly so the
+      // card never shows a price different from what's spent. Surfaced
+      // candidates may be override-priced (25 base) — left unpriced here.
+      revealCost:
+        m.status === "interested" ? revealCostForScore(REVEAL_COST, m.score) : null,
     };
   });
 
   return (
-    <main className="mx-auto max-w-2xl space-y-6 px-6 py-14">
+    <main className="jb-fade mx-auto max-w-2xl space-y-6 px-6 py-14">
       <header className="flex flex-col gap-1.5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+          Candidate pipeline
+        </p>
         <div className="flex items-center gap-3">
-          <h1 className="text-[30px] font-semibold leading-tight tracking-tight">
+          <h1 className="font-heading text-[30px] font-medium leading-tight tracking-tight">
             Candidate matches
           </h1>
           {recruiterTier !== "free" && (

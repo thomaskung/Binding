@@ -25,7 +25,7 @@ export default async function OnboardingPage({
     <div className="flex min-h-screen flex-col">
       <AuthNav context="authenticated" />
       <main className="flex flex-1 items-center justify-center p-8">
-        <Card className="w-full max-w-lg">
+        <Card className="jb-fade w-full max-w-lg">
           <CardHeader>
             <CardTitle className="font-medium">Welcome to Binding</CardTitle>
             <CardDescription>

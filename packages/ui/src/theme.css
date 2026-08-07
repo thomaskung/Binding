@@ -17,7 +17,8 @@ body {
 }
 
 @theme inline {
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-geist), "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-newsreader), "Newsreader", ui-serif, Georgia, serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -65,18 +66,22 @@ body {
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  /* Binding brand: purple primary, darkened to oklch(0.45 0.17 264)
+     for AA — white-on-primary ≈ 7.7:1 (mockup's 0.52 0.16 was borderline). */
+  --primary: oklch(0.45 0.17 264);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
+  /* soft purple tint — card tints / highlights / badges / ::selection */
+  --accent: oklch(0.96 0.02 264);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* opaque brand purple; component /50 alpha yields a visible focus ring */
+  --ring: oklch(0.52 0.16 264);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -85,12 +90,12 @@ body {
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary: oklch(0.45 0.17 264);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent: oklch(0.96 0.02 264);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-ring: oklch(0.52 0.16 264);
 }
 
 .dark {
@@ -100,18 +105,21 @@ body {
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  /* Binding brand in dark: same AA-safe purple, white text stays ≈ 7.7:1 */
+  --primary: oklch(0.45 0.17 264);
+  --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
+  /* dark purple-tinted surface — the near-white soft tint would make
+     hovered text and ::selection invisible in dark mode */
+  --accent: oklch(0.29 0.03 264);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: oklch(0.52 0.16 264);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -119,12 +127,12 @@ body {
   --chart-5: oklch(0.269 0 0);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary: oklch(0.45 0.17 264);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent: oklch(0.29 0.03 264);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: oklch(0.52 0.16 264);
 }
 
 @layer base {
@@ -136,5 +144,51 @@ body {
   }
   html {
     @apply font-sans;
+  }
+  a {
+    color: var(--primary);
+  }
+}
+
+/* Binding brand utilities (mirrors Binding.dc.html). */
+.jb-serif {
+  font-family: var(--font-heading);
+}
+
+.jb-lift {
+  transition: transform 0.16s, box-shadow 0.16s;
+}
+.jb-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.28);
+}
+
+@keyframes jbFade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.jb-fade {
+  animation: jbFade 0.32s ease;
+}
+
+::selection {
+  background: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jb-lift,
+  .jb-lift:hover {
+    transition: none;
+    transform: none;
+    box-shadow: none;
+  }
+  .jb-fade {
+    animation: none;
   }
 }

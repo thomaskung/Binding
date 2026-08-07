@@ -7,6 +7,14 @@ import { expect, type Page } from "@playwright/test";
  * recruiter dashboard.
  *
  * Seeds +100 pts via activateRecruiter. Ends on /recruiter$.
+ *
+ * Modal AI cost: ZERO. This walk makes no AI round-trip (job creation/publish
+ * is a separate step — see `createAndPublishJob` in match-helpers.ts).
+ *
+ * Against a shared, never-reset staging DB, pass `opts.name`/`opts.company`
+ * as `uniqueLabel(...)` (from staging-helpers.ts) whenever a later assertion
+ * will filter/search by them — a fixed literal cross-contaminates concurrent
+ * runs against the same DB.
  */
 export async function completeRecruiterOnboarding(
   page: Page,
@@ -27,7 +35,10 @@ export async function completeRecruiterOnboarding(
 
   await page.getByTestId("recruiter-onboarding-industry").fill("Recruiting");
   await page.getByTestId("recruiter-onboarding-continue").click();
-  await expect(page.getByTestId("recruiter-onboarding-finish-skip")).toBeVisible();
+  // Cold Vercel lambda on staging — the default 5s expect timeout flakes.
+  await expect(page.getByTestId("recruiter-onboarding-finish-skip")).toBeVisible({
+    timeout: 15_000,
+  });
   await page.getByTestId("recruiter-onboarding-finish-skip").click();
-  await page.waitForURL(/\/recruiter$/);
+  await page.waitForURL(/\/recruiter$/, { timeout: 30_000 });
 }

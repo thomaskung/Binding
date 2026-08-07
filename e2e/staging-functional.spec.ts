@@ -8,22 +8,26 @@ import {
   stagingContext,
   countAiCall,
   assertAiCallBudget,
+  uniqueLabel,
 } from "./staging-helpers";
 import { completeSeekerOnboarding } from "./seeker-onboarding";
 import { completeRecruiterOnboarding } from "./recruiter-onboarding";
 
 /**
- * Staging functional suite — 17 tests, all real. Tests 5→9→17 form one
+ * Staging functional suite — 23 tests, all real. Tests 5→9→17 form one
  * sequential pipeline sharing fresh users via module-level state (workers:1,
  * file order), so each numbered block asserts its slice without repeating the
- * Modal publishes. The pipeline costs exactly 5 Modal calls for the whole run
- * (see countAiCall() call sites); the teardown asserts the suite-wide budget.
+ * Modal publishes. Tests 18/20 also reuse the pipeline's already-published
+ * seeker profile (18 additionally reuses the pipeline recruiter, but needs a
+ * BRAND NEW job — see that test's comment for why). The pipeline + reuse
+ * costs exactly 6 Modal calls for the whole run (see countAiCall() call
+ * sites); the teardown asserts the suite-wide budget.
  *
  * Fresh users (unique emails per run) keep the nightly idempotent — no shared
  * demo-account state is mutated, so balance assertions are exact.
  */
 
-// Shared pipeline state (assigned by test 5/6, consumed by 7/8/9/16/17).
+// Shared pipeline state (assigned by test 5/6, consumed by 7/8/9/16/17/18/20).
 let pipelineSeekerEmail = "";
 let pipelineSeekerId = "";
 let pipelineSeekerName = "";
@@ -46,10 +50,11 @@ test.describe("Staging functional — auth & registration", () => {
     await ctx.close();
   });
 
-  test("2. Password login works with demo account", async ({ browser }) => {
+  test("2. Password login works with a fresh account", async ({ browser }) => {
     const ctx = await stagingContext(browser);
     const page = await ctx.newPage();
-    await signIn(page, "seeker@demo.local");
+    const user = await ensureStagingUser("seeker");
+    await signIn(page, user.email);
     expect(page.url()).not.toContain("/login");
     await ctx.close();
   });
@@ -101,9 +106,10 @@ test.describe("Staging functional — matching pipeline", () => {
     const ctx = await stagingContext(browser);
     const page = await ctx.newPage();
     const user = await ensureStagingUser("seeker");
+    if (!user.id) throw new Error(`ensureStagingUser returned no id for ${user.email} (email collision)`);
     pipelineSeekerEmail = user.email;
     pipelineSeekerId = user.id;
-    pipelineSeekerName = "Pip Seeker";
+    pipelineSeekerName = uniqueLabel("Pip Seeker");
 
     // Onboard via wizard-skip: activation seeds +10 pts, no AI round-trip.
     await signIn(page, pipelineSeekerEmail);
@@ -133,8 +139,8 @@ test.describe("Staging functional — matching pipeline", () => {
 
     await signIn(page, pipelineRecruiterEmail);
     await completeRecruiterOnboarding(page, {
-      name: "Rex Recruiter",
-      company: "Nimbus Search Group",
+      name: uniqueLabel("Rex Recruiter"),
+      company: uniqueLabel("Nimbus Search Group"),
     });
 
     await page.goto("/recruiter/jobs/new");
@@ -267,18 +273,23 @@ test.describe("Staging functional — reveal mechanics", () => {
 });
 
 test.describe("Staging functional — privacy & Layer-0", () => {
-  test("10. No third-party requests on resume upload page", async ({ browser }) => {
+  test("10. No third-party requests on resume upload page", async ({ browser, baseURL }) => {
+    // First-party hosts derived from the actual targets (hosted staging +
+    // its Supabase project) — mirrors e2e/no-third-party.spec.ts. No
+    // 127.0.0.1/localhost entries: those are meaningless against hosted
+    // staging and only weaken the assertion.
+    const firstPartyHosts = new Set(
+      [baseURL, process.env.E2E_SUPABASE_URL]
+        .filter((v): v is string => Boolean(v))
+        .map((v) => new URL(v).host),
+    );
     const ctx = await stagingContext(browser);
     const page = await ctx.newPage();
     const requests: string[] = [];
     page.on("request", (r) => {
       const url = new URL(r.url());
-      if (!url.hostname.includes("binding-staging.vercel.app") &&
-          !url.hostname.includes("supabase.co") &&
-          !url.hostname.includes("127.0.0.1") &&
-          !url.hostname.includes("localhost")) {
-        requests.push(url.hostname);
-      }
+      if (url.protocol !== "http:" && url.protocol !== "https:") return; // data:/blob:/about: etc.
+      if (!firstPartyHosts.has(url.host)) requests.push(url.hostname);
     });
     await page.goto("/seeker/profile/resume");
     // No third-party requests should fire on page load
@@ -324,11 +335,16 @@ test.describe("Staging functional — routing & UIUX", () => {
   test("12. All path-segment routes work without query params", async ({ browser }) => {
     const ctx = await stagingContext(browser);
     const page = await ctx.newPage();
-    await signIn(page, "seeker@demo.local");
+    const user = await ensureStagingUser("seeker");
+    await signIn(page, user.email);
+    // Onboard (wizard-skip, free) so these routes serve real dashboard pages
+    // rather than bouncing an un-onboarded user to /onboarding.
+    await completeSeekerOnboarding(page, { name: uniqueLabel("Routes Seeker") });
     const routes = ["/seeker", "/seeker/matches", "/seeker/points", "/seeker/profile", "/seeker/profile/resume"];
     for (const route of routes) {
       await page.goto(route);
       await expect(page.locator("body")).toBeAttached();
+      expect(page.url()).toContain(route);
       expect(page.url()).not.toContain("?");
     }
     await ctx.close();
@@ -451,33 +467,41 @@ test.describe("Staging functional — maintenance & messaging", () => {
 test.describe("Staging functional — dealbreaker & tier differentiation", () => {
   test("18. Equity dealbreaker filters matches when candidate requires it", async ({ browser }) => {
     const admin = stagingAdminClient();
-    // Set equity_required on the demo seeker's dealbreaker matrix.
-    const { data: demoProfile } = await admin
+    // Require equity on the pipeline seeker's dealbreaker matrix. Reuses the
+    // profile published in test 5 — no second Modal redact+embed round-trip.
+    const { data: seekerProfile } = await admin
       .from("profiles")
       .select("dealbreaker_matrix")
-      .eq("id", "00000000-0000-0000-0000-000000000001")
+      .eq("id", pipelineSeekerId)
       .maybeSingle();
-    const updated = {
-      ...((demoProfile?.dealbreaker_matrix ?? {}) as Record<string, unknown>),
+    const updatedMatrix = {
+      ...((seekerProfile?.dealbreaker_matrix ?? {}) as Record<string, unknown>),
       equity_required: true,
     };
-    await admin
-      .from("profiles")
-      .update({ dealbreaker_matrix: updated })
-      .eq("id", "00000000-0000-0000-0000-000000000001");
+    await admin.from("profiles").update({ dealbreaker_matrix: updatedMatrix }).eq("id", pipelineSeekerId);
 
-    // Recruiter creates + publishes a job that DOES offer equity.
+    // Recruiter (pipeline account) creates + publishes a job that DOES offer
+    // equity — via the actual "This role offers equity" checkbox, not just
+    // description wording (the original spec never checked that box, so the
+    // job it created didn't really offer equity; fixed here). Dealbreakers
+    // are enforced at match-refresh time (baked into the `matches` row when
+    // it's created, not re-evaluated on read), so this MUST be a job that has
+    // never matched this candidate before — reusing pipelineJobId would find
+    // the old (pre-dealbreaker) match row already sitting in the table and
+    // prove nothing about the filter.
     const recruiterCtx = await stagingContext(browser);
     const recruiter = await recruiterCtx.newPage();
-    await signIn(recruiter, "recruiter@demo.local");
+    await signIn(recruiter, pipelineRecruiterEmail);
 
     await recruiter.goto("/recruiter/jobs/new");
-    await recruiter.getByTestId("job-title").fill("Backend Equity Engineer");
+    const jobTitle = uniqueLabel("Backend Equity Engineer");
+    await recruiter.getByTestId("job-title").fill(jobTitle);
     await recruiter.getByTestId("job-description").fill(
-      "Backend engineer: distributed systems, Postgres, Kubernetes, event-driven pipelines. Equity offered.",
+      "Backend engineer: distributed systems, Postgres, Kubernetes, event-driven pipelines for our payments platform.",
     );
     await recruiter.getByTestId("job-salary-max").fill("160000");
     await recruiter.locator('input[name="work_setups"][value="remote"]').check();
+    await recruiter.getByTestId("job-offers-equity").check();
     await recruiter.getByTestId("save-job").click();
     await recruiter.waitForURL(/\/recruiter\/jobs\/[0-9a-f-]+$/);
     countAiCall(); // ai.embed on publish
@@ -486,36 +510,15 @@ test.describe("Staging functional — dealbreaker & tier differentiation", () =>
     // the suite — give it generous headroom.
     await expect(recruiter.getByText("Published — matches refreshed.")).toBeVisible({ timeout: 120_000 });
 
-    // The demo seeker's stored skill vector is a constant unit vector (seeded
-    // without a real Modal embed), so cosine similarity won't surface a match
-    // via the RPC. The equity FILTER logic is unit-tested (passesDealbreakers +
-    // the 0020 RPC clause); here we insert a surfaced match directly so the UI
-    // path (surfaced card rendering for an equity-requiring seeker) is verified
-    // end-to-end.
-    const jobId = new URL(recruiter.url()).pathname.split("/").pop() ?? "";
-    await admin.from("matches").upsert(
-      {
-        job_posting_id: jobId,
-        profile_id: "00000000-0000-0000-0000-000000000001",
-        score: 0.85,
-        status: "surfaced",
-      },
-      { onConflict: "job_posting_id,profile_id" },
-    );
-
-    // Seeker with equity_required should see the match.
+    // Seeker with equity_required should still see this match — the
+    // dealbreaker must not filter out a job that satisfies it.
     const seekerCtx = await stagingContext(browser);
     const seeker = await seekerCtx.newPage();
-    await signIn(seeker, "seeker@demo.local");
+    await signIn(seeker, pipelineSeekerEmail);
     await seeker.goto("/seeker/matches");
-    await expect(seeker.getByTestId("seeker-match-card").first()).toBeVisible({ timeout: 30_000 });
-
-    // Clean up: restore equity_required to false.
-    await admin
-      .from("profiles")
-      .update({ dealbreaker_matrix: { ...updated, equity_required: false } })
-      .eq("id", "00000000-0000-0000-0000-000000000001");
-    await admin.from("matches").delete().eq("job_posting_id", jobId);
+    await expect(seeker.getByTestId("seeker-match-card").filter({ hasText: jobTitle })).toBeVisible({
+      timeout: 30_000,
+    });
 
     await seekerCtx.close();
     await recruiterCtx.close();
@@ -559,110 +562,92 @@ test.describe("Staging functional — dealbreaker & tier differentiation", () =>
 
   test("20. Credentials de-identified on recruiter match card", async ({ browser }) => {
     const admin = stagingAdminClient();
-    // Set credentials + credential_summary on the demo seeker (already published).
+    // Set credentials + credentials_summary directly on the pipeline seeker
+    // (already published in test 5). match_candidates (the RPC the
+    // recruiter's match list reads live, src/app/(app)/recruiter/jobs/[id]/
+    // matches/page.tsx) selects credentials_summary from `profiles` at read
+    // time — no republish/re-embed needed for this column to show up, and
+    // reusing pipelineJobId's existing match row costs zero extra Modal.
     await admin
       .from("profiles")
       .update({
         credentials: "AWS Solutions Architect Professional, Certified Kubernetes Administrator",
         credentials_summary: "2 certifications",
       })
-      .eq("id", "00000000-0000-0000-0000-000000000001");
+      .eq("id", pipelineSeekerId);
 
-    // Recruiter creates + publishes a matching job.
-    const recruiterCtx = await stagingContext(browser);
-    const recruiter = await recruiterCtx.newPage();
-    await signIn(recruiter, "recruiter@demo.local");
-    await recruiter.goto("/recruiter/jobs/new");
-    await recruiter.getByTestId("job-title").fill("Cloud Infrastructure Engineer");
-    await recruiter.getByTestId("job-description").fill(
-      "Cloud engineer: AWS, Kubernetes, distributed systems, CI/CD automation.",
-    );
-    await recruiter.getByTestId("job-salary-max").fill("170000");
-    await recruiter.locator('input[name="work_setups"][value="remote"]').check();
-    await recruiter.getByTestId("save-job").click();
-    await recruiter.waitForURL(/\/recruiter\/jobs\/[0-9a-f-]+$/);
-    countAiCall();
-    await recruiter.getByTestId("publish-job").click();
-    await expect(recruiter.getByText("Published — matches refreshed.")).toBeVisible({ timeout: 120_000 });
+    const ctx = await stagingContext(browser);
+    const page = await ctx.newPage();
+    await signIn(page, pipelineRecruiterEmail);
+    await page.goto(`/recruiter/jobs/${pipelineJobId}`);
+    await page.getByTestId("view-matches").click();
+    await widenMatchFilter(page);
+    // pipelineJobId's canonical description text can also match other
+    // spec files' seekers on this shared, never-reset DB — filter by the
+    // pipeline seeker's (already-revealed, since test 8) name rather than
+    // `.first()`, or a coincidental extra match row could pick the wrong card.
+    const card = page.getByTestId("recruiter-match-card").filter({ hasText: pipelineSeekerName }).first();
+    await expect(card).toBeVisible({ timeout: 30_000 });
 
-    // Insert a surfaced match directly (the demo seeker's constant unit vector
-    // can't surface a real similarity match — see test 18 note). We're verifying
-    // the credential de-identification on the recruiter card, not matching.
-    const jobId = new URL(recruiter.url()).pathname.split("/").pop() ?? "";
-    await admin.from("matches").upsert(
-      {
-        job_posting_id: jobId,
-        profile_id: "00000000-0000-0000-0000-000000000001",
-        score: 0.85,
-        status: "interested",
-      },
-      { onConflict: "job_posting_id,profile_id" },
-    );
+    // Positive: the de-identified summary chip actually renders (not just an
+    // absence of the raw text below — that alone would pass vacuously if the
+    // field never reached the page at all).
+    await expect(card.getByTestId("credentials-chip")).toContainText("2 certifications");
 
-    // View match card — should show generalized credential summary, not raw PII.
-    await recruiter.getByTestId("view-matches").click();
-    await expect(recruiter.getByTestId("recruiter-match-card").first()).toBeVisible({ timeout: 30_000 });
-    const bodyText = await recruiter.locator("body").innerText();
+    // Negative: the raw credential names must never leak into the render.
+    const bodyText = await page.locator("body").innerText();
     expect(bodyText).not.toContain("AWS Solutions Architect Professional");
     expect(bodyText).not.toContain("Certified Kubernetes Administrator");
 
-    // Clean up the direct match row.
-    await admin.from("matches").delete().eq("job_posting_id", jobId);
-
-    await recruiterCtx.close();
+    await ctx.close();
   });
 
   test("21. Recruiter tier badge and sidebar label", async ({ browser }) => {
     const admin = stagingAdminClient();
-    await admin
-      .from("profiles")
-      .update({ recruiter_tier: "solo" })
-      .eq("id", "00000000-0000-0000-0000-000000000002");
-
     const ctx = await stagingContext(browser);
     const page = await ctx.newPage();
-    await signIn(page, "recruiter@demo.local");
+    const user = await ensureStagingUser("recruiter");
+    if (!user.id) throw new Error(`ensureStagingUser returned no id for ${user.email} (email collision)`);
+    await signIn(page, user.email);
+    await completeRecruiterOnboarding(page, {
+      name: uniqueLabel("Tier Recruiter"),
+      company: uniqueLabel("Tier Search Co"),
+    });
+
+    await admin.from("profiles").update({ recruiter_tier: "solo" }).eq("id", user.id);
 
     // Dashboard shows Solo badge.
     await page.goto("/recruiter");
-    await expect(page.getByText("Solo")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Solo").first()).toBeVisible({ timeout: 10_000 });
 
-    // Clean up.
-    await admin
-      .from("profiles")
-      .update({ recruiter_tier: "free" })
-      .eq("id", "00000000-0000-0000-0000-000000000002");
     await ctx.close();
   });
 
   test("22. Pro tier badge on dashboard, profile, and points page", async ({ browser }) => {
     const admin = stagingAdminClient();
-    await admin
-      .from("profiles")
-      .update({ seeker_tier: "pro" })
-      .eq("id", "00000000-0000-0000-0000-000000000001");
-
     const ctx = await stagingContext(browser);
     const page = await ctx.newPage();
-    await signIn(page, "seeker@demo.local");
+    const user = await ensureStagingUser("seeker");
+    if (!user.id) throw new Error(`ensureStagingUser returned no id for ${user.email} (email collision)`);
+    await signIn(page, user.email);
+    await completeSeekerOnboarding(page, { name: uniqueLabel("Tier Seeker") });
 
-    // Dashboard: Pro badge, no upsell card.
-    await expect(page.getByText("Pro", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await admin.from("profiles").update({ seeker_tier: "pro" }).eq("id", user.id);
+
+    // Dashboard: Pro badge, no upsell card (the two are mutually exclusive —
+    // exact:true so this can't accidentally match unrelated "Pro..." text).
+    await page.goto("/seeker");
+    await expect(page.getByText("Pro", { exact: true }).first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId("pro-upsell-card")).toHaveCount(0);
 
     // Profile page: Pro badge.
     await page.goto("/seeker/profile");
-    await expect(page.getByText("Pro", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Pro", { exact: true }).first()).toBeVisible({ timeout: 10_000 });
 
     // Points page: Pro badge.
     await page.goto("/seeker/points");
-    await expect(page.getByText("Pro", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Pro", { exact: true }).first()).toBeVisible({ timeout: 10_000 });
 
-    // Clean up.
-    await admin
-      .from("profiles")
-      .update({ seeker_tier: "free" })
-      .eq("id", "00000000-0000-0000-0000-000000000001");
     await ctx.close();
   });
 });

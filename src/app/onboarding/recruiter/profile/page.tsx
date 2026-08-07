@@ -1,12 +1,11 @@
-import Link from "next/link";
-import { AuthNav } from "@/components/auth-nav";
-import { Button } from "@binding/ui";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { RecruiterOnboardingWizard } from "./recruiter-onboarding-wizard";
 
 /** Wizard steps 2-3: company details, then a first-job-post hand-off.
- * Skippable at every point — the dashboard is reachable without either. */
+ * Skippable at every point — the dashboard is reachable without either.
+ * Chrome (step dots, skip link, title) is owned by the client wizard —
+ * it's the only side that knows which of the two sub-steps is active. */
 export default async function RecruiterOnboardingProfilePage() {
   const session = await requireRole("recruiter");
   const supabase = await createSupabaseServerClient();
@@ -18,23 +17,13 @@ export default async function RecruiterOnboardingProfilePage() {
     .single();
 
   return (
-    <div>
-      <AuthNav context="authenticated" />
-      <div className="mx-auto flex max-w-2xl items-center justify-end px-8 pt-6">
-        <Button variant="ghost" size="sm" data-testid="recruiter-wizard-skip" render={<Link href="/recruiter" />}>
-          Skip for now
-        </Button>
-      </div>
-      <main className="p-8">
-        <RecruiterOnboardingWizard
-          displayName={profile?.display_name ?? ""}
-          companyName={profile?.company_name ?? ""}
-          recruiterTitle={profile?.recruiter_title ?? ""}
-          companyIndustry={profile?.company_industry ?? ""}
-          companySize={profile?.company_size ?? null}
-          phone={profile?.phone ?? ""}
-        />
-      </main>
-    </div>
+    <RecruiterOnboardingWizard
+      displayName={profile?.display_name ?? ""}
+      companyName={profile?.company_name ?? ""}
+      recruiterTitle={profile?.recruiter_title ?? ""}
+      companyIndustry={profile?.company_industry ?? ""}
+      companySize={profile?.company_size ?? null}
+      phone={profile?.phone ?? ""}
+    />
   );
 }

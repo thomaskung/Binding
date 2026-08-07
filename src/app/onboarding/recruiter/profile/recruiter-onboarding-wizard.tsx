@@ -2,14 +2,10 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   Button,
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   Input,
   Label,
   Select,
@@ -19,6 +15,7 @@ import {
   SelectValue,
 } from "@binding/ui";
 import { saveRecruiterProfile } from "@/app/(app)/recruiter/actions";
+import { OnboardingChrome } from "../../seeker/onboarding-chrome";
 
 const COMPANY_SIZE_LABEL: Record<string, string> = {
   startup: "1–50 employees",
@@ -42,7 +39,6 @@ interface Props {
  * display_name/company_name through untouched so step 1's values survive
  * (saveRecruiterProfile overwrites both on every call). */
 export function RecruiterOnboardingWizard(props: Props) {
-  const router = useRouter();
   const [step, setStep] = useState<"company" | "job">("company");
   const [recruiterTitle, setRecruiterTitle] = useState(props.recruiterTitle);
   const [companyIndustry, setCompanyIndustry] = useState(props.companyIndustry);
@@ -66,106 +62,112 @@ export function RecruiterOnboardingWizard(props: Props) {
 
   if (step === "job") {
     return (
-      <Card className="mx-auto max-w-lg">
-        <CardHeader>
-          <CardTitle className="font-medium">You&apos;re set</CardTitle>
-          <CardDescription>Step 3 of 3 — post your first role, or come back to it later.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Your company profile is saved. Posting a role starts matching against opted-in
-            candidates right away.
-          </p>
-          <div className="flex gap-2">
-            <Button variant="outline" disabled={pending} onClick={() => setStep("company")}>
-              Back
-            </Button>
-            <Button
-              className="flex-1"
-              data-testid="recruiter-onboarding-post-job"
-              render={<Link href="/recruiter/jobs/new" />}
-            >
-              Post your first job
-            </Button>
-          </div>
-          <div className="flex justify-center">
-            <Button
-              variant="ghost"
-              size="sm"
-              data-testid="recruiter-onboarding-finish-skip"
-              render={<Link href="/recruiter" />}
-            >
-              Skip for now
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <OnboardingChrome
+        current={3}
+        skipHref="/recruiter"
+        skipTestId="recruiter-wizard-skip"
+        title="You're set"
+        description="Post your first role, or come back to it later."
+      >
+        <Card>
+          <CardContent className="space-y-4 pt-6">
+            <p className="text-sm text-muted-foreground">
+              Your company profile is saved. Posting a role starts matching against opted-in
+              candidates right away.
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" disabled={pending} onClick={() => setStep("company")}>
+                Back
+              </Button>
+              <Button
+                className="flex-1"
+                data-testid="recruiter-onboarding-post-job"
+                render={<Link href="/recruiter/jobs/new" />}
+              >
+                Post your first job
+              </Button>
+            </div>
+            <div className="flex justify-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                data-testid="recruiter-onboarding-finish-skip"
+                render={<Link href="/recruiter" />}
+              >
+                Skip for now
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </OnboardingChrome>
     );
   }
 
   return (
-    <Card className="mx-auto max-w-lg">
-      <CardHeader>
-        <CardTitle className="font-medium">Company details</CardTitle>
-        <CardDescription>
-          Step 2 of 3 — helps candidates size up the role before they express interest.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="recruiter_title">Your title</Label>
-          <Input
-            id="recruiter_title"
-            data-testid="recruiter-onboarding-title"
-            value={recruiterTitle}
-            onChange={(e) => setRecruiterTitle(e.target.value)}
-            placeholder="Talent Acquisition Lead"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="company_industry">Company industry</Label>
-          <Input
-            id="company_industry"
-            data-testid="recruiter-onboarding-industry"
-            value={companyIndustry}
-            onChange={(e) => setCompanyIndustry(e.target.value)}
-            placeholder="e.g. Fintech"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>Company size</Label>
-          <Select value={companySize} onValueChange={(v) => setCompanySize(v ?? "")}>
-            <SelectTrigger data-testid="recruiter-onboarding-size" style={{ width: "100%" }}>
-              <SelectValue>{companySize ? COMPANY_SIZE_LABEL[companySize] : "Select…"}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="startup">1–50</SelectItem>
-              <SelectItem value="mid">51–500</SelectItem>
-              <SelectItem value="large">501–5,000</SelectItem>
-              <SelectItem value="enterprise">5,000+</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="phone">Phone</Label>
-          <Input
-            id="phone"
-            data-testid="recruiter-onboarding-phone"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Never shown to candidates"
-          />
-        </div>
-        <div className="flex justify-end">
-          <Button
-            data-testid="recruiter-onboarding-continue"
-            disabled={pending}
-            onClick={continueToJobStep}
-          >
-            Continue
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <OnboardingChrome
+      current={2}
+      skipHref="/recruiter"
+      skipTestId="recruiter-wizard-skip"
+      title="Company details"
+      description="Helps candidates size up the role before they express interest."
+    >
+      <Card>
+        <CardContent className="space-y-4 pt-6">
+          <div className="space-y-2">
+            <Label htmlFor="recruiter_title">Your title</Label>
+            <Input
+              id="recruiter_title"
+              data-testid="recruiter-onboarding-title"
+              value={recruiterTitle}
+              onChange={(e) => setRecruiterTitle(e.target.value)}
+              placeholder="Talent Acquisition Lead"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="company_industry">Company industry</Label>
+            <Input
+              id="company_industry"
+              data-testid="recruiter-onboarding-industry"
+              value={companyIndustry}
+              onChange={(e) => setCompanyIndustry(e.target.value)}
+              placeholder="e.g. Fintech"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Company size</Label>
+            <Select value={companySize} onValueChange={(v) => setCompanySize(v ?? "")}>
+              <SelectTrigger data-testid="recruiter-onboarding-size" style={{ width: "100%" }}>
+                <SelectValue>{companySize ? COMPANY_SIZE_LABEL[companySize] : "Select…"}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="startup">1–50</SelectItem>
+                <SelectItem value="mid">51–500</SelectItem>
+                <SelectItem value="large">501–5,000</SelectItem>
+                <SelectItem value="enterprise">5,000+</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="phone">Phone</Label>
+            <Input
+              id="phone"
+              data-testid="recruiter-onboarding-phone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Never shown to candidates"
+            />
+          </div>
+          <div className="flex justify-end">
+            <Button
+              data-testid="recruiter-onboarding-continue"
+              disabled={pending}
+              onClick={continueToJobStep}
+            >
+              Continue
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </OnboardingChrome>
   );
 }

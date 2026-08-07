@@ -17,27 +17,42 @@ export function CandidatePanel({ card, onClose }: { card: RecruiterMatchCard; on
   const senChip = seniorityChip(card.seniorityBand, card.yearsExperience);
 
   return (
-    <div className="rounded-lg border bg-card p-5" data-testid="candidate-panel">
+    <div className="jb-fade rounded-xl border bg-card p-5" data-testid="candidate-panel">
       <div className="flex items-start justify-between gap-3">
+        <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+          {revealed ? "Candidate" : "Consider before revealing"}
+        </p>
+        <Button size="sm" variant="ghost" onClick={onClose} aria-label="Close" data-testid="panel-close">
+          ✕
+        </Button>
+      </div>
+
+      <div className="mt-2 flex items-center gap-3">
+        <div className="flex size-14 flex-none flex-col items-center justify-center rounded-xl bg-accent text-accent-foreground">
+          <span className="jb-serif text-base font-semibold leading-none">
+            {Math.round(card.score * 100)}%
+          </span>
+          <span className="mt-0.5 text-[7px] font-semibold uppercase tracking-wide opacity-70">
+            match
+          </span>
+        </div>
         <div className="min-w-0">
-          <h2 className="text-lg font-medium">
+          <h2 className="truncate font-heading text-[17px] font-medium leading-tight tracking-tight">
             {revealed && card.revealedName ? (
               <span data-testid="panel-revealed-name">{card.revealedName}</span>
             ) : (
               candidateLabel(card)
             )}
           </h2>
-          {interest && <p className="text-xs text-muted-foreground">interested {interest}</p>}
+          {interest && <p className="text-[12px] text-muted-foreground">interested {interest}</p>}
         </div>
-        <Button size="sm" variant="ghost" onClick={onClose} aria-label="Close" data-testid="panel-close">
-          ✕
-        </Button>
       </div>
 
-      <div className="mt-3 flex items-center gap-2">
-        <Badge variant="outline">{Math.round(card.score * 100)}% match</Badge>
-        {!revealed && <Badge variant="secondary">reveal {card.revealCost} pts</Badge>}
-      </div>
+      {!revealed && (
+        <Badge variant="secondary" className="mt-3">
+          reveal {card.revealCost} pts
+        </Badge>
+      )}
 
       {/* Strength chips (always visible — the pitch for revealing) */}
       <div className="mt-4 flex flex-wrap gap-1.5">
@@ -66,15 +81,19 @@ export function CandidatePanel({ card, onClose }: { card: RecruiterMatchCard; on
         <div className="space-y-4">
           {card.fitSummary && (
             <section>
-              <h3 className="text-sm font-medium">Why they fit</h3>
-              <p className="mt-1 text-sm text-muted-foreground" data-testid="fit-summary">
+              <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                Why they fit
+              </h3>
+              <p className="mt-1.5 text-sm text-muted-foreground" data-testid="fit-summary">
                 {card.fitSummary}
               </p>
             </section>
           )}
           <section>
-            <h3 className="text-sm font-medium">Profile</h3>
-            <p className="mt-1 text-sm whitespace-pre-wrap text-muted-foreground">
+            <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+              Profile
+            </h3>
+            <p className="mt-1.5 text-sm whitespace-pre-wrap text-muted-foreground">
               {card.text || "(profile text unavailable)"}
             </p>
           </section>
@@ -111,8 +130,10 @@ export function CandidatePanel({ card, onClose }: { card: RecruiterMatchCard; on
       ) : (
         <div className="space-y-3">
           <section>
-            <h3 className="text-sm font-medium">Profile summary</h3>
-            <p className="mt-1 text-sm whitespace-pre-wrap text-muted-foreground">
+            <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+              Profile summary
+            </h3>
+            <p className="mt-1.5 text-sm whitespace-pre-wrap text-muted-foreground">
               {card.text || "(profile text unavailable)"}
             </p>
           </section>

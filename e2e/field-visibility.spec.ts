@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
-import { createClient } from "@supabase/supabase-js";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { completeSeekerOnboarding } from "./seeker-onboarding";
+import { publishMatchingProfile } from "./match-helpers";
+import { ensureStagingUser, signIn, stagingContext } from "./staging-helpers";
 
 /**
  * Seeker Profile tab's per-field visibility (Phase 2B, src/lib/field-visibility.ts):
@@ -10,51 +10,29 @@ import { completeSeekerOnboarding } from "./seeker-onboarding";
  * feeding the match embedding, which isn't observable through the UI — that
  * side is covered by tests/field-visibility.test.ts's pure-function tests).
  * This spec proves the display half through the real publish pipeline.
+ *
+ * The `redacted-preview` block on /seeker/profile/resume is literally
+ * labeled "What recruiters see" in the UI (resume-canvas.tsx) — it's the
+ * same redacted text recruiters are shown, so asserting against it from the
+ * seeker's own session is a direct test of the recruiter-facing output, no
+ * separate recruiter account required.
+ *
+ * Runs against hosted staging: opens through `stagingContext(browser)` for
+ * the auth-gate headers, creates a fresh seeker via `ensureStagingUser`
+ * (no seeded demo account), and reuses the free `wizard-skip` onboarding
+ * path. Modal AI cost: exactly TWO round-trips (`ai.redact` + `ai.embed`)
+ * from the single `publishMatchingProfile` call — counted internally by
+ * that helper, not duplicated here.
  */
 
-const PASSWORD = "J0B!Demo#2026$secure";
-const SEEKER = { email: "field-visibility-seeker@e2e.local", password: PASSWORD };
-
-function adminClient() {
-  const env: Record<string, string> = {};
-  for (const line of readFileSync(".env.local", "utf8").split("\n")) {
-    const m = line.match(/^([A-Z_]+)=(.*)$/);
-    if (m && m[1] && m[2] !== undefined) env[m[1]] = m[2];
-  }
-  return createClient(env.NEXT_PUBLIC_SUPABASE_URL!, env.SUPABASE_SERVICE_ROLE_KEY!, {
-    auth: { persistSession: false },
-  });
-}
-
-async function ensureUser(email: string) {
-  const admin = adminClient();
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    const { data, error } = await admin.auth.admin.createUser({
-      email,
-      password: PASSWORD,
-      email_confirm: true,
-    });
-    if (data.user || error?.code === "email_exists") return;
-    if (attempt === 5) throw new Error(`createUser failed: ${error?.message ?? JSON.stringify(error)}`);
-    await new Promise((r) => setTimeout(r, 2000 * attempt));
-  }
-}
-
-async function signIn(page: Page, user: { email: string; password: string }) {
-  await page.goto("/login");
-  await page.getByLabel("Work email").fill(user.email);
-  await page.getByRole("button", { name: "Continue with email" }).click();
-  await page.getByLabel("Password").fill(user.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL(/\/(seeker|recruiter|onboarding)/);
-}
-
 test("hidden and matching_only fields are excluded from what recruiters see; visible fields still show", async ({
-  page,
+  browser,
 }) => {
-  await ensureUser(SEEKER.email);
+  const ctx = await stagingContext(browser);
+  const page = await ctx.newPage();
+  const user = await ensureStagingUser("seeker");
 
-  await signIn(page, SEEKER);
+  await signIn(page, user.email);
   await completeSeekerOnboarding(page, { name: "Vic Visibility" });
 
   await page.goto("/seeker/profile");
@@ -75,15 +53,26 @@ test("hidden and matching_only fields are excluded from what recruiters see; vis
   await page.getByLabel("Target industries visibility").selectOption("matching_only");
   await expect(page.getByText("Visibility updated.")).toBeVisible();
 
-  await page.goto("/seeker/profile/resume");
-  await page.getByTestId("profile-draft").fill(
-    "Experienced software engineer focused on distributed systems and cloud infrastructure.",
-  );
-  await page.getByTestId("publish-profile").click();
-  await expect(page.getByTestId("redacted-preview")).toBeVisible({ timeout: 15_000 });
+  // Belt-and-suspenders settle check before publishing: the "Visibility
+  // updated." toast is a shared status string reused by both selects (it's
+  // cleared to null synchronously on each change, then re-set post-commit —
+  // see profile-fields.tsx), so a reload-and-assert-persisted-value round
+  // trip removes any doubt that BOTH writes actually committed server-side
+  // before we navigate away and publish (an in-flight save can be cancelled
+  // by navigation, per the comment above).
+  await page.reload();
+  await expect(page.getByLabel("Skills visibility")).toHaveValue("hidden");
+  await expect(page.getByLabel("Target industries visibility")).toHaveValue("matching_only");
+
+  await publishMatchingProfile(page, {
+    resumeText:
+      "Experienced software engineer focused on distributed systems and cloud infrastructure.",
+  });
 
   const preview = page.getByTestId("redacted-preview");
   await expect(preview).not.toContainText("Rust");
   await expect(preview).not.toContainText("Fintech");
   await expect(preview).toContainText("Backend Engineer");
+
+  await ctx.close();
 });

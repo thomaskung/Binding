@@ -152,3 +152,40 @@ Added for the recruiter-monetization per-role budget UI (budget-cap slider + spe
   and the bundle globalName the app + design bundle both bind to). A future
   package rename, if ever done, is a `pkg`/`srcDir` change → full re-grade
   (see "Re-sync risks" above).
+  - **SUPERSEDED 2026-08-05 — this bullet is now stale.** `config.json` has
+    since been changed to `globalName:"BindingUI"` / `pkg:"@binding/ui"` (the
+    app package genuinely renamed to `@binding/ui`, so `transpilePackages`
+    binds `@binding/ui` — the earlier breakage concern no longer applies).
+    Consequence: the LIVE design-project bundle + every `.dc.html` template
+    still bind the old `window.JumpOnBoardUI`, so config and the deployed
+    bundle are now genuinely out of sync. The next `/design-sync` regenerates
+    the bundle as `window.BindingUI` and forces a full re-grade (globalName
+    change, per "Re-sync risks"); it must be paired **atomically** with
+    renaming every template's `JumpOnBoardUI.*`→`BindingUI.*`, or the project
+    is left half-migrated and broken. Verify against `config.json` (ground
+    truth), not this paragraph. See MEMORY.md 2026-08-05, DESIGN.md §13i.
+  - **RESOLVED 2026-08-05 (migration executed).** The atomic BindingUI
+    migration ran: `/design-sync` regenerated the bundle as `window.BindingUI`
+    (13 components + CSS + `_ds_sync.json` uploaded), and ALL 24 `.dc.html`
+    templates were renamed `JumpOnBoardUI.*`→`BindingUI.*` and re-pushed in the
+    same pass. Config + live bundle + every template now agree on `BindingUI`.
+    The drift above is closed.
+
+## 2026-08-05: config.json fields restored (were silently missing)
+
+Discovered during the BindingUI re-sync that `config.json` had lost three
+accumulated fields (the file had been trimmed to the bare minimum at some
+point). All restored — do NOT drop them again (the skill's "preserve
+accumulated fields" rule):
+- **`cssEntry: ".ds-tailwind-cache.css"`** — without it the build emits a
+  near-empty `_ds_bundle.css` (73 bytes) + a `_ds_needs_recompile` marker
+  (`[CSS_RUNTIME]`); with it, `_ds_bundle.css` is the full ~76KB compiled
+  Tailwind. `buildCmd` writes the cache to `packages/ui/.ds-tailwind-cache.css`
+  and cssEntry is PKG_DIR-relative (resolves inside `packages/ui`).
+- **`componentSrcMap`** — the 27 compound sub-parts (CardAction, DialogClose,
+  SelectItem, TabsList, …) mapped to `null` so they don't surface as their own
+  (meaningless-alone) cards. Without it the build emits 40 component dirs
+  instead of 13 and the sub-parts show as "added" in the diff.
+- **`overrides`** — Card `cardMode:column`; Dialog/Progress/Select
+  `cardMode:single` (+ primaryStory) to fix `[GRID_OVERFLOW]` on those cards.
+  Dialog/Toaster `[RENDER_THIN]` remain the known-benign position:fixed warns.

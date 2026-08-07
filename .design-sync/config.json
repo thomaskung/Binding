@@ -5,5 +5,18 @@
   "globalName": "BindingUI",
   "srcDir": "packages/ui/src",
   "tsconfig": "../../tsconfig.json",
-  "buildCmd": "npx @tailwindcss/cli -i packages/ui/src/theme.css -o packages/ui/.ds-tailwind-cache.css"
+  "cssEntry": ".ds-tailwind-cache.css",
+  "buildCmd": "npx @tailwindcss/cli -i packages/ui/src/theme.css -o packages/ui/.ds-tailwind-cache.css",
+  "componentSrcMap": {
+    "CardAction": null, "CardContent": null, "CardDescription": null, "CardFooter": null, "CardHeader": null, "CardTitle": null,
+    "DialogClose": null, "DialogContent": null, "DialogDescription": null, "DialogFooter": null, "DialogHeader": null, "DialogOverlay": null, "DialogPortal": null, "DialogTitle": null, "DialogTrigger": null,
+    "SelectContent": null, "SelectGroup": null, "SelectItem": null, "SelectLabel": null, "SelectScrollDownButton": null, "SelectScrollUpButton": null, "SelectSeparator": null, "SelectTrigger": null, "SelectValue": null,
+    "TabsContent": null, "TabsList": null, "TabsTrigger": null
+  },
+  "overrides": {
+    "Card": { "cardMode": "column" },
+    "Dialog": { "cardMode": "single", "primaryStory": "Open" },
+    "Progress": { "cardMode": "single", "primaryStory": "Default" },
+    "Select": { "cardMode": "single", "primaryStory": "Open" }
+  }
 }

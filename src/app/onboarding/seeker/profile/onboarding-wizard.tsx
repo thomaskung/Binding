@@ -7,10 +7,7 @@ import {
   Button,
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
-  CardHeader,
-  CardTitle,
   Input,
   Label,
   Select,
@@ -84,7 +81,7 @@ function ItemCard({
   onRemove: (id: number) => void;
 }) {
   return (
-    <Card size="sm">
+    <Card size="sm" className="jb-lift">
       <CardContent>
         {item.editing ? (
           <div className="flex items-center gap-2">
@@ -365,13 +362,14 @@ export function OnboardingWizard(props: Props) {
 
   if (step === "dealbreakers") {
     return (
-      <OnboardingChrome current={3} skipHref="/seeker">
+      <OnboardingChrome
+        current={3}
+        skipHref="/seeker"
+        title="Your dealbreakers"
+        description="We'll only surface roles that clear these bars."
+      >
         <Card>
-          <CardHeader>
-            <CardTitle>Your dealbreakers</CardTitle>
-            <CardDescription>We&apos;ll only surface roles that clear these bars.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 pt-6">
             <div className="space-y-1.5">
               <Label htmlFor="min_salary">Minimum base salary (USD)</Label>
               <Input
@@ -393,6 +391,7 @@ export function OnboardingWizard(props: Props) {
                   <label key={setup} className="flex items-center gap-1.5 text-sm capitalize">
                     <input
                       type="checkbox"
+                      className="size-4 accent-primary"
                       checked={workSetups.includes(setup)}
                       onChange={(e) =>
                         setWorkSetups((prev) =>
@@ -426,15 +425,14 @@ export function OnboardingWizard(props: Props) {
   }
 
   return (
-    <OnboardingChrome current={2} skipHref="/seeker">
+    <OnboardingChrome
+      current={2}
+      skipHref="/seeker"
+      title="Add your resume"
+      description="PDF upload or pasted text — this is the primary way we build your profile."
+    >
       <Card>
-        <CardHeader>
-          <CardTitle>Add your resume</CardTitle>
-          <CardDescription>
-            PDF upload or pasted text — this is the primary way we build your profile.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-6">
           <input
             ref={fileInput}
             type="file"
@@ -452,7 +450,7 @@ export function OnboardingWizard(props: Props) {
                 type="button"
                 data-testid="onboarding-upload-resume"
                 onClick={() => fileInput.current?.click()}
-                className="flex w-full flex-col items-center gap-2.5 rounded-xl border-[1.5px] border-dashed border-border px-5 py-9 text-center"
+                className="flex w-full flex-col items-center gap-2.5 rounded-xl border-[1.5px] border-dashed border-border px-5 py-9 text-center transition-colors hover:border-primary/50 hover:bg-accent/40"
               >
                 <span className="text-sm font-semibold">
                   Drop your resume PDF here, or click to browse
@@ -523,7 +521,7 @@ export function OnboardingWizard(props: Props) {
                   <p className="text-sm text-muted-foreground">Nothing extracted — add below.</p>
                 )}
                 {expItems.map((item) => (
-                  <Card key={item.id} size="sm" data-testid="onboarding-experience-row">
+                  <Card key={item.id} size="sm" className="jb-lift" data-testid="onboarding-experience-row">
                     <CardContent>
                       {item.editing ? (
                         <div className="flex flex-col gap-2">

@@ -46,11 +46,15 @@ function initialsOf(name: string): string {
   );
 }
 
-/** Recruiter profile (RecruiterProfile template): Internal/External view
- * tabs + a global view/edit mode. External is what a matched candidate
- * sees — active roles only, contact-free, in-platform messaging. The
- * template's Team-members card is not built: no team/seat model exists yet
- * (enterprise is a disabled placeholder), and fake teammates would lie. */
+/** Recruiter profile: Internal/External view tabs + a global view/edit mode.
+ * External is what a matched candidate sees — active roles only,
+ * contact-free, in-platform messaging. The mockup has no dedicated
+ * RecruiterProfile screen (its Internal/External toggle lives on
+ * SEEKER · PROFILE only) — this restyle mirrors that seeker screen's
+ * already-restyled sibling (`seeker/profile/profile-fields.tsx`) instead:
+ * same tab/header/avatar-card/edit-field idioms. A Team-members card is not
+ * built: no team/seat model exists yet (enterprise is a disabled
+ * placeholder), and fake teammates would lie. */
 export function RecruiterProfileEditor(props: Props) {
   const [view, setView] = useState<"internal" | "external">("internal");
   const [editing, setEditing] = useState(false);
@@ -84,11 +88,13 @@ export function RecruiterProfileEditor(props: Props) {
   const visibleJobs = internal ? props.jobs : activeJobs;
 
   return (
-    <main className="mx-auto max-w-[920px] space-y-6 px-6 py-14">
+    <main className="jb-fade mx-auto max-w-[920px] space-y-6 px-6 py-14">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-1.5">
-          <h1 className="text-[30px] font-semibold leading-tight tracking-tight">Your profile</h1>
-          <p className="text-[15px] text-muted-foreground">
+          <h1 className="font-heading text-[28px] font-medium leading-tight tracking-tight">
+            Your profile
+          </h1>
+          <p className="text-sm text-muted-foreground">
             {internal
               ? "How your recruiter profile looks to you"
               : "What this candidate sees for their matched role"}
@@ -131,7 +137,7 @@ export function RecruiterProfileEditor(props: Props) {
 
       <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-[280px_1fr]">
         <div className="flex flex-col gap-4">
-          <Card>
+          <Card className="jb-lift">
             <CardContent className="pt-6">
               <div className="flex flex-col items-center gap-3 text-center">
                 <div className="flex size-[76px] items-center justify-center rounded-full bg-secondary text-2xl font-semibold text-secondary-foreground">
@@ -139,7 +145,7 @@ export function RecruiterProfileEditor(props: Props) {
                 </div>
                 {!editing && (
                   <div className="flex flex-col gap-0.5">
-                    <div className="text-lg font-semibold tracking-tight">{displayName}</div>
+                    <div className="font-heading text-lg font-semibold tracking-tight">{displayName}</div>
                     <div className="text-sm text-muted-foreground">{recruiterTitle || "—"}</div>
                     <div className="text-[13px] text-muted-foreground">{companyName || "—"}</div>
                   </div>
@@ -195,7 +201,7 @@ export function RecruiterProfileEditor(props: Props) {
           </Card>
 
           {internal && (
-            <Card>
+            <Card className="jb-lift">
               <CardHeader>
                 <CardTitle className="text-sm">Reveal credits</CardTitle>
                 <CardAction>
@@ -215,7 +221,7 @@ export function RecruiterProfileEditor(props: Props) {
         </div>
 
         <div className="flex flex-col gap-4">
-          <Card>
+          <Card className="jb-lift">
             <CardHeader>
               <CardTitle className="text-sm">Company info</CardTitle>
             </CardHeader>
@@ -227,7 +233,7 @@ export function RecruiterProfileEditor(props: Props) {
                 <div className="flex flex-1 flex-col gap-2.5">
                   {!editing ? (
                     <div className="flex flex-col gap-0.5">
-                      <div className="text-[15px] font-semibold">{companyName || "—"}</div>
+                      <div className="font-heading text-[15px] font-semibold">{companyName || "—"}</div>
                       <div className="text-[13px] text-muted-foreground">
                         {[companyIndustry, companySize && COMPANY_SIZE_LABEL[companySize]]
                           .filter(Boolean)
@@ -271,22 +277,25 @@ export function RecruiterProfileEditor(props: Props) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="jb-lift">
             <CardHeader>
               <CardTitle className="text-sm">{internal ? "Open roles" : "Matched job"}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3.5">
+            <CardContent className="space-y-2.5">
               {visibleJobs.length === 0 && (
                 <span className="text-sm text-muted-foreground">
                   {internal ? "No postings yet." : "No active roles."}
                 </span>
               )}
               {visibleJobs.map((job) => (
-                <div key={job.id} className="flex items-center justify-between gap-3">
+                <div
+                  key={job.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5"
+                >
                   <div className="flex flex-col gap-0.5">
                     <Link
                       href={`/recruiter/jobs/${job.id}`}
-                      className="text-sm font-semibold hover:underline"
+                      className="font-heading text-sm font-semibold tracking-tight hover:underline"
                     >
                       {job.title}
                     </Link>

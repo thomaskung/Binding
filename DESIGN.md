@@ -1,6 +1,6 @@
 # DESIGN.md — Binding (formerly JumpOnBoard) Technical Architecture
 
-**Version 2.8** · Last updated 2026-08-04 · Revision history at the end of this document.
+**Version 2.10** · Last updated 2026-08-06 · Revision history at the end of this document.
 
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [VISION.md](./VISION.md) (goals/metrics). This document describes how the product is actually built. Status: walking-skeleton MVP implemented (see §12 for what's built vs. deferred and where the MVP diverges from the target architecture below).
 
@@ -330,7 +330,7 @@ Ads, if introduced, are **contextual only — no behavioral or individual-level 
 - Market Intelligence pricing (§2e) — deferred/roadmap-only, same philosophy as the AI-Credit Marketplace $-caps.
 - Recruiter reveal-pricing multipliers (match-quality tiers, same-role volume discount, JD-assist flat cost — §4a) — no placeholder invented ahead of real usage data.
 - Recruiter-monetization tier naming ("Solo"/"Advanced" are working names, §4a/BUSINESS.md §7) — confirm during drafting/launch, not load-bearing to the mechanics.
-- Whether `job_postings.salary_min`/`salary_max` are actually enforced NOT NULL today, given salary is meant to be mandatory at posting time (§4a) — verify at implementation time.
+- ~~Whether `job_postings.salary_min`/`salary_max` are actually enforced NOT NULL today~~ — **answered 2026-08-06: they are NOT.** Both columns are plain `integer` (nullable) in `0001_schema.sql:83-84`, and the job editor only counts `salaryMin && salaryMax` as a single item in its "N of 8 fields complete" nudge — nothing hard-requires both. So a half-filled range is creatable today. **Interim display decision (2026-08-06): a half-filled range renders "Salary on request"** — every seeker surface now routes through the single `salaryDisplay()` helper (`src/lib/jobs.ts`), which fails closed when *either* bound is null. This replaced three disagreeing formatters (the dashboard's local `salaryLine()` showed `$150,000+`, the match list showed `—`, only the detail page used the shared helper) — and that inconsistency was hiding a real leak: the dashboard path never selected `salary_visibility` at all, so it printed the range for `on_request` jobs. Consistent-and-fails-closed is the right default for a salary-stealth product. **Making both bounds NOT NULL remains the real fix** (it also makes §4a's seniority-derivation-from-salary-band sound) and is tracked as a follow-up: migration + editor validation + updating the smoke spec that currently fills only `job-salary-max`.
 - Placement-outcome tracking (recruiter marks a hire, optionally logs commission, §4a/§10) — long-range backlog only, contingent on a future decision to expand into hiring-process support; not scoped by anything above.
 - Nonce-CSP via edge middleware (before public launch — §2f Layer 0): per-route CSP headers don't survive App Router client-side navigation; the enforceable slice today is the zero-third-party e2e assertion.
 - Edge/core physicalization design details (§2f): regional-store topology (per-region Supabase project vs. self-hosted), cross-layer reveal API auth, and the HK-GPU serving stack — deferred until a promotion trigger fires.
@@ -405,6 +405,194 @@ sections above remain the target architecture.
   `tests/frontier-guardrail.test.ts`, which fails typecheck if the boundary
   is weakened.
 
+## 13. 2026-08-05 Design Pass (designed, not yet built)
+
+This section records a founder-directed design pass. **Nothing here is coded yet** — this was a
+docs+design-sync cycle (deliberate, to protect the demo). Each subsection carries the concrete
+code touch-points so the later build cycle starts from a map, not a blank page. Design-project
+templates for these screens are authored in the "Binding UI" project (`dc871eb6`).
+
+### 13a. Salary stealth — deepened (BUSINESS §3/§7, reconciles §4a/§5)
+"Salary stealthiness is a selling point" — hardened on both sides:
+- **Default flips `public` → `on_request`.** Stealth is the default posture, disclosure the opt-in.
+  Touch-point: `salary_visibility` column default in `supabase/migrations/0007_job_structured_fields.sql:16`.
+- **Third visibility mode `band`** (coarse band, e.g. "$180k+" / "$150–200k") between exact-range and
+  fully-hidden. Enum grows to `('public','band','on_request')`; `salaryDisplay()`
+  (`src/lib/jobs.ts:32`) gains banding logic (round to a coarse bucket). Applies to job salary.
+- **Existing rows migrated** to `on_request` (not just the default) so the demo shows stealth
+  everywhere, not only on newly-created postings.
+- **Seeker side made symmetric.** `profiles.share_salary` default flips `true → false`
+  (`0008_profile_fields_and_experience.sql:20`), and the recruiter-facing surface stops showing
+  candidate salary-expectation — this closes the standing contradiction with §5 ("salary withheld
+  even post-reveal") that the current recruiter card + `recruiter-match-dashboard` template violate.
+- **Close the dashboard leak (bug, not just default):** the seeker dashboard match card
+  (`src/app/(app)/seeker/match-list.tsx`) renders the raw `$min–$max` and offers a "Highest salary"
+  sort while `src/app/(app)/seeker/seeker-data.tsx` doesn't even select `salary_visibility` — so an
+  `on_request` job would still leak its range there. Fix: select `salary_visibility`, route the card
+  through `salaryDisplay()`, drop/neuter the salary sort. The detail page
+  (`src/app/(app)/seeker/matches/[id]/page.tsx`) already honors visibility — align the card to it.
+
+### 13b. AI job-post authoring — three modes (fixes recruiter "manual is not good")
+Today recruiter posting is fully manual (`job-editor.tsx`); the only AI is `refineJobText`
+(`src/app/(app)/recruiter/actions.ts:129`) rewriting already-typed prose. Bring recruiters to
+parity with the seeker resume-first flow (`onboarding-wizard.tsx` upload→extract→approve). Three
+input modes, all suggest-and-approve:
+1. **Paste/upload existing JD** → new `extractJobFields(text)` → prefill the editor's structured
+   fields as approve/edit cards (reuse the seeker `ItemCard` pattern).
+2. **Generate from a prompt** → new `generateJob({title, company, notes})` → AI drafts description /
+   responsibilities / requirements for review. This is the "frictionless from nothing" path.
+3. **Refine editor** (existing `refineJobText`) retained for polishing typed prose.
+- New `AiProvider` methods `extractJobFields` / `generateJob` in `src/lib/ai/types.ts` + `stub.ts`
+  + `modal.ts`. Recruiter-authored JD text is `JDTextOnly` (frontier-eligible) but stays on Modal
+  for cost parity — no candidate data involved, so the frontier-guardrail is not implicated.
+- Recruiter-gated ingest: generalize `/api/ingest` (currently seeker-only, `route.ts:15`) or add
+  `/api/ingest-jd`. **AI-never-fabricates still holds** — generated JD text is recruiter-owned and
+  recruiter-approved before publish.
+
+### 13c. Fewer fields — AI-first with progressive disclosure (#7; extends §2c/§2d)
+Principle for the AI era: **AI drafts / human confirms; AI prefills every field it can; advanced or
+optional fields are progressively disclosed** (hidden behind "edit"/"more" until needed) rather than
+presented as a wall of empty inputs. This is the "fewer fields" win *without* breaking the PDPA
+posture: the AI may draft and prefill, but **never silently maintains** hiring-decision data —
+every committed change stays suggest-and-approve (§2c AI-never-fabricates, §11 Accuracy Obligation).
+Applies to the seeker structured profile (`profile-fields.tsx`, currently ~13 fields + 7 visibility
+controls shown flat) and to #13b's job editor. Not runtime-generative UI — still deterministic slots
+(§2d); progressive disclosure is a state-driven show/hide, not model-emitted markup.
+
+### 13d. Skill assessment + verified-skill matching (BUSINESS §3/§6, extends §3 matching)
+`verified_actions` table + `skill_assessment` enum exist (`0001_schema.sql`) with **zero code**;
+matching is a single cosine score by design (`matching.ts:28-53`), no second axis, no prestige proxy.
+Design:
+- **Auto-scored MCQ, founder-reviewed bank.** Content is AI-generated then **human(founder)-reviewed
+  once per assessment before publish** — a seeded reviewed question bank, NOT per-attempt generation.
+  This resolves the "AI-generated, human-reviewed" reviewer question at solo-founder stage: grading
+  is deterministic (MCQ auto-score), so there is no per-attempt human-in-the-loop.
+- **Schema sketch**: `skill_assessments` (skill, questions jsonb, published flag) +
+  `assessment_attempts` (profile_id, assessment_id, score, passed_at). A pass writes a
+  `verified_actions` row (`action_type='skill_assessment'`, `detail={skill,score}`) and earns points
+  via the existing `verified_action` earn path (mirror `earnFreshnessConfirmation` in `points.ts`).
+- **Match interaction — recruiter-configurable per job, folded into the ONE score:**
+  - The recruiter marks, per posting, whether a skill is **required-verified** (a filter/dealbreaker —
+    unverified candidates excluded for that role) or a **weighted advantage** (like "X a plus" in a
+    JD). Stored on `job_postings` (e.g. `verified_skill_prefs jsonb`).
+  - A verified skill applies a **small, capped bonus to the raw cosine** for jobs that value it —
+    folded into the single score, not a parallel formula shown alongside. Touch-points: the `score`
+    from `match_candidates` and/or `matchBand` (`matching.ts:28,46`), reading `verified_actions`.
+  - **Band-cap invariant preserved (load-bearing).** The boost changes recruiter-side ranking and
+    the *pre-cap* score identically; the seeker still sees band-only, and a capped `high→normal`
+    match stays indistinguishable from a genuine `normal` (§2d). **New invariant test required**:
+    the boost must never produce a seeker-visible differential signal (add to
+    `tests/reveal-invariants.test.ts` or a matching test).
+  - **Fairness**: skill verification is merit-based, consistent with the tenure-not-employer-prestige
+    stance already encoded in `src/lib/experience.ts` — it rewards a demonstrated skill, not a brand.
+
+### 13e. Security + Privacy settings — two pages (#14)
+No settings route exists today; consent/visibility toggles are scattered in the seeker profile
+"Privacy" card (`profile-fields.tsx:799`) and `/account`'s privacy section is a "Coming soon" stub.
+Design: **two dedicated pages, single source of truth (toggles move OUT of the profile card).**
+- **Privacy** (`/seeker/settings/privacy`): consolidate `share_salary`, `reveal_override_enabled`,
+  continuous-maintenance consent, market-signals opt-in, per-field `field_visibility`; show consent
+  versions (`src/lib/consent.ts`) + withdraw. Reuse existing actions (`updateMaintenanceConsent`,
+  `updateMarketSignalsConsent`, `updateFieldVisibility`, `saveDraft`). Extract the card into a shared
+  component; the profile page keeps a link, not the controls.
+- **Security** (`/seeker/settings/security`): account deletion (moved from `/account`), auth method /
+  connected providers, sign-out-everywhere. Replaces the `/account` stub.
+- **Recruiter** gets minimal Privacy + Security pages (company-identity note, deletion, auth).
+
+### 13f. Dashboard feature-widgets (#1; extends §2d)
+The `/seeker` and `/recruiter` dashboards (and the design-project templates) are the **adaptive
+state machine** + a flat match list — there is **no widget-per-feature surface**, and Training /
+Benefits / Market-intelligence have no dashboard presence. Design: **keep the adaptive state-machine
+leading module** (privacy invariants depend on its frame logic) and **add a feature-widget grid
+below it**, both roles.
+- Seeker widgets: Training, Benefits, Points, Skill Assessment (13d), Profile freshness,
+  Market-insights teaser. Recruiter widgets: Market Intelligence, Job postings, Reveal credits/points,
+  Training. Touch-points: `src/app/(app)/seeker/page.tsx`, `.../recruiter/page.tsx` (routes already
+  in `app-shell.tsx` nav).
+- **Invariants in every match-bearing widget**: match-band-cap (§2d) and the "Promoted" ranking-boost
+  label (§4a) must both remain visible — a widget frame is not exempt.
+
+### 13g. Referral / invite acquisition loop (#12; closes BUSINESS §6a gap)
+Audit finding: earn-loops are wired (seed, reveal-compensation, freshness, training in `points.ts` /
+`training.ts`) but there is **no acquisition/viral loop anywhere** — no referral, no invite (grep of
+`referral|invite|refer_|growth` returns only unrelated prose). This is the biggest structural hole in
+the §6a flywheel (seeker→pool→recruiter). Design: an **invite mechanic where both parties earn points
+on the invitee's activation** (not on send — anti-farming). Touch-points: new `referrals` table +
+`invite_code`, a new `verified_action`-adjacent earn category in `points.ts`, rate-limited. Keeps the
+closed-loop non-monetary invariant (points, never cash). This is the missing top-of-funnel lever the
+whole flywheel depends on.
+
+### 13h. Auth — OAuth (Google first) (#13)
+Today: magic-link primary; OAuth buttons inert (`login-form.tsx:74` toasts "coming soon"); password
+gated for demo/e2e. Design: wire `onSocial` → `supabase.auth.signInWithOAuth`, enable **Google first**
+in `supabase/config.toml` (LinkedIn later); the callback route (`auth/callback/route.ts`) already
+exchanges the code. Provider client-ID/secret is a founder Supabase-dashboard step; magic-link stays
+the fallback so the demo never depends on OAuth creds existing.
+
+### 13i. UI gap analysis — design-project adherence (#2)
+Adherence to the authoritative "Binding UI" templates is otherwise solid (15 templates, monochrome
+theme, path-segment routing). Real gaps found this pass:
+- **Namespace drift is now REAL** (was previously a deliberate hold): `.design-sync/config.json` has
+  moved to `globalName:"BindingUI"` / `pkg:"@binding/ui"`, but the live design-project bundle +
+  every template still bind `window.JumpOnBoardUI`. The next `/design-sync` regenerates the bundle as
+  `BindingUI`, which will break templates until they're updated `JumpOnBoardUI.*`→`BindingUI.*` (a
+  `globalName` change = full re-grade, per `.design-sync/NOTES.md` "Re-sync risks"). NOTES.md's
+  2026-08-03 "identifiers stay JumpOnBoard on purpose" paragraph is stale and corrected in this pass.
+- **`recruiter-match-dashboard` template shows candidate "Salary expectation"** — violates §5
+  (withhold even post-reveal). Fix in the template (13a).
+- **`new-job-post` template defaults salary visibility to "public"** — contradicts salary-stealth
+  (13a). Flip default + add the `band` option.
+- **No templates** for: settings (Privacy/Security), skill assessment, referral, widget dashboards,
+  AI job-post authoring, enterprise. Authored this pass.
+- Deferred serif-removal kit delta (NOTES.md) still unsynced — folded into this pass's kit re-sync.
+
+### 13j. Brand theme reversed — monochrome → purple/serif (founder directive 2026-08-05)
+
+**What changed.** `Binding.dc.html` in the **"Binding UI" project `b7e905dd`** is now the
+authoritative final-product mockup, and the app + design system are being rebuilt to match it. Its
+theme is the *richer* brand — purple accent used pervasively (`--jb: oklch(0.52 0.16 264)`, 215
+occurrences: 79 as text/links, 23 as solid CTA fills, 40 as soft tint), **Newsreader** serif headings
+(`jb-serif`, 27×), Geist body, and `jb-fade`/`jb-lift` micro-interactions. The mockup never uses a
+near-black primary at all.
+
+**This deliberately reverses §1.9's monochrome reversion.** Recording *why monochrome was originally
+adopted*, so this doesn't ping-pong: in 1.9 (2026-07-26) the founder directed strict adherence to the
+then-authoritative Claude Design mockup (`dc871eb6`), which was itself monochrome — so purple +
+Newsreader + jb-lift/jb-fade were removed **to match that mockup**, not because monochrome was judged
+better on its own merits. The 2026-08-05 flip is the same rule (*follow the authoritative mockup*)
+applied to a **new, better mockup** — not a reversal of the underlying principle. If the authoritative
+mockup changes again, the theme follows it again; the principle is stable even when the palette isn't.
+
+**Implemented tokens** (`packages/ui/src/theme.css`, both `:root` and `.dark`):
+- `--primary: oklch(0.45 0.17 264)` — **AA-darkened** from the mockup's `0.52 0.16` so white-on-primary
+  clears 4.5:1 (measures ~7.7:1). Primary CTAs/active states are purple (matching the mockup), not near-black.
+- `--accent` = soft purple tint (`oklch(0.96 0.02 264)` light) — **mode-aware deviation**: dark mode uses
+  `oklch(0.29 0.03 264)`, because the literal near-white tint would render hovered text and `::selection`
+  invisible against the dark foreground.
+- `--ring: oklch(0.52 0.16 264)` **opaque** — deliberate deviation from the mockup's `/.22` alpha:
+  Button/base layers re-apply `ring-ring/50`, so a `.22` base composites to ~`.11` (an effectively
+  invisible focus ring, WCAG 2.4.7). Opaque base + component alpha follows shadcn convention.
+- `--font-heading` = Newsreader (restored; applied to page h1/h2 **and** `CardTitle`/`DialogTitle`),
+  `--font-sans` leads with Geist. Sidebar/rail tokens mirrored to the purple set.
+- `jb-lift` / `jb-fade` utilities, both disabled under `prefers-reduced-motion: reduce`.
+- **Fonts self-hosted** via `next/font/google` in `src/app/layout.tsx` — never a `fonts.googleapis.com`
+  link, which would break the zero-third-party assertion (`e2e/no-third-party.spec.ts`, §2f Layer 0).
+
+**The mockup is a styling reference, NOT a privacy authority.** It shows things the product forbids
+(e.g. `92% match` on seeker surfaces, salary ranges). Porting rule: adopt layout/theme, strip/adapt
+anything violating the invariants — seekers see the qualitative band only with no differential signal
+for a capped match (§2d), job salary hidden by default via `salaryDisplay()` (§13a), candidate
+salary-expectation never shown to recruiters even post-reveal (§5), "Promoted" label retained (§4a),
+raw résumé owner-only (§5). All server actions, the data model, and privacy logic stay unchanged —
+this is presentational + interaction-pattern work.
+
+**Build state**: kit theme + self-hosted fonts + the seeker/recruiter dashboard validation slice are
+**built** (branch `feat/binding-ui-restyle`); the remaining ~23 routes, the three new
+`@binding/ui` composites (RevealRequestCard, CreditLedger, AIDocumentCanvas — sourced from the Binding
+UI project's own `ds-patterns/`, which its README asks to push back into the DS), the Binding DS
+template re-theme, and the mockup-only screens (export/PDF, pipeline-health, external ledger) are
+**pending**.
+
 ---
 
 ## Revision History
@@ -431,3 +619,5 @@ sections above remain the target architecture.
 | 2.6 | 2026-08-04 | **Recruiter candidate-card & reveal UX overhaul** (8 founder observations) + two prerequisites surfaced by a real-résumé founder test. §5 hardened: redaction is now **HYBRID** — the LLM pass plus a deterministic known-identifier strip (`src/lib/redact-known.ts`) for name/employers/address, after the small Modal model returned a 13-yr CISO résumé near-verbatim; the deterministic layer is the guarantee, LLM best-effort on top. New §5 recruiter-surface paragraph: non-identifying descriptive label (role · region · **banded** years), structured strength chips, exact match % + reveal cost per card, de-identified **credentials** (awards/certs/patents — raw owner-only, Modal-generalized via `src/lib/credentials.ts` floor + `credentialsLooksSafe` guard, `field_visibility.credentials` opt-out, folded into the match embedding), detail panel that pops out right (mobile drawer), and a generated redacted-résumé **PDF** (`/api/resume-pdf/[revealRequestId]`, from structured/redacted data, never `raw_text`) — **salary withheld even post-reveal** (fairness). Migration 0018 (`years_experience`, `credentials`, `credentials_summary`, `matches.interested_at`; widened `match_candidates` RPC). Date-normalization defense (`normalizeExperienceDates`, G2). App-shell switch-mode realigned (icon-only when the rail is collapsed). Seeder rewritten for per-candidate variety (distinct embeddings/ratios) + staggered interest times. |
 | 2.7 | 2026-08-04 | **Dynamic reveal pricing (first cut) + recruiter-dashboard label fix + staging data hygiene** (founder feedback on the live demo). §4a: match-quality multiplier now BUILT for standard reveals — `matchPriceMultiplier`/`revealCostForScore` in `points.ts` (×1/×1.5/×2 tiers on the cosine), charged in `revealCandidate` and shown on the card/button via the same helper (price shown == price spent); per-role base + volume discount + override-path scaling remain roadmap. Fixed observation #3's second surface: the `/recruiter` aggregate dashboard (`pipeline-list.tsx`) still rendered the literal "Pseudonymized candidate" — now uses the descriptive label + strength chips like the per-job matches page. Tracked staging seeder (`scripts/seed-staging.ts`, real Modal embeddings, 50 seekers/20 jobs tech+finance, shares the dataset definition with the local smoke seed; wipes both `@smoke.local`/`@demo.local` seed domains). |
 | 2.8 | 2026-08-04 | Dynamic reveal pricing extended to the **override** path (§4a). `overrideRevealCandidate` charges the match-scaled cost and locks the proportionally-scaled engagement-premium refund on `reveal_requests.premium_refund` (migration 0021), so both refund paths (candidate decline in `respondToOverride` / 7-day `expireStaleOverride`) return exactly the scaled premium — kept-base + refund reconstruct the scaled total at every tier. Override card cost + button (cost & refund copy) now reflect the scaled amounts. |
+| 2.9 | 2026-08-05 | **2026-08-05 design pass (docs+design-sync cycle, no app code)** — new §13 records founder-directed feature designs with code touch-points for a later build: 13a salary stealth deepened (default `public`→`on_request`, new `band` mode, existing-row migration, seeker `share_salary`→false + drop recruiter-visible salary-expectation, close the seeker-dashboard `match-list.tsx` leak — reconciles the standing §5 "withhold even post-reveal" contradiction); 13b AI job-post authoring 3 modes (`extractJobFields`/`generateJob`, recruiter parity with the seeker resume flow); 13c fewer-fields AI-first + progressive-disclosure principle (bounded by suggest-and-approve / never-silently-maintain); 13d skill assessment (auto-scored MCQ, founder-reviewed bank, `verified_actions` write) with recruiter-configurable per-job verified-skill filter/advantage folded into the single cosine score + a new band-cap invariant test; 13e Security+Privacy as two pages (toggles move out of the profile card); 13f adaptive-dashboard + feature-widget grid both roles; 13g referral/invite acquisition loop (closes the BUSINESS §6a flywheel gap — no acquisition loop exists today); 13h OAuth Google-first; 13i UI gap analysis (namespace drift now real — config moved to `BindingUI`; recruiter template salary-expectation leak; new-job-post public-salary default; missing templates). Companion to BUSINESS.md 2.2 + new COMPETITORS.md 1.0. |
+| 2.10 | 2026-08-06 | **Brand theme reversed: monochrome → purple + Newsreader serif** (founder directive; new §13j). The authoritative UIUX mockup moved to **`Binding.dc.html` in the "Binding UI" project `b7e905dd`** (the founder's final-product design); Binding DS `dc871eb6` is demoted to the component/template library that gets synced *to* match it. §1.9's monochrome reversion is reversed — and §13j records *why* monochrome existed (it mirrored the then-authoritative mockup, not an independent judgment), so the governing principle ("follow the authoritative mockup") stays stable even as the palette changes. Implemented in `packages/ui/src/theme.css`: purple `--primary` **AA-darkened** to `oklch(0.45 0.17 264)` (~7.7:1 white-on-primary), mode-aware soft-purple `--accent` (dark mode deviates from the literal near-white tint so hover/`::selection` stay visible), **opaque** `--ring` (the mockup's `/.22` would composite to ~`.11` under `ring-ring/50` → invisible focus, WCAG 2.4.7), Newsreader `--font-heading` restored on page h1/h2 + Card/Dialog titles, Geist `--font-sans`, `jb-lift`/`jb-fade` gated on `prefers-reduced-motion`, sidebar tokens on-brand. Fonts **self-hosted** via `next/font` (a CDN link would break `e2e/no-third-party.spec.ts`). Seeker/recruiter dashboards restyled as the validation slice, including a real privacy fix: `on_request` salaries are now nulled **at the source** in `seeker-data.tsx` (previously only visually hidden, so the figures still shipped in client props) and all seeker salary rendering routes through `salaryDisplay()`. Remaining routes, the 3 new `@binding/ui` composites, DS-template re-theme, and mockup-only screens (export/PDF, pipeline-health, external ledger) are pending on branch `feat/binding-ui-restyle`. |

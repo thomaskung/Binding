@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Geist } from "next/font/google";
+import { Geist, Newsreader } from "next/font/google";
 import { Toaster, cn } from "@binding/ui";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+// Self-hosted at build time by next/font (no runtime CDN — protects
+// e2e/no-third-party). Exposed as the CSS vars the kit theme consumes.
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
+const newsreader = Newsreader({ subsets: ["latin"], variable: "--font-newsreader" });
 
 export const metadata: Metadata = {
   title: "Binding",
@@ -15,7 +18,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={cn("font-sans", geist.variable)}>
+    <html lang="en" className={cn("font-sans", geist.variable, newsreader.variable)}>
       <body className="min-h-screen antialiased">
         {children}
         <Toaster />

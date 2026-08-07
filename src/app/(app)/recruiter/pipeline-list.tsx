@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Badge, Button, Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Tabs, TabsList, TabsTrigger } from "@binding/ui";
+import { Badge, Button, Card, CardContent, CardFooter, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Tabs, TabsList, TabsTrigger } from "@binding/ui";
 import { candidateLabel, seniorityChip } from "@/lib/candidate-card";
 
 export interface PipelineCard {
@@ -22,6 +22,9 @@ export interface PipelineCard {
   region: string | null;
   credentialsSummary: string | null;
   threadId: string | null;
+  /** Points the standard reveal will cost (opt-in path only); null otherwise.
+   * Computed server-side via revealCostForScore so it equals what's charged. */
+  revealCost: number | null;
 }
 
 const STATUS_FILTERS = ["all", "surfaced", "interested", "revealed"] as const;
@@ -86,47 +89,70 @@ export function PipelineList({ cards }: { cards: PipelineCard[] }) {
           const label = card.revealedName ?? candidateLabel(card);
           const senChip = seniorityChip(card.seniorityBand, card.yearsExperience);
           return (
-          <Card key={card.id} data-testid="pipeline-card">
-            <CardHeader>
-              <CardTitle data-testid={card.revealedName ? "pipeline-revealed-name" : "pipeline-label"}>
-                {label} <span className="font-normal text-muted-foreground">— {card.jobTitle}</span>
-              </CardTitle>
-              <CardAction>
-                <Badge variant="secondary">{Math.round(card.score * 100)}% match</Badge>
-              </CardAction>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex flex-wrap gap-1.5">
-                {senChip && <Badge variant="secondary">{senChip}</Badge>}
-                {card.region && <Badge variant="secondary">{card.region}</Badge>}
-                {card.industries.slice(0, 1).map((ind) => (
-                  <Badge key={ind} variant="secondary">{ind}</Badge>
-                ))}
-                {card.skills.slice(0, 4).map((s) => (
-                  <Badge key={s} variant="outline">{s}</Badge>
-                ))}
-                {card.skills.length > 4 && <Badge variant="outline">+{card.skills.length - 4}</Badge>}
-                {card.credentialsSummary && (
-                  <Badge variant="default" data-testid="pipeline-credentials">★ {card.credentialsSummary}</Badge>
-                )}
+          <Card key={card.id} data-testid="pipeline-card" className="jb-lift jb-fade">
+            <CardContent className="flex items-start gap-4">
+              {/* Exact % match — recruiter-only (raw score never reaches
+                  seeker code). Soft-tint tile mirrors the mockup's score chip;
+                  accent-foreground keeps it AA in both themes. */}
+              <div className="flex size-[52px] flex-none flex-col items-center justify-center rounded-xl bg-accent text-accent-foreground">
+                <span className="jb-serif text-lg font-semibold leading-none">
+                  {Math.round(card.score * 100)}%
+                </span>
+                <span className="mt-0.5 text-[8px] font-semibold uppercase tracking-wide opacity-70">
+                  match
+                </span>
               </div>
-              <Badge variant={STATUS_VARIANT[card.status] ?? "outline"}>
-                {card.status.charAt(0).toUpperCase() + card.status.slice(1)}
-              </Badge>
+              <div className="min-w-0 flex-1 space-y-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    data-testid={card.revealedName ? "pipeline-revealed-name" : "pipeline-label"}
+                    className="text-[15px] font-semibold leading-snug tracking-tight"
+                  >
+                    {label}
+                  </span>
+                  <Badge variant={STATUS_VARIANT[card.status] ?? "outline"}>
+                    {card.status.charAt(0).toUpperCase() + card.status.slice(1)}
+                  </Badge>
+                </div>
+                <p className="text-[13px] text-muted-foreground">{card.jobTitle}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {senChip && <Badge variant="secondary">{senChip}</Badge>}
+                  {card.region && <Badge variant="secondary">{card.region}</Badge>}
+                  {card.industries.slice(0, 1).map((ind) => (
+                    <Badge key={ind} variant="secondary">{ind}</Badge>
+                  ))}
+                  {card.skills.slice(0, 4).map((s) => (
+                    <Badge key={s} variant="outline">{s}</Badge>
+                  ))}
+                  {card.skills.length > 4 && <Badge variant="outline">+{card.skills.length - 4}</Badge>}
+                  {card.credentialsSummary && (
+                    <Badge variant="default" data-testid="pipeline-credentials">★ {card.credentialsSummary}</Badge>
+                  )}
+                </div>
+              </div>
             </CardContent>
-            <CardFooter>
+            <CardFooter className="gap-3">
               {card.status === "revealed" && card.threadId ? (
-                <Button size="sm" render={<Link href={`/thread/${card.threadId}`} />}>
+                <Button size="sm" className="ml-auto" render={<Link href={`/thread/${card.threadId}`} />}>
                   Message candidate
                 </Button>
               ) : (
-                <Button
-                  size="sm"
-                  variant={card.status === "interested" ? "default" : "outline"}
-                  render={<Link href={`/recruiter/jobs/${card.jobId}/matches`} />}
-                >
-                  {card.status === "interested" ? "Reveal profile" : "View profile"}
-                </Button>
+                <>
+                  {/* Reveal cost mirrors revealCostForScore(REVEAL_COST, score),
+                      the exact charge in revealCandidate. Candidate salary
+                      expectation is deliberately never shown here. */}
+                  {card.revealCost != null && (
+                    <Badge variant="outline">{card.revealCost} pts to reveal</Badge>
+                  )}
+                  <Button
+                    size="sm"
+                    className="ml-auto"
+                    variant={card.status === "interested" ? "default" : "outline"}
+                    render={<Link href={`/recruiter/jobs/${card.jobId}/matches`} />}
+                  >
+                    {card.status === "interested" ? "Reveal profile" : "View profile"}
+                  </Button>
+                </>
               )}
             </CardFooter>
           </Card>

@@ -198,12 +198,12 @@ export function AppShell({
           <button
             type="button"
             onClick={toggleRail}
-            className="mb-5 flex w-full items-center gap-3 rounded-lg px-2.5 py-2 hover:bg-muted"
+            className="mb-5 flex w-full items-center gap-3 rounded-lg px-2.5 py-2 hover:bg-accent/50"
             aria-label={railOpen ? "Collapse navigation" : "Expand navigation"}
           >
             <Icon name="hamburger" />
             {railOpen && (
-              <span className="whitespace-nowrap text-sm font-semibold tracking-tight">
+              <span className="font-heading whitespace-nowrap text-[15px] font-medium tracking-tight">
                 Binding
               </span>
             )}
@@ -218,11 +218,11 @@ export function AppShell({
                   key={item.label}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-3 rounded-lg px-2.5 py-2 text-[13.5px] font-medium transition-colors hover:bg-muted",
-                    active ? "bg-muted text-foreground" : "text-muted-foreground",
+                    "flex items-center gap-3 rounded-lg px-2.5 py-2 text-[13.5px] font-medium transition-colors hover:bg-accent/50",
+                    active ? "bg-accent text-foreground" : "text-muted-foreground",
                   )}
                 >
-                  <Icon name={item.icon} />
+                  <Icon name={item.icon} className={active ? "text-primary" : undefined} />
                   {railOpen && <span className="truncate whitespace-nowrap">{item.label}</span>}
                 </Link>
               );
@@ -235,7 +235,7 @@ export function AppShell({
             type="button"
             data-testid="account-menu-toggle"
             onClick={() => setProfileOpen((v) => !v)}
-            className="flex w-full items-center gap-3 rounded-[10px] px-2.5 py-2 text-left hover:bg-muted"
+            className="flex w-full items-center gap-3 rounded-[10px] px-2.5 py-2 text-left hover:bg-accent/50"
           >
             <span className="flex size-[30px] flex-none items-center justify-center rounded-full bg-primary text-[13px] font-semibold text-primary-foreground">
               {initials(displayName)}
@@ -303,7 +303,7 @@ export function AppShell({
                     className={cn(
                       "flex size-9 items-center justify-center rounded-md text-[13px] font-semibold transition-colors",
                       role === m
-                        ? "bg-background text-foreground shadow-sm"
+                        ? "bg-accent text-primary shadow-sm"
                         : "text-muted-foreground hover:bg-background/60",
                     )}
                   >
@@ -329,23 +329,25 @@ export function AppShell({
                 className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-[12.5px] font-semibold text-foreground"
                 data-testid="ai-suggestion-chip"
               >
-                <Icon name="sparkle" className="size-[15px]" />
+                <Icon name="sparkle" className="size-[15px] text-primary" />
                 {aiSuggestion}
               </span>
             )}
             {role === "seeker" ? (
               <Link
                 href="/seeker/points"
-                className="rounded-full bg-muted px-3 py-1.5 text-[12.5px] font-semibold text-foreground hover:bg-accent"
+                className="flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-primary transition-colors hover:bg-accent/70"
                 data-testid="points-balance"
               >
+                <Icon name="sparkle" className="size-[14px]" />
                 {points.toLocaleString()} points
               </Link>
             ) : (
               <span
-                className="rounded-full bg-muted px-3 py-1.5 text-[12.5px] font-semibold text-foreground"
+                className="flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-primary"
                 data-testid="points-balance"
               >
+                <Icon name="sparkle" className="size-[14px]" />
                 {points.toLocaleString()} points
               </span>
             )}

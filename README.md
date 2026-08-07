@@ -11,19 +11,21 @@ points ledger → in-app messaging). Covered by a Playwright e2e test.
 
 ## Setup
 
-Prereqs: Node 22+, pnpm, Docker (for local Supabase).
+Prereqs: Node 22+, pnpm. **No Docker** — local Supabase was retired 2026-08-06; the
+backend is hosted Supabase and staging is Vercel.
 
 ```bash
 pnpm install
-pnpm db:start          # local Supabase (Postgres+pgvector, auth, storage)
-pnpm db:reset          # apply migrations + demo seed
-cp .env.example .env.local   # fill keys from `pnpm db:start` output
-pnpm dev               # http://localhost:3000
+cp .env.example .env.local   # fill in the hosted Supabase keys (dashboard → Settings → API)
+pnpm dev                     # http://localhost:3000, against hosted Supabase
 ```
 
-Demo accounts (local seed): `seeker@demo.local` / `recruiter@demo.local`,
-password `J0B!Demo#2026$secure` (password tab on the login page). Magic-link emails
-land in Inbucket: http://127.0.0.1:54324
+Because `pnpm dev` talks to the **shared hosted** project, treat its data as real —
+destructive experiments hit staging, not a throwaway local volume. `pnpm seed:staging`
+restores the dataset.
+
+Sign in with a magic link (delivered by the hosted project's mailer), or enable the
+password tab locally with `NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN=true` in `.env.local`.
 
 ## Commands
 
@@ -32,9 +34,9 @@ land in Inbucket: http://127.0.0.1:54324
 | `pnpm dev` / `pnpm build` | Next.js dev server / production build |
 | `pnpm lint` / `pnpm typecheck` | ESLint / tsc |
 | `pnpm test` | Vitest unit tests (stub AI, matching filter, privacy guardrail) |
-| `pnpm e2e` | Playwright acceptance suite (smoke, override, signup, app-shell, …) — needs `pnpm db:reset` first |
-| Staging E2E | Playwright against deployment: `npx playwright test e2e/staging-functional.spec.ts` (secrets from `.env.local`, see AGENTS.md) |
-| `pnpm db:start` / `pnpm db:reset` | Local Supabase up / migrate+seed from zero |
+| `pnpm e2e` | Playwright acceptance suite **against deployed staging** — needs the `E2E_*` secrets in `.env.local` (see `.env.example`); also runs in CI on every PR |
+| `pnpm db:push` | Apply pending migrations to hosted Supabase (needs `SUPABASE_DB_URL`; CI does this on merge) |
+| `pnpm seed:staging` | (Re)seed the hosted staging dataset (real Modal embeddings) |
 | `node scripts/pdf2md.mjs "<file.pdf>" /tmp/out.md` | Convert a PDF to markdown (see the `pdf-reader` skill) |
 
 ## Stack (why: free-tier + solo-founder constraints — see DESIGN.md §12)

@@ -78,7 +78,7 @@ export function LoginForm({ intent }: { intent: SignupIntent | null }) {
   }
 
   return (
-    <Card className="w-full">
+    <Card className="jb-fade w-full">
       {step === "email" && (
         <>
           <CardHeader>
@@ -185,7 +185,7 @@ export function LoginForm({ intent }: { intent: SignupIntent | null }) {
       {step === "sent" && (
         <>
           <CardHeader>
-            <div className="mb-1.5 flex size-11 items-center justify-center rounded-full bg-secondary text-xl">
+            <div className="mb-1.5 flex size-11 items-center justify-center rounded-full bg-accent text-xl text-accent-foreground">
               ✦
             </div>
             <CardTitle className="font-medium">Check your inbox</CardTitle>
