@@ -19,7 +19,24 @@
       "model": "opencode-go/deepseek-v4-pro",
       "permission": {
         "edit": "deny",
-        "bash": "deny",
+        "bash": {
+          "*": "ask",
+          "git *": "allow",
+          "gh *": "allow",
+          "ls *": "allow",
+          "rg *": "allow",
+          "cat *": "allow",
+          "rm -rf *": "deny",
+          "rm -fr *": "deny",
+          "git push --force*": "deny",
+          "git push -f *": "deny",
+          "git reset --hard*": "deny",
+          "gh repo delete *": "deny",
+          "gh secret *": "deny",
+          "sudo *": "deny",
+          "chmod -R *": "deny",
+          "chown -R *": "deny"
+        },
         "task": "deny"
       }
     }
