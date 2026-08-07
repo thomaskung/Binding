@@ -41,40 +41,150 @@ jobs:
 
       - run: npx vitest run --coverage
 
-  # Playwright runs against the DEPLOYED staging app — local Supabase was
-  # retired (2026-08-06), so there is no local stack for CI to boot either.
-  # Every spec creates and cleans up its own per-run users via the service-role
-  # key (e2e/staging-helpers.ts), so concurrent runs don't collide.
+  # Modal-free gate: intended as a REQUIRED merge check. Runs only the 5 specs
+  # that never touch Modal, against the PR's OWN Vercel preview (never main's
+  # staging deploy — see the `preview` step) so the code under review is what
+  # actually gets tested.
   #
-  # Skipped automatically on forks, where the staging secrets aren't available.
+  # The full 13-file suite (with real Modal calls) moved to nightly
+  # (e2e-staging.yml, job `functional`) plus a post-merge smoke pass
+  # (deploy-staging.yml, job `smoke`) — this job used to run the whole suite
+  # against main's deploy, which took 32.7 min, spent ~27 paid Modal calls per
+  # PR, and never actually exercised the PR's own code.
+  #
+  # This job has NO job-level `if:`. GitHub treats a job skipped via a
+  # job-level `if:` as never having reported at all, which is fatal for a
+  # REQUIRED check — an unrunnable required check blocks the PR forever.
+  # Instead the `gate` step below sets a `skip` output for the two cases
+  # where running is impossible or unsafe, and every later step conditions on
+  # `steps.gate.outputs.skip != 'true'`, so the job always runs and always
+  # reports a real (green) conclusion — see the `gate` step for the two
+  # skip conditions.
   e2e:
     needs: check
-    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      - name: Determine whether this PR can be tested (fork / migration)
+        id: gate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+
+            // (a) Fork PRs don't get repo secrets, so E2E_SUPABASE_URL etc.
+            // are unavailable — the run would fail on missing env, not on a
+            // real problem.
+            const headFullName = pr.head.repo?.full_name;
+            const isFork = headFullName !== `${context.repo.owner}/${context.repo.repo}`;
+            if (isFork) {
+              core.info('Skipping: fork PR — staging secrets are not available to fork-originated workflow runs.');
+              core.setOutput('skip', 'true');
+              return;
+            }
+
+            // (b) PRs that touch supabase/migrations/: the PR's own migration
+            // has not been applied to staging yet. This is NOT "staging's
+            // schema is older than the PR" — deploy-staging.yml runs
+            // `migrate` before `vercel`, so staging is always at or ahead of
+            // merged code; the only gap is the PR's own UNAPPLIED migration.
+            // An additive migration would in fact run fine against the
+            // preview and a destructive one (e.g. adding a NOT NULL column)
+            // would not — this skips both deliberately rather than risk
+            // false confidence either way. Verify migration-bearing PRs with
+            // a scratch-DB dry run instead (see CLAUDE.md Gotchas).
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              per_page: 100,
+            });
+            const touchesMigrations = files.some((f) => f.filename.startsWith('supabase/migrations/'));
+            if (touchesMigrations) {
+              core.info("Skipping: PR touches supabase/migrations/ — the PR's own migration has not been applied to staging yet, so its preview can't be verified against the right schema.");
+              core.setOutput('skip', 'true');
+              return;
+            }
+
+            core.setOutput('skip', 'false');
+
+      - name: Resolve the PR's own Vercel preview
+        id: preview
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          SHA="${{ github.event.pull_request.head.sha }}"
+          echo "Looking for a READY Vercel preview built from commit $SHA..."
+          for i in $(seq 1 30); do
+            RESPONSE=$(curl -s "https://api.vercel.com/v6/deployments?teamId=${VERCEL_ORG_ID}&projectId=${VERCEL_PROJECT_ID}&meta-githubCommitSha=${SHA}&limit=1" \
+              -H "Authorization: Bearer ${VERCEL_API_TOKEN}")
+            # Tolerate either key name — different Vercel API versions/docs
+            # disagree on `state` vs `readyState`, and if the key we guessed
+            # is wrong the python KeyError gets swallowed by `2>/dev/null`,
+            # leaving STATE empty and silently burning all 30 attempts.
+            STATE=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); d0=(d.get('deployments') or [{}])[0]; print(d0.get('state') or d0.get('readyState') or '')" 2>/dev/null || echo "")
+            URL=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); d0=(d.get('deployments') or [{}])[0]; print(d0.get('url') or '')" 2>/dev/null || echo "")
+            echo "attempt $i: state=$STATE url=$URL"
+            if [ "$STATE" = "READY" ] && [ -n "$URL" ]; then
+              echo "base_url=https://$URL" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [ "$STATE" = "ERROR" ] || [ "$STATE" = "CANCELED" ]; then
+              echo "::error::Vercel preview build for commit $SHA ended in state $STATE — not waiting out the remaining attempts."
+              exit 1
+            fi
+            sleep 20
+          done
+          # Deliberately no fallback to https://binding-staging.vercel.app: a
+          # silent fallback to main's deploy is exactly what let this job run
+          # green for weeks without ever testing the PR under review. No
+          # READY preview means a real, loud failure instead.
+          echo "::error::No READY Vercel preview found for commit $SHA after 10 minutes — refusing to fall back to binding-staging.vercel.app."
+          exit 1
+
       - uses: pnpm/action-setup@v4
+        if: steps.gate.outputs.skip != 'true'
         with:
           version: 11.5.2
 
       - uses: actions/setup-node@v4
+        if: steps.gate.outputs.skip != 'true'
         with:
           node-version: 22
           cache: pnpm
 
       - run: pnpm install
+        if: steps.gate.outputs.skip != 'true'
 
       - run: pnpm exec playwright install --with-deps chromium
+        if: steps.gate.outputs.skip != 'true'
 
-      - run: pnpm e2e
+      # Only the specs that never call a Modal endpoint. Three more
+      # fixture-based specs (field-visibility-fixture, no-third-party-fixture,
+      # seeker-invariants-fixture) will join this list once their rewrites
+      # land in a later pass — do NOT add them yet, the files don't exist yet
+      # and the job would fail on a missing spec path.
+      - name: Run Modal-free e2e specs against the PR preview
+        if: steps.gate.outputs.skip != 'true'
+        run: npx playwright test e2e/app-shell.spec.ts e2e/signup.spec.ts e2e/recruiter-onboarding-wizard.spec.ts e2e/training-benefits.spec.ts e2e/market-intel-dimensions.spec.ts
         env:
-          E2E_BASE_URL: https://binding-staging.vercel.app
+          E2E_BASE_URL: ${{ steps.preview.outputs.base_url }}
           E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
           E2E_SERVICE_ROLE_KEY: ${{ secrets.E2E_SERVICE_ROLE_KEY }}
-          E2E_STAGING_BASIC_USER: ${{ secrets.E2E_STAGING_BASIC_USER }}
+          # Literal, matching e2e-staging.yml. NOT `secrets.E2E_STAGING_BASIC_USER`:
+          # an unset secret renders as an empty string, and staging-helpers.ts's
+          # env() falls back with `??`, which only catches null/undefined — so ""
+          # would win over the "staging" default and every request would 401 at
+          # the basic-auth gate.
+          E2E_STAGING_BASIC_USER: staging
           E2E_STAGING_BASIC_PW: ${{ secrets.E2E_STAGING_BASIC_PW }}
           E2E_STAGING_SECRET: ${{ secrets.E2E_STAGING_SECRET }}
+          # No E2E_WARM_MODAL here: none of these 5 specs touch a Modal
+          # endpoint, so there's nothing to warm.
 
       - uses: actions/upload-artifact@v4
         if: failure()

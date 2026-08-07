@@ -102,7 +102,18 @@ jobs:
           done
       - name: Run functional tests
         id: tests
-        run: npx playwright test e2e/staging-functional.spec.ts --retries=1
+        # Now runs the WHOLE suite (all 13 spec files, no path argument — the
+        # config's testDir is ./e2e), not just staging-functional.spec.ts —
+        # the PR gate (ci.yml, job `e2e`) only covers 5 Modal-free specs, so
+        # this nightly run is now the only place the Modal-touching journeys
+        # (publish/reveal/extract/refine) get exercised end to end.
+        #
+        # Deliberately `npx playwright test`, not `pnpm e2e --`: pnpm forwards
+        # a literal `--` through to the underlying script instead of
+        # stripping it (verified locally — `pnpm e2e -- --retries=1 --list`
+        # invoked `playwright test -- --retries=1 --list`, which does not do
+        # what it looks like), so `--retries=1` would silently not apply.
+        run: npx playwright test --retries=1
         env:
           E2E_BASE_URL: https://binding-staging.vercel.app
           E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
@@ -110,6 +121,18 @@ jobs:
           E2E_STAGING_SECRET: ${{ secrets.E2E_STAGING_SECRET }}
           E2E_STAGING_BASIC_USER: staging
           E2E_STAGING_BASIC_PW: ${{ secrets.E2E_STAGING_BASIC_PW }}
+          # globalSetup's Modal warm-up needs the same token the curl
+          # warm-up steps above use.
+          MODAL_API_TOKEN: ${{ secrets.MODAL_API_TOKEN }}
+          # Makes Playwright's globalSetup warm the Modal endpoints too, right
+          # at the start of the test process. This is NOT redundant with the
+          # three curl warm-up steps above: those run BEFORE `pnpm install`/
+          # `playwright install` even start, buying Modal 5+ minutes of extra
+          # container lead time that a globalSetup starting at t=0 of the test
+          # process cannot. Both passes are deliberate — see the "Re-warm
+          # Modal right before tests" step above for why even three warm-up
+          # passes weren't always enough.
+          E2E_WARM_MODAL: '1'
 
       # Report failures onto ONE rolling issue instead of opening a new one per
       # run. The previous version called issues.create() unconditionally, which
@@ -208,6 +231,13 @@ jobs:
               body,
             });
 
+  # NOTE — known cost, not yet fixed: `functional`'s `pnpm e2e` above now runs
+  # the whole suite, which includes staging-uat.spec.ts, AND this job runs
+  # staging-uat.spec.ts again on its own for `score-uat` to consume. So
+  # staging-uat.spec.ts now executes twice per night — roughly 30 Modal calls
+  # total instead of the old ~27. Left as-is because `score-uat` needs this
+  # job's evidence artifacts specifically; consolidating the two runs is a
+  # follow-up, not done here.
   uat-evidence:
     needs: functional
     runs-on: ubuntu-latest
