@@ -248,14 +248,38 @@ export async function signInExpectFailure(page: Page, email: string) {
 }
 
 export async function stagingContext(browser: Browser) {
+  const headers: Record<string, string> = {
+    "x-staging-auth": env("E2E_STAGING_SECRET"),
+  };
+
+  // Vercel Deployment Protection. PREVIEW deployments in this project sit
+  // behind Vercel SSO — verified 2026-08-07: every request to a preview URL
+  // 302s to https://vercel.com/sso-api, BEFORE Next.js middleware runs, so
+  // neither the basic-auth credentials nor `x-staging-auth` below ever get a
+  // chance to apply. Playwright cannot complete that SSO flow.
+  //
+  // The documented escape hatch is Protection Bypass for Automation: generate
+  // the secret in Vercel (Project Settings -> Deployment Protection) and send
+  // it as this header. `x-vercel-set-bypass-cookie` makes Vercel set a cookie
+  // on the first response so client-side navigations and subresource requests
+  // stay bypassed too — without it only the top-level document carrying the
+  // header is let through.
+  //
+  // Only sent when the secret is present, so production-target runs (which
+  // are not protected) are unaffected. The PR gate in ci.yml targets a preview
+  // and therefore REQUIRES this secret; see CLAUDE.md.
+  const bypass = env("E2E_VERCEL_BYPASS_SECRET");
+  if (bypass) {
+    headers["x-vercel-protection-bypass"] = bypass;
+    headers["x-vercel-set-bypass-cookie"] = "true";
+  }
+
   const ctx = await browser.newContext({
     httpCredentials: {
       username: env("E2E_STAGING_BASIC_USER", "staging"),
       password: env("E2E_STAGING_BASIC_PW"),
     },
-    extraHTTPHeaders: {
-      "x-staging-auth": env("E2E_STAGING_SECRET"),
-    },
+    extraHTTPHeaders: headers,
   });
   return ctx;
 }

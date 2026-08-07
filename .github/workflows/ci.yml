@@ -182,6 +182,14 @@ jobs:
           # the basic-auth gate.
           E2E_STAGING_BASIC_USER: staging
           E2E_STAGING_BASIC_PW: ${{ secrets.E2E_STAGING_BASIC_PW }}
+          # REQUIRED for this job. Preview deployments sit behind Vercel SSO
+          # (verified 2026-08-07: preview URLs 302 to vercel.com/sso-api before
+          # Next.js middleware runs, so basic auth and x-staging-auth never get
+          # a chance). Generate it in Vercel: Project Settings -> Deployment
+          # Protection -> Protection Bypass for Automation, then add it as the
+          # repo secret VERCEL_AUTOMATION_BYPASS_SECRET. Without it every
+          # request in this job lands on the SSO redirect instead of the app.
+          E2E_VERCEL_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           E2E_STAGING_SECRET: ${{ secrets.E2E_STAGING_SECRET }}
           # No E2E_WARM_MODAL here: none of these 5 specs touch a Modal
           # endpoint, so there's nothing to warm.
