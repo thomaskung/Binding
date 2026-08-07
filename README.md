@@ -27,6 +27,28 @@ restores the dataset.
 Sign in with a magic link (delivered by the hosted project's mailer), or enable the
 password tab locally with `NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN=true` in `.env.local`.
 
+## Testing accounts
+
+Staging carries a generated demo dataset (50 seekers + 20 jobs + 8 recruiters,
+created by `pnpm seed:staging`). Every account shares one password:
+
+```
+J0B!Demo#2026$secure
+```
+
+| Role | Example logins |
+|---|---|
+| Recruiter | `nimbus@smoke.local`, `harbour@smoke.local`, `sterling@smoke.local`, `cathay@smoke.local` (8 in total) |
+| Seeker | `backend1@smoke.local`, `frontend2@smoke.local`, `quant11@smoke.local`, `risk12@smoke.local` (50 in total, `${role}N@smoke.local`) |
+
+Notes:
+- Requires the password login tab (`NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN=true` locally;
+  enabled on staging) — or add a demo user's email as a login whitelist for magic links.
+- These accounts are wiped and recreated by `pnpm seed:staging` (which also clears
+  the retired `@demo.local` accounts).
+- The E2E suite creates its own disposable `test-…@staging.local` users per run; the
+  nightly cleanup workflow deletes stale ones. Don't rely on them as fixtures.
+
 ## Commands
 
 | Command | What |
