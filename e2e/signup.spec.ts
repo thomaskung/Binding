@@ -21,10 +21,10 @@ test("landing splits sign-up CTAs from the sign-in nav link", async ({ browser }
   const page = await ctx.newPage();
   await page.goto("/", { timeout: 30_000 });
   // Copy was "Sign up to find a job" / "Sign up to hire talent" pre-restyle
-  // (feat/binding-ui-restyle); the testids and the seeker/recruiter split are
-  // what this test actually guards, so assert current copy rather than the
-  // stale literal.
-  await expect(page.getByTestId("cta-seeker")).toHaveText("Find a job — privacy-first", {
+  // (feat/binding-ui-restyle); now updating to "Find a job privately" per the
+  // Binding UI mockup restyle. Testids and seeker/recruiter split are what
+  // this test actually guards, so assert current copy rather than a stale literal.
+  await expect(page.getByTestId("cta-seeker")).toHaveText("Find a job privately", {
     timeout: 15_000,
   });
   await expect(page.getByTestId("cta-recruiter")).toHaveText("Hire verified talent");
