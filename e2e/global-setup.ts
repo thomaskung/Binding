@@ -23,15 +23,27 @@ import { aiCounterFile } from "./staging-helpers";
 // does not want to touch Modal at all — it leaves this unset so plain
 // `pnpm e2e` runs never warm (or spend against) a live Modal endpoint by
 // surprise.
-const MODAL_ENDPOINTS = [
-  "https://thomaskung--binding-embeddings-embedder-embed.modal.run",
-  "https://thomaskung--binding-llm-qwen-redact.modal.run",
-  "https://thomaskung--binding-llm-qwen-fit-summary.modal.run",
-  "https://thomaskung--binding-llm-qwen-refine.modal.run",
-  "https://thomaskung--binding-llm-qwen-extract.modal.run",
+// Each endpoint needs a body matching its own schema (modal_app/llm.py's
+// module docstring). A generic `{"text":"warmup"}` ping works for
+// redact/refine/extract (they all read `body["text"]`), but `fit_summary`
+// reads `body["candidate"]`/`body["job"]` with no fallback — sending it the
+// generic shape throws an unhandled KeyError server-side (HTTP 500) on every
+// single warm-up attempt, every time, for every caller that has ever pinged
+// it (confirmed via modal-logs.yml: `KeyError: 'candidate'` at llm.py:141).
+// Fixed here 2026-08-07 — this bug predates this file; fit-summary has
+// effectively never been warmed by anything.
+const MODAL_ENDPOINTS: Array<{ url: string; body: Record<string, string> }> = [
+  { url: "https://thomaskung--binding-embeddings-embedder-embed.modal.run", body: { text: "warmup" } },
+  { url: "https://thomaskung--binding-llm-qwen-redact.modal.run", body: { text: "warmup" } },
+  {
+    url: "https://thomaskung--binding-llm-qwen-fit-summary.modal.run",
+    body: { candidate: "warmup", job: "warmup" },
+  },
+  { url: "https://thomaskung--binding-llm-qwen-refine.modal.run", body: { text: "warmup" } },
+  { url: "https://thomaskung--binding-llm-qwen-extract.modal.run", body: { text: "warmup" } },
 ];
 
-async function warmEndpoint(url: string): Promise<void> {
+async function warmEndpoint(url: string, body: Record<string, string>): Promise<void> {
   for (let attempt = 1; attempt <= 5; attempt++) {
     try {
       const res = await fetch(url, {
@@ -40,7 +52,7 @@ async function warmEndpoint(url: string): Promise<void> {
           Authorization: `Bearer ${process.env.MODAL_API_TOKEN ?? ""}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text: "warmup" }),
+        body: JSON.stringify(body),
       });
       console.log(`[global-setup] warm ${url} attempt ${attempt} -> ${res.status}`);
       if (res.status === 200) return;
@@ -59,8 +71,8 @@ export default async function globalSetup(): Promise<void> {
   fs.rmSync(file, { force: true });
 
   if (process.env.E2E_WARM_MODAL === "1") {
-    for (const url of MODAL_ENDPOINTS) {
-      await warmEndpoint(url);
+    for (const { url, body } of MODAL_ENDPOINTS) {
+      await warmEndpoint(url, body);
     }
   }
 }
