@@ -16,17 +16,20 @@
       "model": "opencode-go/deepseek-v4-flash"
     },
     "advise": {
-      "model": "opencode-go/deepseek-v4-pro"
+      "model": "opencode-go/deepseek-v4-pro",
+      "permission": {
+        "edit": "deny",
+        "bash": "deny",
+        "task": "deny"
+      }
     }
   },
   "permission": {
     "edit": "allow",
     "bash": {
-      "git status *": "allow",
-      "git diff *": "allow",
-      "git log *": "allow",
-      "git show *": "allow",
-      "git branch *": "allow",
+      "*": "ask",
+      "git *": "allow",
+      "gh *": "allow",
       "uv *": "allow",
       "ruff *": "allow",
       "mypy *": "allow",
@@ -41,10 +44,11 @@
       "git push --force*": "deny",
       "git push -f *": "deny",
       "git reset --hard*": "deny",
+      "gh repo delete *": "deny",
+      "gh secret *": "deny",
       "sudo *": "deny",
       "chmod -R *": "deny",
-      "chown -R *": "deny",
-      "*": "ask"
+      "chown -R *": "deny"
     },
     "external_directory": {
       "**/.env*": "deny",

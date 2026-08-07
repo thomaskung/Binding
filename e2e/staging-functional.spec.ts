@@ -557,6 +557,16 @@ test.describe("Staging functional — dealbreaker & tier differentiation", () =>
 
     await seekerCtx.close();
     await recruiterCtx.close();
+
+    // Clean up: reset the pipeline seeker's dealbreaker_matrix. Test 20 reads
+    // the seeker back through match_candidates (whose equity clause runs
+    // against the pipeline job, which does NOT offer equity) — leaving
+    // equity_required:true here would silently filter the seeker out of that
+    // RPC's results and drop credentials_summary (and the chip) from the card.
+    await admin
+      .from("profiles")
+      .update({ dealbreaker_matrix: seekerProfile?.dealbreaker_matrix ?? {} })
+      .eq("id", pipelineSeekerId);
   });
 
   test("19. Business-email signup gate rejects consumer domains", async ({ browser }) => {
@@ -614,6 +624,20 @@ test.describe("Staging functional — dealbreaker & tier differentiation", () =>
         credentials_summary: "2 certifications",
       })
       .eq("id", pipelineSeekerId);
+
+    // Defensive: clear the equity dealbreaker in case test 18 failed mid-way
+    // before its own cleanup. match_candidates applies the equity clause
+    // against pipelineJobId, which does NOT offer equity — a leftover
+    // equity_required:true would filter this seeker out of the RPC results and
+    // make the credentials chip assertion below fail.
+    const { data: dealbreakerProfile } = await admin
+      .from("profiles")
+      .select("dealbreaker_matrix")
+      .eq("id", pipelineSeekerId)
+      .maybeSingle();
+    const cleanMatrix = { ...((dealbreakerProfile?.dealbreaker_matrix ?? {}) as Record<string, unknown>) };
+    delete cleanMatrix.equity_required;
+    await admin.from("profiles").update({ dealbreaker_matrix: cleanMatrix }).eq("id", pipelineSeekerId);
 
     const ctx = await stagingContext(browser);
     const page = await ctx.newPage();
