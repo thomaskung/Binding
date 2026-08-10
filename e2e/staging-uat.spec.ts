@@ -45,6 +45,7 @@ let sharedSeekerId = "";
 let sharedSeekerName = "";
 let sharedRecruiterEmail = "";
 let sharedJobId = "";
+let sharedJobTitle = "";
 
 test.describe("UAT: Privacy-first promise (§1, §3 pillar 1)", () => {
   test("Recruiter sees pseudonymized data, never raw PII", async ({ browser }) => {
@@ -72,13 +73,14 @@ test.describe("UAT: Privacy-first promise (§1, §3 pillar 1)", () => {
       name: uniqueLabel("UAT Recruiter"),
       company: uniqueLabel("UAT Recruiting Co"),
     });
-    const { jobId } = await createAndPublishJob(recruiter); // ai.embed
+    const { jobId, jobTitle } = await createAndPublishJob(recruiter); // ai.embed
 
     sharedSeekerEmail = seekerUser.email;
     sharedSeekerId = seekerUser.id;
     sharedSeekerName = seekerName;
     sharedRecruiterEmail = recruiterUser.email;
     sharedJobId = jobId;
+    sharedJobTitle = jobTitle;
 
     // Navigate list -> detail (own job, not a blind `.first()`) into the
     // job's match list to capture the non-identifying candidate labels +
@@ -126,7 +128,7 @@ test.describe("UAT: Dealbreaker matrix (§3 pillar 2)", () => {
 test.describe("UAT: Consent-first reveal (§3 pillar 3, §4)", () => {
   test("Candidate must actively express interest before recruiter reveals", async ({ browser }) => {
     test.skip(
-      !sharedSeekerEmail || !sharedJobId || !sharedRecruiterEmail || !sharedSeekerName,
+      !sharedSeekerEmail || !sharedJobId || !sharedRecruiterEmail || !sharedSeekerName || !sharedJobTitle,
       "pipeline fixture unavailable — an earlier test failed and Playwright reset module state",
     );
     const seekerCtx = await stagingContext(browser);
@@ -135,10 +137,14 @@ test.describe("UAT: Consent-first reveal (§3 pillar 3, §4)", () => {
     const recruiter = await recruiterCtx.newPage();
 
     // Seeker sees the shared match on the dashboard and actively opts in —
-    // the consent gate a recruiter reveal depends on.
+    // the consent gate a recruiter reveal depends on. Filter by this
+    // pipeline's own job title, not .first(): on a shared, never-reset DB
+    // with real embeddings, this seeker's résumé can match many leftover
+    // jobs from past runs — see smoke.spec.ts's fix for the same bug class
+    // (a real 2026-08-10 post-merge smoke failure).
     await signIn(seeker, sharedSeekerEmail);
     await seeker.goto("/seeker/matches");
-    const matchCard = seeker.getByTestId("seeker-match-card").first();
+    const matchCard = seeker.getByTestId("seeker-match-card").filter({ hasText: sharedJobTitle }).first();
     await expect(matchCard).toBeVisible({ timeout: 60_000 });
     await matchCard.getByTestId("match-interested").click();
     // exact: true — the status BADGE ("interested"), not the "I'm interested"
