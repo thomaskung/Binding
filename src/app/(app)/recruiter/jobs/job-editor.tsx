@@ -225,11 +225,12 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
                 </h3>
               </div>
               <div className="text-sm text-muted-foreground">
-                {salaryDisplay(
-                  salaryMin ? Number(salaryMin) : null,
-                  salaryMax ? Number(salaryMax) : null,
-                  visibility,
-                )}
+                {/* salaryDisplay no longer accepts null (bounds NOT NULL since
+                    migration 0023); guard the live "Candidate sees" preview —
+                    an unfilled range during editing renders "Salary on request". */}
+                {salaryMin.trim() && salaryMax.trim()
+                  ? salaryDisplay(Number(salaryMin), Number(salaryMax), visibility)
+                  : "Salary on request"}
               </div>
               {skillsText.trim() && (
                 <div className="flex flex-wrap gap-1.5">

@@ -139,24 +139,7 @@ export function MatchList({ cards }: { cards: SeekerMatchCard[] }) {
       ) : (
         <div className="flex flex-col gap-3">
           {visible.map((card) => {
-<<<<<<< HEAD
-            const meta = [
-              card.company,
-              card.location,
-              // salaryDisplay no longer accepts null (both bounds NOT NULL since
-              // migration 0023); on_request jobs carry null bounds by design
-              // (privacy — the raw range is never shipped to the client), so
-              // guard before calling it.
-              card.salaryMin != null && card.salaryMax != null
-                ? salaryDisplay(card.salaryMin, card.salaryMax, card.salaryVisibility)
-                : "Salary on request",
-              card.workSetups.join(" / ") || null,
-            ]
-              .filter(Boolean)
-              .join(" · ");
-=======
             const meta = cardMeta(card);
->>>>>>> origin/main
             return (
               <Card key={card.id} className="jb-lift" data-testid="seeker-match-card">
                 <div className="flex gap-4 px-4">
