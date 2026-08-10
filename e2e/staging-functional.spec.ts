@@ -250,6 +250,7 @@ test.describe("Staging functional — reveal mechanics", () => {
     await expect(recruiter.getByTestId("candidate-panel")).toBeVisible();
     countAiCall(); // ai.fitSummary on reveal
     await recruiter.getByTestId("reveal-candidate").click();
+    await recruiter.getByTestId("confirm-reveal").click();
     await expect(recruiter.getByTestId("revealed-name")).toHaveText(pipelineSeekerName, {
       timeout: 60_000,
     });
