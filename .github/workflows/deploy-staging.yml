@@ -101,6 +101,47 @@ jobs:
 
       - run: pnpm exec playwright install --with-deps chromium
 
+      - name: Start background Modal keep-warm loop
+        # smoke.spec.ts's own globalSetup warm-up (below) is a ONE-TIME ping
+        # before the test starts. The test itself then makes several real,
+        # sequential Modal calls (seeker redact+embed, job embed, reveal
+        # fitSummary) across multiple onboarding/UI steps — Modal's
+        # `scaledown_window=120` means any endpoint idle 2+ minutes between
+        # those calls (e.g. while a cold Vercel lambda or UI step is slow)
+        # scales back to zero, and the next real call eats a fresh cold
+        # start. Confirmed cause of the 2026-08-10 post-merge failure (run
+        # 31389935601): globalSetup warm-up alone took ~4 minutes, then the
+        # test still timed out at its 420s budget waiting on a later step —
+        # same "element/state never appeared in time" signature as the
+        # nightly's chronic flake (e2e-staging.yml), fixed there the same
+        # way. Ping every endpoint every 90s (under the 120s window) for the
+        # lifetime of this one test.
+        run: |
+          (
+            while true; do
+              sleep 90
+              for url in \
+                "https://thomaskung--binding-embeddings-embedder-embed.modal.run" \
+                "https://thomaskung--binding-llm-qwen-redact.modal.run" \
+                "https://thomaskung--binding-llm-qwen-refine.modal.run" \
+                "https://thomaskung--binding-llm-qwen-extract.modal.run"; do
+                code=$(curl -s -m 30 -X POST "$url" \
+                  -H "Authorization: Bearer $MODAL_API_TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d '{"text":"keepwarm"}' -o /dev/null -w "%{http_code}" || echo "000")
+                echo "keepwarm $url -> $code"
+              done
+              code=$(curl -s -m 30 -X POST "https://thomaskung--binding-llm-qwen-fit-summary.modal.run" \
+                -H "Authorization: Bearer $MODAL_API_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d '{"candidate":"keepwarm","job":"keepwarm"}' -o /dev/null -w "%{http_code}" || echo "000")
+              echo "keepwarm fit-summary -> $code"
+            done
+          ) > /tmp/keepwarm.log 2>&1 &
+          echo "KEEPWARM_PID=$!" >> "$GITHUB_ENV"
+        env:
+          MODAL_API_TOKEN: ${{ secrets.MODAL_API_TOKEN }}
+
       # smoke.spec.ts runs ALONE, in its own `playwright test` invocation, so
       # its globalSetup warm-up (E2E_WARM_MODAL=1) fires immediately before
       # the ONE test that actually needs Modal — nothing else can run first
@@ -137,6 +178,15 @@ jobs:
           # MODAL_API_TOKEN is required, not optional, for this job.
           MODAL_API_TOKEN: ${{ secrets.MODAL_API_TOKEN }}
           E2E_WARM_MODAL: '1'
+
+      - name: Stop background Modal keep-warm loop
+        if: always()
+        run: |
+          if [ -n "$KEEPWARM_PID" ]; then
+            kill "$KEEPWARM_PID" 2>/dev/null || true
+          fi
+          echo "--- keepwarm log ---"
+          cat /tmp/keepwarm.log 2>/dev/null || true
 
       # The 5 Modal-free specs from the PR gate (ci.yml, job `e2e`), run
       # separately and without E2E_WARM_MODAL — they never touch Modal, so
