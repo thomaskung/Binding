@@ -3,16 +3,10 @@ import { Badge, Button, Card, CardContent, Progress } from "@binding/ui";
 import { requireRole } from "@/lib/auth";
 import { EMPLOYMENT_TYPE_LABEL, salaryDisplay, type EmploymentType, type SalaryVisibility } from "@/lib/jobs";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { computeJobFunnel, type MatchRow, type FunnelStage } from "@/lib/pipeline-funnel";
 
 const STATUS_VARIANT = { draft: "outline", active: "default", closed: "secondary" } as const;
 const STATUS_LABEL = { draft: "Draft", active: "Active", closed: "Closed" } as const;
-
-interface FunnelStage {
-  key: string;
-  label: string;
-  value: number;
-  pct: number;
-}
 
 /** Job-postings list at its own route (mockup nav "Job postings" item) —
  * moved from /recruiter, which becomes the pipeline Dashboard. Funnel tiles
@@ -33,21 +27,13 @@ export default async function RecruiterJobsPage() {
 
   const jobIds = (jobs ?? []).map((j) => j.id);
   const { data: matchRows } = jobIds.length
-    ? await supabase.from("matches").select("job_posting_id, status").in("job_posting_id", jobIds)
-    : { data: [] as { job_posting_id: string; status: string }[] };
+    ? await supabase.from("matches").select("job_posting_id, status, created_at").in("job_posting_id", jobIds)
+    : { data: [] as MatchRow[] };
 
   const funnelByJob = new Map<string, FunnelStage[]>();
   for (const jobId of jobIds) {
-    const rows = (matchRows ?? []).filter((r) => r.job_posting_id === jobId);
-    const matched = rows.filter((r) => r.status !== "declined").length;
-    const interested = rows.filter((r) => r.status === "interested" || r.status === "revealed").length;
-    const revealed = rows.filter((r) => r.status === "revealed").length;
-    const pct = (n: number) => (matched === 0 ? 0 : Math.round((n / matched) * 100));
-    funnelByJob.set(jobId, [
-      { key: "matched", label: "Matched", value: matched, pct: 100 },
-      { key: "interested", label: "Interested", value: interested, pct: pct(interested) },
-      { key: "revealed", label: "Revealed", value: revealed, pct: pct(revealed) },
-    ]);
+    const rows = ((matchRows ?? []) as MatchRow[]).filter((r) => r.job_posting_id === jobId);
+    funnelByJob.set(jobId, computeJobFunnel(rows));
   }
 
   const activeCount = (jobs ?? []).filter((j) => j.status === "active").length;

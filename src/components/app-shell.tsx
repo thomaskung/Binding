@@ -7,8 +7,7 @@ import { Badge, Tabs, TabsList, TabsTrigger, cn } from "@binding/ui";
 import type { SeekerTier } from "@/lib/matching";
 import { recruiterTierLabel, type RecruiterTier } from "@/lib/recruiter-tier";
 import { SignOutButton } from "@/components/sign-out-button";
-import { DevTierToggle } from "@/app/(app)/seeker/dev-tier-toggle";
-import { DevRecruiterTierToggle } from "@/app/(app)/recruiter/dev-tier-toggle";
+import { AiAssistantDock } from "@/components/ai-assistant-dock";
 
 type Role = "seeker" | "recruiter";
 
@@ -25,14 +24,15 @@ interface NavItem {
 // the job list until the pipeline overview lands).
 const SEEKER_NAV: NavItem[] = [
   { label: "Dashboard", href: "/seeker", icon: "home", exact: true },
+  { label: "Job matches", href: "/seeker/matches", icon: "briefcase" },
   { label: "Profile", href: "/seeker/profile", icon: "doc" },
-  { label: "Job", href: "/seeker/matches", icon: "briefcase" },
   { label: "Training", href: "/training", icon: "cap" },
-  { label: "Benefit", href: "/benefits", icon: "gift" },
+  { label: "Benefits", href: "/benefits", icon: "gift" },
 ];
 
 const RECRUITER_NAV: NavItem[] = [
-  { label: "Dashboard", href: "/recruiter", icon: "home", exact: true },
+  { label: "Pipeline", href: "/recruiter", icon: "home", exact: true },
+  { label: "Candidates", href: "/recruiter/candidates", icon: "briefcase" },
   { label: "Profile", href: "/recruiter/profile", icon: "doc" },
   { label: "Job postings", href: "/recruiter/jobs", icon: "briefcase" },
   { label: "Market intel", href: "/recruiter/market-intelligence", icon: "chart" },
@@ -276,16 +276,9 @@ export function AppShell({
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
-                {role === "seeker" && (
-                  <div className="px-1">
-                    <DevTierToggle tier={seekerTier} />
-                  </div>
-                )}
-                {role === "recruiter" && (
-                  <div className="px-1">
-                    <DevRecruiterTierToggle tier={recruiterTier} />
-                  </div>
-                )}
+                <Link href="/settings" className="rounded px-1 py-2 text-[13px] font-medium text-foreground hover:bg-background/50">
+                  Settings
+                </Link>
                 <SignOutButton />
               </div>
             ) : (
@@ -366,6 +359,7 @@ export function AppShell({
           >
             <Icon name="arrowUp" className="size-[18px]" />
           </button>
+          <AiAssistantDock />
         </div>
       </div>
     </div>

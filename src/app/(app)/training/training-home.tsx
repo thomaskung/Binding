@@ -3,6 +3,7 @@
 import { useTransition } from "react";
 import { Badge, Button, Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from "@binding/ui";
 import { completeAssignedTraining, completeTrainingProgram } from "./actions";
+import { setCareerPath } from "@/app/(app)/seeker/actions";
 
 export interface TrainingProgramView {
   id: string;
@@ -28,6 +29,7 @@ interface Props {
   creditBalance: number;
   programs: TrainingProgramView[];
   assignments: AssignedProgramView[];
+  currentCareerPathId?: string;
 }
 
 /** Training hub (TrainingHome template): the two tracks side by side —
@@ -36,7 +38,7 @@ interface Props {
  * not built: no ad inventory exists, and a fake sponsor card would be
  * dishonest chrome. Completion mechanics (affordability gating, employer
  * assignments) are the real ones, not the template's inert Start buttons. */
-export function TrainingHome({ seekerTier, creditBalance, programs, assignments }: Props) {
+export function TrainingHome({ seekerTier, creditBalance, programs, assignments, currentCareerPathId }: Props) {
   const [pending, startTransition] = useTransition();
 
   function complete(programId: string) {
@@ -64,7 +66,7 @@ export function TrainingHome({ seekerTier, creditBalance, programs, assignments 
             </Badge>
           </CardAction>
         </CardHeader>
-        <CardFooter>
+        <CardFooter className="flex-col gap-2">
           <div className="flex w-full items-center justify-between gap-2">
             <span className="text-[13px] text-muted-foreground">
               {cost === 0 ? "Free" : `${cost} credits`}
@@ -82,6 +84,17 @@ export function TrainingHome({ seekerTier, creditBalance, programs, assignments 
               </Button>
             )}
           </div>
+          {p.track === "career_path" && (
+            <Button
+              variant={currentCareerPathId === p.id ? "default" : "outline"}
+              size="sm"
+              className="w-full"
+              disabled={pending}
+              onClick={() => startTransition(() => setCareerPath(p.id))}
+            >
+              {currentCareerPathId === p.id ? "Your path" : "Choose as your path"}
+            </Button>
+          )}
         </CardFooter>
       </Card>
     );

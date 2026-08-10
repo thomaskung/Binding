@@ -69,6 +69,7 @@ test("full reveal slice", async ({ browser }) => {
   await expect(recruiter.getByTestId("candidate-panel")).toBeVisible({ timeout: 15_000 });
   countAiCall(); // ai.fitSummary on reveal
   await recruiter.getByTestId("reveal-candidate").click();
+  await recruiter.getByTestId("confirm-reveal").click();
   await expect(recruiter.getByTestId("revealed-name")).toHaveText(seekerName, {
     timeout: 60_000,
   });

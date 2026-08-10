@@ -26,3 +26,10 @@ const RECRUITER_TIER_LABEL: Record<RecruiterTier, string> = {
 export function recruiterTierLabel(tier: RecruiterTier): string {
   return RECRUITER_TIER_LABEL[tier];
 }
+
+/** Market Intelligence full-access gate: only "advanced" and "pro_saas" tiers
+ * unlock the deep-dive reports and compensation breakdowns. Solo is
+ * deliberately excluded (one regression for this high-value feature). */
+export function hasMarketIntelFullAccess(tier: RecruiterTier): boolean {
+  return tier === "advanced" || tier === "pro_saas";
+}

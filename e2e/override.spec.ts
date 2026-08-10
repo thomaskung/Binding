@@ -171,11 +171,22 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   // charging something the pricing table doesn't allow, while staying
   // correct regardless of which tier the real embedding score lands in.
   const revealPanel = recruiter.getByTestId("candidate-panel");
-  const panelText = await revealPanel.innerText();
-  const costMatch = panelText.match(/Reveal now \((\d+) pts/);
-  const refundMatch = panelText.match(/(\d+) pts refund if they decline/);
-  if (!costMatch?.[1] || !refundMatch?.[1]) {
-    throw new Error(`could not parse override cost/refund from candidate panel: ${panelText}`);
+  const preClickText = await revealPanel.innerText();
+  const costMatch = preClickText.match(/Reveal now \((\d+) pts/);
+  if (!costMatch?.[1]) {
+    throw new Error(`could not parse override cost from candidate panel: ${preClickText}`);
+  }
+
+  // The refund/decline terms now live inside the confirmation dialog (Feature
+  // 12: reveal-consent moved from always-visible panel text to a Dialog) —
+  // open it before parsing the refund figure.
+  await revealPanel.getByTestId("override-candidate").click();
+  const confirmDialog = recruiter.getByRole("dialog");
+  await expect(confirmDialog).toBeVisible({ timeout: 15_000 });
+  const dialogText = await confirmDialog.innerText();
+  const refundMatch = dialogText.match(/(\d+) pts refund if they decline/);
+  if (!refundMatch?.[1]) {
+    throw new Error(`could not parse override refund from confirmation dialog: ${dialogText}`);
   }
   const overrideCost = Number(costMatch[1]);
   const premiumRefund = Number(refundMatch[1]);
@@ -188,7 +199,7 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   );
 
   countAiCall(); // ai.fitSummary on override reveal
-  await revealPanel.getByTestId("override-candidate").click();
+  await recruiter.getByTestId("confirm-override").click();
   await expect(recruiter.getByTestId("revealed-name")).toHaveText(seekerName, {
     timeout: 60_000,
   });

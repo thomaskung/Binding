@@ -113,3 +113,31 @@ export async function rewardTrainingCompletion(
     note: `training completion: ${programTitle}`,
   });
 }
+
+/** Fetch recent training credit ledger entries, ordered by recency (most recent
+ * first). Used by training-credits-card to populate the CreditLedger widget.
+ * RLS policy ensures only the profile owner's entries are visible. */
+export async function getRecentTrainingLedger(
+  supabase: SupabaseClient,
+  profileId: string,
+  limit: number,
+): Promise<Array<{ label: string; note: string; amount: number; createdAt: string }>> {
+  const { data, error } = await supabase
+    .from("training_credits_ledger")
+    .select("id, event, amount, note, created_at")
+    .eq("profile_id", profileId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`training ledger fetch failed: ${error.message}`);
+
+  return (data ?? []).map((row) => ({
+    label: row.note ? row.note : row.event === "earned" ? "Credits earned" : "Program started",
+    note: new Date(row.created_at).toLocaleDateString("en", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }),
+    amount: row.amount,
+    createdAt: row.created_at,
+  }));
+}

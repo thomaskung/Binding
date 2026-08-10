@@ -119,4 +119,29 @@ export const modalProvider: AiProvider = {
       return floor;
     }
   },
+
+  async careerAssist(
+    message: string,
+    history?: Array<{ role: "user" | "assistant"; content: string }>,
+  ): Promise<string> {
+    const c = config();
+    // Flatten the conversation: render history as alternating "User: ...\nAssistant: ..."
+    // lines followed by the new message, all as one text blob (the underlying
+    // Modal endpoint takes one system prompt + one user text blob, no native
+    // multi-turn array).
+    let conversationText = "";
+    if (history && history.length > 0) {
+      for (const msg of history) {
+        const prefix = msg.role === "user" ? "User:" : "Assistant:";
+        conversationText += `${prefix} ${msg.content}\n`;
+      }
+    }
+    conversationText += `User: ${message}`;
+
+    const { refined } = await post<{ refined: string }>(c.refineUrl, c.apiToken, {
+      text: conversationText,
+      kind: "career_assist",
+    });
+    return refined;
+  },
 };

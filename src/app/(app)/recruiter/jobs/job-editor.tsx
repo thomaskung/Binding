@@ -19,12 +19,23 @@ import {
   SelectValue,
   Textarea,
 } from "@binding/ui";
-import { EMPLOYMENT_TYPE_LABEL, EMPLOYMENT_TYPES, type EmploymentType, type SalaryVisibility } from "@/lib/jobs";
+import { EMPLOYMENT_TYPE_LABEL, EMPLOYMENT_TYPES, type EmploymentType, type SalaryVisibility, salaryDisplay } from "@/lib/jobs";
+import { matchBand } from "@/lib/matching";
 import { closeJob, publishJob, refineJobText, saveJob } from "../actions";
 
 const WORK_SETUPS = ["onsite", "hybrid", "remote"] as const;
 
 const JD_QUICK_ACTIONS = ["Tighten wording", "More inclusive language", "Add impact metrics", "Shorten"];
+
+// Illustrative score for "Candidate sees" preview: a typical match score that
+// a free-tier seeker would see as "Normal match". Not tied to any real candidate.
+const ILLUSTRATIVE_SCORE = 0.75;
+
+const BAND_LABEL = {
+  high: "High match",
+  normal: "Normal match",
+  low: "Low match",
+} as const;
 
 export interface EditableJob {
   id: string;
@@ -179,6 +190,46 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
             </Button>
           )}
         </div>
+      </div>
+
+      <div className="sticky top-16 z-10 -mx-8 px-8 py-4">
+        <Card className="border border-secondary bg-secondary/30">
+          <CardContent className="space-y-2 pt-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+              Candidate sees
+            </p>
+            <div className="space-y-3">
+              <div>
+                <h3 className="font-heading text-base font-semibold leading-snug text-foreground">
+                  {title.trim() || "Job title"}
+                </h3>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {salaryDisplay(
+                  salaryMin ? Number(salaryMin) : null,
+                  salaryMax ? Number(salaryMax) : null,
+                  visibility,
+                )}
+              </div>
+              {skillsText.trim() && (
+                <div className="flex flex-wrap gap-1.5">
+                  {skillsText
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                    .map((skill) => (
+                      <Badge key={skill} variant="secondary" className="text-[12px]">
+                        {skill}
+                      </Badge>
+                    ))}
+                </div>
+              )}
+              <div className="text-sm font-medium text-foreground">
+                {BAND_LABEL[matchBand(ILLUSTRATIVE_SCORE, "free")]}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {!job && (

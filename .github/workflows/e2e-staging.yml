@@ -125,6 +125,45 @@ jobs:
             [ "$code" = "200" ] && break
             sleep 3
           done
+      - name: Start background Modal keep-warm loop
+        # The suite runs serially (`workers: 1`) across 15 spec files, ~40
+        # minutes total. Every warm-up above is a ONE-TIME ping before the
+        # suite starts — nothing keeps Modal warm DURING the run. Modal's
+        # `scaledown_window=120` means any endpoint idle for 2+ minutes mid-run
+        # (very likely across a 40-minute suite — most spec files don't hit
+        # every endpoint) scales back to zero, and the next real test call
+        # eats a full cold start that blows its 60-90s UI timeout — this is
+        # the actual cause of the "element(s) not found" flakes that have
+        # failed 4 of the last 5 nightly runs (2026-08-07 through -10),
+        # despite the pre-test warm-up reporting 200 for every endpoint each
+        # time. Fix: ping every endpoint every 90s (under the 120s window) in
+        # a background loop for the lifetime of the test step, so nothing
+        # ever goes idle long enough to scale down mid-suite.
+        run: |
+          (
+            while true; do
+              sleep 90
+              for url in \
+                "https://thomaskung--binding-embeddings-embedder-embed.modal.run" \
+                "https://thomaskung--binding-llm-qwen-redact.modal.run" \
+                "https://thomaskung--binding-llm-qwen-refine.modal.run" \
+                "https://thomaskung--binding-llm-qwen-extract.modal.run"; do
+                code=$(curl -s -m 30 -X POST "$url" \
+                  -H "Authorization: Bearer $MODAL_API_TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d '{"text":"keepwarm"}' -o /dev/null -w "%{http_code}" || echo "000")
+                echo "keepwarm $url -> $code"
+              done
+              code=$(curl -s -m 30 -X POST "https://thomaskung--binding-llm-qwen-fit-summary.modal.run" \
+                -H "Authorization: Bearer $MODAL_API_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d '{"candidate":"keepwarm","job":"keepwarm"}' -o /dev/null -w "%{http_code}" || echo "000")
+              echo "keepwarm fit-summary -> $code"
+            done
+          ) > /tmp/keepwarm.log 2>&1 &
+          echo "KEEPWARM_PID=$!" >> "$GITHUB_ENV"
+        env:
+          MODAL_API_TOKEN: ${{ secrets.MODAL_API_TOKEN }}
       - name: Run functional tests
         id: tests
         # Now runs the WHOLE suite (all 13 spec files, no path argument — the
@@ -158,6 +197,14 @@ jobs:
           # Modal right before tests" step above for why even three warm-up
           # passes weren't always enough.
           E2E_WARM_MODAL: '1'
+      - name: Stop background Modal keep-warm loop
+        if: always()
+        run: |
+          if [ -n "$KEEPWARM_PID" ]; then
+            kill "$KEEPWARM_PID" 2>/dev/null || true
+          fi
+          echo "--- keepwarm log ---"
+          cat /tmp/keepwarm.log 2>/dev/null || true
 
       # Report failures onto ONE rolling issue instead of opening a new one per
       # run. The previous version called issues.create() unconditionally, which

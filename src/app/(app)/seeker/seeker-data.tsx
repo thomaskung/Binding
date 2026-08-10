@@ -2,7 +2,10 @@ import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/sup
 import { expireStaleOverride, getBalance, OVERRIDE_COMPENSATION } from "@/lib/points";
 import { matchBand, type SeekerTier } from "@/lib/matching";
 import type { SalaryVisibility } from "@/lib/jobs";
+import { getLifetimeEarnedPoints, listBenefitPartnerUnlocks } from "@/lib/benefits";
+import { getTrainingCreditBalance, getRecentTrainingLedger } from "@/lib/training";
 import { OverrideResponseButtons } from "./override-response";
+import { RevealRequestSheet } from "./reveal-request-sheet";
 import type { SeekerMatchCard } from "./match-list";
 
 /** Shared server-side data assembly for the seeker dashboard and the
@@ -11,11 +14,20 @@ import type { SeekerMatchCard } from "./match-list";
 export async function loadSeekerContext(userId: string) {
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: profile }, { data: matches }, { data: reveals }, balance] = await Promise.all([
+  const [
+    { data: profile },
+    { data: matches },
+    { data: reveals },
+    balance,
+    lifetimeEarnedPoints,
+    partnerUnlocks,
+    trainingCreditBalance,
+    recentTrainingLedger,
+  ] = await Promise.all([
     supabase
       .from("profiles")
       .select(
-        "display_name, published_text, draft_text, skills, dealbreaker_matrix, visibility, seeker_tier, last_profile_activity_at",
+        "display_name, published_text, draft_text, skills, dealbreaker_matrix, visibility, seeker_tier, last_profile_activity_at, career_path_program_id",
       )
       .eq("id", userId)
       .single(),
@@ -33,7 +45,35 @@ export async function loadSeekerContext(userId: string) {
       )
       .eq("profile_id", userId),
     getBalance(supabase, userId),
+    getLifetimeEarnedPoints(supabase, userId),
+    listBenefitPartnerUnlocks(supabase),
+    getTrainingCreditBalance(supabase, userId),
+    getRecentTrainingLedger(supabase, userId, 5),
   ]);
+
+  // Fetch career path program details if set
+  let careerPathProgram: { title: string; module_count: number } | null = null;
+  let trainingCompletionCount = 0;
+
+  if (profile?.career_path_program_id) {
+    const [{ data: program }, { count }] = await Promise.all([
+      supabase
+        .from("training_programs")
+        .select("title, module_count")
+        .eq("id", profile.career_path_program_id)
+        .maybeSingle(),
+      supabase
+        .from("training_completions")
+        .select("id", { count: "exact" })
+        .eq("profile_id", userId)
+        .eq("program_id", profile.career_path_program_id),
+    ]);
+
+    if (program) {
+      careerPathProgram = { title: program.title, module_count: program.module_count };
+      trainingCompletionCount = count ?? 0;
+    }
+  }
 
   // Lazy expiry pass on any stale pending overrides (7-day window, no cron).
   const admin = createSupabaseAdminClient();
@@ -102,7 +142,19 @@ export async function loadSeekerContext(userId: string) {
     };
   });
 
-  return { profile, cards, pendingOverrides, balance, seekerTier };
+  return {
+    profile,
+    cards,
+    pendingOverrides,
+    balance,
+    seekerTier,
+    lifetimeEarnedPoints,
+    partnerUnlocks,
+    trainingCreditBalance,
+    recentTrainingLedger,
+    careerPathProgram,
+    trainingCompletionCount,
+  };
 }
 
 type SeekerContext = Awaited<ReturnType<typeof loadSeekerContext>>;
@@ -120,6 +172,12 @@ export function OverrideBanners({ context }: { context: SeekerContext }) {
         return (
           <div key={reveal.id} className="jb-fade" data-testid="pending-override-card">
             <OverrideResponseButtons
+              revealId={reveal.id}
+              recruiterLabel={recruiter?.company_name ?? recruiter?.display_name ?? "A recruiter"}
+              jobTitle={job?.title ?? "a job"}
+              compensation={OVERRIDE_COMPENSATION}
+            />
+            <RevealRequestSheet
               revealId={reveal.id}
               recruiterLabel={recruiter?.company_name ?? recruiter?.display_name ?? "A recruiter"}
               jobTitle={job?.title ?? "a job"}

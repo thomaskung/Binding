@@ -20,12 +20,14 @@ import type {
   SkillDemandByLocationRow,
   SkillDemandRow,
 } from "@/lib/market-signals";
+import { hasMarketIntelFullAccess, type RecruiterTier } from "@/lib/recruiter-tier";
 
 interface Props {
   skillDemand: SkillDemandRow[];
   salaryTrend: SalaryTrendRow[];
   skillDemandByLocation: SkillDemandByLocationRow[];
   salaryTrendBySeniority: SalaryTrendBySeniorityRow[];
+  tier: RecruiterTier;
 }
 
 function Cell({ suppressed, children }: { suppressed: boolean; children: React.ReactNode }) {
@@ -124,17 +126,17 @@ const SENIORITY_LABEL: Record<string, string> = {
  * below the 20-person cohort render "Not enough data" in either frame, never
  * a fabricated figure. The mockup's quarterly-briefing narrative findings
  * have no backing query and are deliberately left unbuilt (same standard as
- * the jobs-list funnel tiles). "Preview full access" stays a dev-only
- * affordance (sales-gated product). */
+ * the jobs-list funnel tiles). Full access is tier-gated (advanced and
+ * pro_saas only; solo is deliberately excluded). */
 export function MarketIntelligence({
   skillDemand,
   salaryTrend,
   skillDemandByLocation,
   salaryTrendBySeniority,
+  tier,
 }: Props) {
-  const [previewFull, setPreviewFull] = useState(false);
   const [section, setSection] = useState<"skills" | "comp">("skills");
-  const fullAccess = previewFull;
+  const fullAccess = hasMarketIntelFullAccess(tier);
 
   const maxSkillCount = Math.max(
     1,
@@ -153,7 +155,7 @@ export function MarketIntelligence({
           </p>
         </div>
         <Badge variant={fullAccess ? "outline" : "secondary"}>
-          {fullAccess ? "Contact us" : "Free"}
+          {fullAccess ? "Full access" : "Free tier"}
         </Badge>
       </header>
 
@@ -279,17 +281,6 @@ export function MarketIntelligence({
         Aggregated from opted-in profiles, minimum cohort of 20 — no individual data. Low-cohort
         cells are suppressed, never estimated.
       </p>
-
-      {process.env.NODE_ENV !== "production" && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="border border-dashed text-xs text-muted-foreground"
-          onClick={() => setPreviewFull((v) => !v)}
-        >
-          Dev: preview full access — toggle
-        </Button>
-      )}
     </>
   );
 }

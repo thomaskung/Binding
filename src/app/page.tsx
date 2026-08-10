@@ -26,7 +26,7 @@ export default async function LandingPage() {
             <span className="text-sm text-primary font-medium">Private beta · Hong Kong & Singapore</span>
           </div>
 
-          <h1 className="max-w-3xl font-heading text-5xl font-semibold tracking-tight leading-tight">
+          <h1 className="max-w-2xl font-heading text-6xl font-bold tracking-tight leading-[1.05] md:text-7xl">
             Match on merit. Reveal on consent.
           </h1>
 

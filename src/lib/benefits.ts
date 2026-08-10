@@ -100,3 +100,50 @@ export async function getLifetimeBenefitPoints(
     ? getLifetimeEarnedPoints(supabase, profileId)
     : getLifetimeSpentPoints(supabase, profileId);
 }
+
+/**
+ * Loyalty ladder rows for the dashboard widget: one row per tier in
+ * BENEFIT_TIER_THRESHOLDS, with reached/current status and per-tier unlock
+ * counts. Unlock counts are NOT cumulative — each partner counts only at the
+ * tier matching its tier_required value, never duplicated across lower tiers.
+ */
+export function loyaltyLadderRows(
+  lifetimePoints: number,
+  partners: { tier_required: number }[],
+): Array<{ tier: number; threshold: number; reached: boolean; current: boolean; unlockedPartnerCount: number }> {
+  const currentTier = benefitTier(lifetimePoints);
+
+  // Build a map: tier -> count of partners requiring exactly that tier
+  const unlockedByTier = new Map<number, number>();
+  for (const partner of partners) {
+    const count = unlockedByTier.get(partner.tier_required) ?? 0;
+    unlockedByTier.set(partner.tier_required, count + 1);
+  }
+
+  return BENEFIT_TIER_THRESHOLDS.map((threshold, index) => {
+    const tier = index + 1;
+    return {
+      tier,
+      threshold,
+      reached: lifetimePoints >= threshold,
+      current: tier === currentTier,
+      unlockedPartnerCount: unlockedByTier.get(tier) ?? 0,
+    };
+  });
+}
+
+/**
+ * Query benefit_partners for tier_required only (deliberately excludes
+ * code/discount_description — the ladder says WHAT unlocks, never leaks
+ * redemption codes). Returns all partners ordered by tier_required.
+ */
+export async function listBenefitPartnerUnlocks(
+  supabase: SupabaseClient,
+): Promise<{ tier_required: number }[]> {
+  const { data, error } = await supabase
+    .from("benefit_partners")
+    .select("tier_required")
+    .order("tier_required");
+  if (error) throw new Error(`benefit partner unlocks lookup failed: ${error.message}`);
+  return data ?? [];
+}

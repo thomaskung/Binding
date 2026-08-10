@@ -3,7 +3,14 @@ import { notFound } from "next/navigation";
 import { Badge, Button } from "@binding/ui";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
-import { expireStaleOverride, getBalance, OVERRIDE_COST, OVERRIDE_PREMIUM_REFUND, REVEAL_COST, revealCostForScore } from "@/lib/points";
+import {
+  expireStaleOverride,
+  getBalance,
+  OVERRIDE_COST,
+  OVERRIDE_PREMIUM_REFUND,
+  REVEAL_COST,
+  revealCostForRank,
+} from "@/lib/points";
 import { MatchesView } from "./matches-view";
 import { type RecruiterMatchCard } from "./match-list";
 
@@ -19,7 +26,7 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
     await Promise.all([
       supabase
         .from("job_postings")
-        .select("id, title, status")
+        .select("id, title, status, skills")
         .eq("id", id)
         .eq("recruiter_id", session.userId)
         .maybeSingle(),
@@ -59,6 +66,11 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
   const liveReveals = (reveals ?? []).map((r, i) =>
     expiryResults[i] ? { ...r, status: "declined" as const, refunded: true } : r,
   );
+  // Every reveal_requests row for this job counts toward the same-role
+  // discount rank (§4a) regardless of path — mirrors countRevealsForJob.
+  // Next reveal (from either RevealButton or Compare) would be this rank.
+  const alreadyRevealedForJobCount = liveReveals.length;
+  const nextRevealRank = alreadyRevealedForJobCount + 1;
 
   // Override availability hints for surfaced candidates (server-side only;
   // the action re-validates everything at spend time).
@@ -133,12 +145,16 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
       region: strength?.region ?? null,
       credentialsSummary: strength?.credentials_summary ?? null,
       interestedAt: match.interested_at ?? null,
-      // Match-quality pricing (§4a): interested → standard reveal, surfaced → override.
-      revealCost: revealCostForScore(
+      // Match-quality pricing (§4a) + same-role discount (rank 2+, applied
+      // globally to every reveal path): interested → standard, surfaced →
+      // override. nextRevealRank is what this reveal would cost right now —
+      // the actual charge is recomputed server-side at spend time.
+      revealCost: revealCostForRank(
         match.status === "interested" ? REVEAL_COST : OVERRIDE_COST,
         match.score,
+        nextRevealRank,
       ),
-      overrideRefund: revealCostForScore(OVERRIDE_PREMIUM_REFUND, match.score),
+      overrideRefund: revealCostForRank(OVERRIDE_PREMIUM_REFUND, match.score, nextRevealRank),
       revealRequestId: reveal?.id ?? null,
       overridePending: reveal?.path === "override" && reveal.status === "pending",
       overrideDeclined: reveal?.path === "override" && reveal.status === "declined",
@@ -163,6 +179,8 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
             Candidates are pseudonymized until you reveal. Standard reveal (10 pts) needs candidate
             interest; override ({OVERRIDE_COST} pts) reveals immediately — messaging unlocks only if
             they accept.
+            {alreadyRevealedForJobCount > 0 &&
+              ` Your next reveal for this role gets the same-role discount (${alreadyRevealedForJobCount} already revealed).`}
           </p>
         </div>
         <div className="flex flex-col items-end gap-3">
@@ -173,7 +191,7 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
         </div>
       </header>
 
-      <MatchesView cards={cards} />
+      <MatchesView cards={cards} jobSkills={job.skills ?? []} />
     </main>
   );
 }
