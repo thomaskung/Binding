@@ -33,7 +33,7 @@ async function expandRail(page: Page) {
   await button.click();
 }
 
-test("seeker nav rail: Job and Benefit land on the right screens", async ({ browser }) => {
+test("seeker nav rail: Job matches and Benefits land on the right screens", async ({ browser }) => {
   const ctx = await stagingContext(browser);
   const page = await ctx.newPage();
   const user = await ensureStagingUser("seeker");
@@ -41,10 +41,10 @@ test("seeker nav rail: Job and Benefit land on the right screens", async ({ brow
   await completeSeekerOnboarding(page, { name: uniqueLabel("Rail Seeker") });
   await expandRail(page);
 
-  await page.getByRole("link", { name: "Job", exact: true }).click();
+  await page.getByRole("link", { name: "Job matches", exact: true }).click();
   await page.waitForURL(/\/seeker\/matches$/);
 
-  await page.getByRole("link", { name: "Benefit", exact: true }).click();
+  await page.getByRole("link", { name: "Benefits", exact: true }).click();
   await page.waitForURL(/\/benefits$/);
   // Shell persists on a non-exemplar page too — nav is still there to leave from.
   await expect(page.getByRole("link", { name: "Dashboard" })).toBeVisible();
@@ -52,7 +52,7 @@ test("seeker nav rail: Job and Benefit land on the right screens", async ({ brow
   await ctx.close();
 });
 
-test("recruiter nav rail: all five items live, no disabled placeholders", async ({ browser }) => {
+test("recruiter nav rail: Pipeline + Candidates split, all six items live", async ({ browser }) => {
   const ctx = await stagingContext(browser);
   const page = await ctx.newPage();
   const user = await ensureStagingUser("recruiter");
@@ -64,11 +64,14 @@ test("recruiter nav rail: all five items live, no disabled placeholders", async 
   await expandRail(page);
 
   const nav = page.locator("aside nav");
-  // Mockup nav: every rail item is a live link — the old Pipeline/Candidates/
-  // Team training placeholders are gone.
-  await expect(nav.getByRole("link")).toHaveCount(5, { timeout: 15_000 });
-  await expect(nav.getByText("Pipeline")).toHaveCount(0);
-  await expect(nav.getByText("Candidates")).toHaveCount(0);
+  // Pipeline command-center + Candidates split (relabeled from the old flat
+  // "Dashboard" — the nav now has 6 live items, not 5).
+  await expect(nav.getByRole("link")).toHaveCount(6, { timeout: 15_000 });
+  await expect(nav.getByText("Pipeline")).toBeVisible();
+  await expect(nav.getByText("Candidates")).toBeVisible();
+
+  await page.getByRole("link", { name: "Candidates" }).click();
+  await page.waitForURL(/\/recruiter\/candidates$/);
 
   await page.getByRole("link", { name: "Market intel" }).click();
   await page.waitForURL(/\/recruiter\/market-intelligence$/);

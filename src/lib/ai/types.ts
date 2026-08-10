@@ -80,4 +80,14 @@ export interface AiProvider {
    * the deterministic category+count floor (src/lib/credentials.ts) if the
    * model output still looks identifying. */
   generalizeCredentials(rawCredentials: string): Promise<string>;
+
+  /** Open-ended career assistant chat (resume rewriting, cover letters,
+   * interview prep, career-path guidance). Private-path only — never a frontier
+   * API, same as every other method here. This is a simple/unmetered lookalike
+   * for now; the real metered, classifier-gated Pillar 5 system (BUSINESS.md)
+   * is still on the roadmap. */
+  careerAssist(
+    message: string,
+    history?: Array<{ role: "user" | "assistant"; content: string }>,
+  ): Promise<string>;
 }
