@@ -170,6 +170,17 @@ Added for the recruiter-monetization per-role budget UI (budget-cap slider + spe
     templates were renamed `JumpOnBoardUI.*`→`BindingUI.*` and re-pushed in the
     same pass. Config + live bundle + every template now agree on `BindingUI`.
     The drift above is closed.
+  - **REGRESSED for the "Binding UI" identity specifically (found 2026-08-10).**
+    This migration ran on `dc871eb6-…` while it was still the combined project.
+    That project has since split (see CLAUDE.md): `dc871eb6` kept the
+    `BindingUI`-migrated templates and is now called **"Binding DS"**; a
+    **new** project `b7e905dd-…` became **"Binding UI"**, carrying a copy of
+    `Binding.dc.html` taken before (or independent of) the migration — it
+    still binds `JumpOnBoardUI.*` and loads a stale `_ds/jumponboard-ui-…/`
+    bundle folder as of this note. "The drift above is closed" is true for
+    `dc871eb6`/Binding DS only — do not trust it for `b7e905dd`/Binding UI
+    without checking that project directly. See `.design-sync/design-prompts.md`
+    surface ⑲ for the fix drafted against the current state.
 
 ## 2026-08-05: config.json fields restored (were silently missing)
 

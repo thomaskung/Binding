@@ -1,5 +1,13 @@
 # Claude Design prompts — resume-first pivot + recruiter-monetization surfaces
 
+**Project-id correction (added 2026-08-10)**: surfaces ①–⑱ below were written
+before the project split. `dc871eb6-…` is now **"Binding DS"** (the
+component/template library — see its own README for the `BindingUI` global
+rename) and `b7e905dd-…` is now **"Binding UI"** (the `Binding.dc.html`
+single-file product mockup). ①–⑱'s header reference to `dc871eb6` as "the
+Binding UI design project" is stale. Every prompt from ⑲ onward, and any
+re-paste of ⑨–⑯, targets **b7e905dd**.
+
 Prompts for the **Binding UI** design project (`dc871eb6-6c3c-48a1-bcff-c841313b456e`).
 Paste **① Setup** first to establish shared rules, then one surface block per screen.
 Surfaces ②–⑦ are backed by DESIGN.md §2c/§2d/§2e/§7a — all of which **shipped** since
@@ -487,4 +495,266 @@ thresholds are placeholder economics, not committed pricing, so don't imply a
 precise number the recruiter can rely on; if showing progress at all, use a vague
 qualitative cue only (e.g. "Getting closer to Tier 3"). Use Card, Badge, Button,
 Separator — same component set as the seeker version.
+```
+
+---
+
+# Binding UI resync + backlog pages (added 2026-08-10)
+
+Target project for everything below: **Binding UI (`b7e905dd-1dfc-4c1b-a58c-e4b47b0d6733`)**, not `dc871eb6`. ⑲ must be pasted and completed **first** — every prompt from ⑳ onward assumes the `BindingUI.*` global (post-rename) and the refreshed `_ds/binding-ds/` bundle path.
+
+Two of the three bugs DESIGN.md §13i attributes to Binding DS templates turned out to be already fixed — confirmed by reading `templates/new-job-post/NewJobPost.dc.html` and `templates/recruiter-match-dashboard/RecruiterMatchDashboard.dc.html` directly during this pass. Don't re-fix them. The two real bugs below (⑳, ㉑) were found instead by reading `Binding.dc.html` itself.
+
+## ⑲ Resync setup — paste first
+
+```
+Setup note — read first, no design output needed for this one:
+
+The current Binding DS bundle has been copied into this project at a NEW path,
+`_ds/binding-ds/` (`_ds_bundle.js`, `_ds_bundle.css`, `styles.css`) — sitting
+alongside the old, stale `_ds/jumponboard-ui-dc871eb6-…/` folder, which is left
+untouched for now so nothing breaks mid-edit.
+
+In ONE pass, across every .dc.html file (Binding.dc.html, Binding Deck.dc.html,
+Binding-print.dc.html, Explorations.dc.html, and the three ds-patterns/*/*.dc.html
+files):
+1. Update every <helmet> <link>/<script src> that points at
+   `_ds/jumponboard-ui-dc871eb6-.../` to point at `_ds/binding-ds/` instead.
+2. Rename every `JumpOnBoardUI.` -> `BindingUI.` component-scope reference.
+Do both together per file — don't leave any file repointed-but-not-renamed (it'll
+render blank) or renamed-but-not-repointed (it'll still load the old global).
+
+Once every file is confirmed working against the new bundle, delete the old
+`_ds/jumponboard-ui-dc871eb6-.../` folder. Confirm with a list of every file
+touched and the count of `JumpOnBoardUI.` occurrences replaced in each.
+```
+
+## ⑳ Fix: seeker match-card salary leak (real bug, found this pass)
+
+```
+Fix: every seeker-facing match card in Binding.dc.html (at least 3 renderings —
+the dashboard list and the matches-list view) interpolates `{{ m.salary }}` as a
+raw, always-shown string (e.g. "S$180k-220k") with no visibility-state modeling at
+all. Real salary stealth has three states: on_request (default — show "Salary on
+request"), band (a coarse range, e.g. "$150-200k"), public (exact range). Add a
+`salaryDisplay` field to the mock match data reflecting one of these three states
+per match (mix them across the mock data so all three states are visible somewhere
+in the demo), and render that instead of the raw `m.salary` everywhere it
+currently appears.
+```
+
+## ㉑ Fix: job-editor candidate-preview match% leak (real bug, found this pass)
+
+```
+Fix: the RECRUITER · JOB POSTINGS detail view's "Candidate sees" sticky preview
+panel (jobFormView) shows a literal `Yours: 94%` line under "Match" — a raw match
+percentage on a UI surface, violating the same "band only, never a number" rule
+already enforced everywhere else a seeker would see a match (DESIGN §11/§2d).
+Replace with a qualitative band label ("High match" / "Normal match" / "Low
+match"), reusing the same band-badge convention already used on the recruiter
+Candidates cards elsewhere in this file. Separately, verify the adjacent "Salary"
+line in the same panel (driven by `jobPreviewBandRef`) is actually wired to the
+three-state on_request/band/public model from the job posting's own salary-
+visibility setting, not a hardcoded value — fix it to read that state if it isn't
+already.
+```
+
+## ㉒ Port: AI Job Post authoring, modes 1&2 (DESIGN §13b) — GRAFT, not a new page
+
+```
+Binding.dc.html's existing RECRUITER · JOB POSTINGS detail view already has a
+working "Canvas" tab (AI refine of already-typed prose — DESIGN §13b mode 3,
+alongside the existing "Form" tab, state flags `jobFormView`/`jobCanvasView`
+under `showRecruiterJobs`). Do NOT create a new top-level section for this.
+Instead, extend that same Form/Canvas tab row with two more tabs, sourced from
+the AI Job Post template (copied into this project at
+_imported/ai-job-post.dc.html — reference only, don't load it as a live page):
+
+1. "Paste JD" — paste/upload an existing JD, AI extracts structured fields
+   (title, salary, skills, description, responsibilities, requirements) as
+   suggest-and-approve cards the recruiter accepts/edits/rejects before they
+   populate the Form tab's fields.
+2. "Generate" — a short prompt (title, company, notes) → AI drafts the full
+   description/responsibilities/requirements for review, same suggest-and-approve
+   pattern.
+
+All four tabs (Form, Paste JD, Generate, Canvas) sit in the same tab row under
+`showRecruiterJobs`. Use real APAC tech/finance content in any example text (e.g.
+"Backend Engineer, Payments", "Singapore" — never lorem ipsum). Use BindingUI.*
+components only.
+```
+
+## ㉓ Port: Privacy Settings (DESIGN §13e) — new page
+
+```
+Surface: port the Privacy Settings template (copied into this project at
+_imported/privacy-settings.dc.html — reference only, don't load it as a live
+page) into Binding.dc.html as a NEW top-level section: `<sc-if value="{{
+isPrivacySettings }}">`. Reachable from the profile menu / a new "Settings" entry
+point in the app shell.
+
+Preserve exactly what the source template does: one page consolidating every
+consent/visibility toggle (salary sharing, reveal-override, continuous AI
+maintenance, market-signals opt-in) each with its own plain-language explainer and
+consent version/withdraw where applicable, plus a separate field-visibility list
+below (Headline/Skills/Credentials/Location, each showing its actual visibility
+state). Close with the standing line: raw résumé + contact details are owner-only
+and never shared, before or after a reveal; salary — yours and the role's — stays
+private by default.
+```
+
+## ㉔ Port: Security Settings (DESIGN §13e) — new page
+
+```
+Surface: port the Security Settings template (copied into this project at
+_imported/security-settings.dc.html — reference only) into Binding.dc.html as a
+NEW top-level section: `<sc-if value="{{ isSecuritySettings }}">`, reachable
+alongside Privacy Settings from the same Settings entry point.
+
+Preserve exactly what the source template does: sign-in method + connected
+providers (magic link primary, "Connect Google" for OAuth per DESIGN §13h),
+active-sessions list with "Sign out everywhere," and a clearly-separated "Danger
+zone" card for account deletion (destructive variant button, explicit
+"permanently removes your profile, résumé, and matches — points ledger is
+sanitized — cannot be undone" copy).
+```
+
+## ㉕ Port: Seeker Dashboard widgets (DESIGN §13f) — GRAFT, not a new page
+
+```
+Graft, don't duplicate: Binding.dc.html's existing SEEKER · DASHBOARD section
+(`showSeekerDashboard`) already has its adaptive leading module (the "3 new
+matches this week" card or whichever state is active). Below that existing
+module — NOT replacing it, NOT a new page — add a "Your tools" widget grid (2
+columns, collapsing to 1 on narrow), sourced from the Seeker Dashboard Widgets
+template (copied into this project at
+_imported/seeker-dashboard-widgets.dc.html — reference only): Skill assessments,
+Training, Benefits, Points, Profile freshness, Market insights — each a small
+card with a stat badge and one-line description. No card in this grid may show a
+numeric match score or percentage.
+```
+
+## ㉖ Port: Recruiter Dashboard widgets (DESIGN §13f) — GRAFT, not a new page
+
+```
+Graft, don't duplicate: Binding.dc.html's existing RECRUITER · PIPELINE DASHBOARD
+section (`showRecruiterDash`) already has its command-center leading module (todo
+list + funnel + posting health). Below that existing module — NOT replacing it,
+NOT a new page — add a "Your tools" widget grid, sourced from the Recruiter
+Dashboard Widgets template (copied into this project at
+_imported/recruiter-dashboard-widgets.dc.html — reference only): Market
+Intelligence, Job postings, Reveal credits, Training. Keep the existing "Salary
+stays private until you both agree to talk" framing consistent if any widget
+references candidates.
+```
+
+## ㉗ Port: Referral / invite (DESIGN §13g) — new page
+
+```
+Surface: port the Referral template (copied into this project at
+_imported/referral.dc.html — reference only) into Binding.dc.html as a NEW
+top-level section: `<sc-if value="{{ isReferral }}">`, reachable from both seeker
+and recruiter nav (this is a shared, role-agnostic surface).
+
+Preserve exactly what the source template does: one invite link with copy button,
+an activated-count + points-earned summary, and a status list per invite
+(Activated/Joined-not-activated/Invite sent). State the anti-farming rule
+verbatim in the header copy: both parties earn points only when the invitee
+activates their profile, never for sending the invite.
+```
+
+## ㉘ Port: Skill Assessment (DESIGN §13d) — new page
+
+```
+Surface: port the Skill Assessment template (copied into this project at
+_imported/skill-assessment.dc.html — reference only) into Binding.dc.html as a
+NEW top-level section: `<sc-if value="{{ isSkillAssessment }}">`, reachable from
+the seeker dashboard's new Skill Assessments widget (㉕).
+
+Preserve exactly what the source template does: an in-progress state (progress
+bar, one MCQ at a time, "Auto-scored. Questions are AI-generated and
+human-reviewed before use. Pass ≥ 70% to verify.") and a passed-result state
+(verified-skill badge, score shown as the seeker's OWN quiz result — this is NOT
+a match score and is not subject to the band-cap rule — plus points earned).
+```
+
+## Re-target note: ⑨–⑭, ⑯ (drafted 2026-07-22, never built)
+
+```
+Re-target note: surfaces ⑨ (recruiter pricing/tier page), ⑩ (per-role budget),
+⑪ (reveal economics — same-role discount, override withdrawal), ⑫ (paid AI
+JD-assist), ⑬ (market-intel comp/bonus/equity extension — this is "Market Intel
+expansion"), ⑭ (ranking-boost purchase + seeker disclosure — this is "Ranking
+boost + per-role budget" together with ⑩), and ⑯ (comp/equity expectations
+capture form) were drafted 2026-07-22 but never landed as DS templates or
+Binding.dc.html sections — confirmed via a fresh check of both projects' file
+lists during this pass. Re-paste them verbatim into the Binding UI project
+(b7e905dd, not the dc871eb6 reference in their original header) any time after
+⑲'s resync — they already assume the post-⑲ BindingUI.* namespace and current
+component allowlist. ⑮ (Privacy Settings) is dropped from this list — ㉓ above
+now covers it with a more complete, already-built version.
+```
+
+## ㉙ Compensation Advisory (BUSINESS §3a) — Deck slide, not a product page
+
+```
+Add this as a NEW SLIDE in Binding Deck.dc.html, matching the deck's existing
+slide pattern (full-bleed section, --type-title/--type-subtitle scale, serif
+headings) — NOT a section in Binding.dc.html. This is Phase-3 enterprise pitch
+material (BUSINESS §3a), not a live product surface.
+
+Port the content from the Compensation Advisory template (copied into this
+project at _imported/compensation-advisory.dc.html — reference only): a
+"Team comp vs. market" table by skill cohort (delta vs. market, a flag per row,
+cohorts below the k-threshold shown as "Suppressed (k<20)" rather than hidden or
+approximated), and a "Demand signal" card. Preserve verbatim: "Aggregate and
+k-anonymized — no individual employee is ever identified or flagged" and "uses
+pseudonymized skill vectors only; no employee is named, ranked, or flagged as a
+flight risk" — this framing is the only defensible shape for this feature
+(BUSINESS §3a) and is load-bearing, not optional copy. This is the ONLY slide
+with the full Compensation Advisory detail — ㉚'s cluster card just points at it.
+```
+
+## ㉚ Enterprise Module Suite overview (BUSINESS §3a) — Deck slide
+
+```
+Add this as a NEW SLIDE in Binding Deck.dc.html, matching the deck's existing
+slide pattern (full-bleed section, --type-title/--type-subtitle scale, serif
+headings) — NOT a section in Binding.dc.html. This is deliberately pitch material,
+not a live product surface: BUSINESS.md §3a is explicit the whole suite is
+"Phase-3 roadmap... NOT a demo build," recorded so the enterprise pitch has a
+coherent shape.
+
+Slide content: five cluster cards —
+1. Talent Acquisition (Recruitment + Onboarding)
+2. Learn & Verify (Training + Skill Assessment)
+3. People Ops (Benefits + Payroll & Taxes + Remote Employment/EOR)
+4. Performance & Relations (Performance Review + Employee Relations incl.
+   Whistleblowing)
+5. Compliance & Safety (Legal Compliance + Safety)
+
+Call out two founder-directed novel features as small badges/notes on their
+clusters, ONE LINE each, no repeated detail: AI-recorded video interviewing on
+Talent Acquisition (see ㉛ for its own slide) and Compensation Advisory on People
+Ops (see ㉙ for its own slide, already carrying the full privacy framing — don't
+repeat it here). Include a "Phase 3 · months 10-24, not built" roadmap marker so
+it doesn't read as available today.
+```
+
+## ㉛ AI-recorded video interviewing (BUSINESS §3a) — Deck slide
+
+```
+Add this as a NEW SLIDE in Binding Deck.dc.html (not Binding.dc.html) — Phase-3
+enterprise pitch material (BUSINESS §3a), tied to the existing (roadmap)
+`interview_schedules` table concept (a message-thread-linked schedule with no UI
+yet).
+
+Slide content, three frames: (1) call setup — scheduled interview details pulled
+from the message thread, join button; (2) in-call state — a recording indicator
+and a "This call is being recorded and summarized for hiring notes" disclosure
+(consent framing matters here — this is recorded content, say so plainly); (3)
+post-call — an AI-drafted interview summary shown as suggest-and-approve (the
+interviewer reviews/edits before it's saved to candidate feedback and hiring-
+match scoring), never auto-applied. Include a "Phase 3 · months 10-24, not built"
+roadmap marker.
 ```
