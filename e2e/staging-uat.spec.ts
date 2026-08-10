@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { mkdirSync, writeFileSync } from "fs";
 import { createAndPublishJob, publishMatchingProfile, widenMatchFilter } from "./match-helpers";
 import { completeRecruiterOnboarding } from "./recruiter-onboarding";
 import { completeSeekerOnboarding } from "./seeker-onboarding";
@@ -36,7 +37,24 @@ import { ensureStagingUser, signIn, stagingAdminClient, stagingContext, uniqueLa
  * scope, not preserved intent.
  */
 
-const RUN_ID = Date.now().toString(36);
+// Run id shared with the CI upload step and the scorer: GITHUB_RUN_ID in the
+// nightly (a monotonically-increasing integer, so bucket listing by name finds
+// the latest), local fallback for manual runs.
+const RUN_ID = process.env.GITHUB_RUN_ID ?? Date.now().toString(36);
+const EVIDENCE_DIR = `e2e-results/${RUN_ID}`;
+
+// DOM state captured alongside each screenshot so the scorer has more than a
+// pixel image (the rubric asks for "screenshots + DOM state"). page.screenshot
+// creates parent directories, but writeFileSync does not — create it once up
+// front so a scenario that crashes before its first screenshot can't poison
+// the next scenario's DOM write.
+mkdirSync(EVIDENCE_DIR, { recursive: true });
+
+function captureDomState(page: import("@playwright/test").Page, name: string) {
+  return page.evaluate(() => document.body.innerHTML).then((html) => {
+    writeFileSync(`${EVIDENCE_DIR}/${name}_dom.html`, html, "utf8");
+  });
+}
 
 // Shared privacy/consent/reveal-scoping/staleness fixture, assigned by
 // scenario 1 and consumed by scenarios 3, 5, 7.
@@ -90,6 +108,7 @@ test.describe("UAT: Privacy-first promise (§1, §3 pillar 1)", () => {
     const matchCard = recruiter.getByTestId("recruiter-match-card").first();
     await expect(matchCard).toBeVisible({ timeout: 60_000 });
     await recruiter.screenshot({ path: `e2e-results/${RUN_ID}/1_privacy_first_matches.png`, fullPage: true });
+    await captureDomState(recruiter, "1_privacy_first_matches");
 
     // Open the candidate's pre-reveal detail panel — the strongest single
     // surface for the privacy invariant: full strength/credential detail,
@@ -99,6 +118,7 @@ test.describe("UAT: Privacy-first promise (§1, §3 pillar 1)", () => {
     await expect(panel).toBeVisible({ timeout: 15_000 });
     expect(await panel.innerText()).not.toContain(seekerName);
     await recruiter.screenshot({ path: `e2e-results/${RUN_ID}/1_privacy_first.png`, fullPage: true });
+    await captureDomState(recruiter, "1_privacy_first");
 
     await seekerCtx.close();
     await recruiterCtx.close();
@@ -119,6 +139,7 @@ test.describe("UAT: Dealbreaker matrix (§3 pillar 2)", () => {
     await page.getByRole("button", { name: "Edit profile" }).click();
     await expect(page.getByTestId("dealbreaker-equity")).toBeVisible({ timeout: 15_000 });
     await page.screenshot({ path: `e2e-results/${RUN_ID}/2_dealbreaker_matrix.png`, fullPage: true });
+    await captureDomState(page, "2_dealbreaker_matrix");
     await ctx.close();
   });
 });
@@ -158,6 +179,7 @@ test.describe("UAT: Consent-first reveal (§3 pillar 3, §4)", () => {
     expect(await recruiter.locator("body").innerText()).not.toContain(sharedSeekerName);
 
     await seeker.screenshot({ path: `e2e-results/${RUN_ID}/3_consent_first_reveal.png`, fullPage: true });
+    await captureDomState(seeker, "3_consent_first_reveal");
     await seekerCtx.close();
     await recruiterCtx.close();
   });
@@ -175,6 +197,7 @@ test.describe("UAT: Closed-loop points economy (§3, §7, §11)", () => {
     await page.goto("/seeker/points");
     await expect(page.getByTestId("points-page-balance")).toBeVisible({ timeout: 15_000 });
     await page.screenshot({ path: `e2e-results/${RUN_ID}/4_closed_loop_points.png`, fullPage: true });
+    await captureDomState(page, "4_closed_loop_points");
     await ctx.close();
   });
 });
@@ -210,6 +233,7 @@ test.describe("UAT: Retention moat (§3 pillar 4)", () => {
     await expect(seeker.getByTestId("seeker-match-card").first()).toBeVisible({ timeout: 60_000 });
 
     await seeker.screenshot({ path: `e2e-results/${RUN_ID}/5_retention_moat.png`, fullPage: true });
+    await captureDomState(seeker, "5_retention_moat");
     await seekerCtx.close();
     await recruiterCtx.close();
   });
@@ -226,6 +250,7 @@ test.describe("UAT: Free vs Pro differentiation (§7)", () => {
     await page.goto("/seeker");
     await expect(page.getByTestId("pro-upsell-card")).toBeVisible({ timeout: 15_000 });
     await page.screenshot({ path: `e2e-results/${RUN_ID}/6_free_vs_pro.png`, fullPage: true });
+    await captureDomState(page, "6_free_vs_pro");
     await ctx.close();
   });
 });
@@ -254,6 +279,7 @@ test.describe("UAT: Dark pool value (§6, §3 pillar 6)", () => {
     await page.goto("/seeker");
     await expect(page.getByTestId("stale-nudge-card")).toBeVisible({ timeout: 15_000 });
     await page.screenshot({ path: `e2e-results/${RUN_ID}/7_dark_pool.png`, fullPage: true });
+    await captureDomState(page, "7_dark_pool");
     await ctx.close();
   });
 });

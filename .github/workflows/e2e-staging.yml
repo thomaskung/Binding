@@ -138,7 +138,13 @@ jobs:
         # stripping it (verified locally — `pnpm e2e -- --retries=1 --list`
         # invoked `playwright test -- --retries=1 --list`, which does not do
         # what it looks like), so `--retries=1` would silently not apply.
-        run: npx playwright test --retries=1
+        #
+        # Excludes staging-uat.spec.ts (every scenario lives in a `UAT: ...`
+        # describe block, so --grep-invert "UAT:" is a safe file-level filter):
+        # the uat-evidence job below is the single owner of that spec now, so
+        # its evidence screenshots are produced exactly once per night instead
+        # of twice (~15 fewer Modal calls).
+        run: npx playwright test --retries=1 --grep-invert "UAT:"
         env:
           E2E_BASE_URL: https://binding-staging.vercel.app
           E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
@@ -256,13 +262,39 @@ jobs:
               body,
             });
 
-  # NOTE — known cost, not yet fixed: `functional`'s `pnpm e2e` above now runs
-  # the whole suite, which includes staging-uat.spec.ts, AND this job runs
-  # staging-uat.spec.ts again on its own for `score-uat` to consume. So
-  # staging-uat.spec.ts now executes twice per night — roughly 30 Modal calls
-  # total instead of the old ~27. Left as-is because `score-uat` needs this
-  # job's evidence artifacts specifically; consolidating the two runs is a
-  # follow-up, not done here.
+      - name: Close the rolling tracker issue on success
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const LABEL = 'nightly-e2e';
+            const { owner, repo } = context.repo;
+
+            const { data: openTrackers } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              labels: LABEL,
+              state: 'open',
+              sort: 'created',
+              direction: 'desc',
+              per_page: 1,
+            });
+
+            if (openTrackers.length === 0) return;
+
+            const tracker = openTrackers[0];
+            await github.rest.issues.update({
+              owner,
+              repo,
+              issue_number: tracker.number,
+              state: 'closed',
+            });
+
+  # Owns staging-uat.spec.ts exclusively: `functional` excludes it via
+  # --grep-invert "UAT:" (see that step's comment), so this is the ONLY place
+  # the 7 UAT scenarios run per night and their evidence is produced exactly
+  # once. The Modal cost stays within AI_CALL_BUDGET (e2e/zz-ai-budget.spec.ts
+  # runs alongside and asserts the suite-wide ceiling).
   uat-evidence:
     needs: functional
     runs-on: ubuntu-latest
@@ -275,7 +307,7 @@ jobs:
       - run: pnpm install
       - run: npx playwright install chromium
       - name: Run UAT evidence tests
-        run: npx playwright test e2e/staging-uat.spec.ts --retries=1
+        run: npx playwright test e2e/staging-uat.spec.ts e2e/zz-ai-budget.spec.ts --retries=1
         env:
           E2E_BASE_URL: https://binding-staging.vercel.app
           E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
@@ -283,6 +315,16 @@ jobs:
           E2E_STAGING_SECRET: ${{ secrets.E2E_STAGING_SECRET }}
           E2E_STAGING_BASIC_USER: staging
           E2E_STAGING_BASIC_PW: ${{ secrets.E2E_STAGING_BASIC_PW }}
+          # Source of truth for the run id: the spec writes evidence under
+          # e2e-results/<GITHUB_RUN_ID>/ and the upload step below pushes the
+          # same folder into the bucket, so the scorer can find the latest run.
+          GITHUB_RUN_ID: ${{ github.run_id }}
+      - name: Upload UAT evidence to Supabase Storage
+        run: node scripts/upload-uat-evidence.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_SERVICE_ROLE_KEY }}
+          RUN_ID: ${{ github.run_id }}
 
   score-uat:
     needs: uat-evidence

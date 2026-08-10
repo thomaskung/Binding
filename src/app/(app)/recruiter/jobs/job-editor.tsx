@@ -101,6 +101,16 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
     return fd;
   }
 
+  // Salary is mandatory at posting time (DESIGN §4a) — both bounds required,
+  // min <= max. Mirrors the server-side enforcement in saveJob (actions.ts).
+  function salaryError(): string | null {
+    const min = salaryMin.trim() ? Number(salaryMin) : null;
+    const max = salaryMax.trim() ? Number(salaryMax) : null;
+    if (min == null || max == null) return "both salary bounds are required";
+    if (min > max) return "minimum salary must not exceed maximum";
+    return null;
+  }
+
   // refineJobText only takes the JD text itself (no free-text instruction
   // param on the server action) — the quick-action label / ask text drives
   // the suggestion's title in the UI, but is never spliced into the text
@@ -141,6 +151,11 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
   }
 
   function saveDraft() {
+    const err = salaryError();
+    if (err) {
+      setStatus(err);
+      return;
+    }
     startTransition(async () => {
       await saveJob(buildFormData());
       setStatus("Saved.");
@@ -148,6 +163,11 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
   }
 
   function publish() {
+    const err = salaryError();
+    if (err) {
+      setStatus(err);
+      return;
+    }
     startTransition(async () => {
       await saveJob(buildFormData());
       if (job) {
@@ -286,6 +306,7 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
               <Label htmlFor="salary_min">Minimum (USD/yr)</Label>
               <Input
                 id="salary_min"
+                data-testid="job-salary-min"
                 type="number"
                 value={salaryMin}
                 onChange={(e) => setSalaryMin(e.target.value)}

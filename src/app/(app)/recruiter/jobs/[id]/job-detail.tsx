@@ -71,7 +71,7 @@ export function JobDetail({ job, matchCount }: { job: EditableJob; matchCount: n
           </CardHeader>
           <CardContent className="flex items-center justify-between gap-4">
             <span className="jb-serif text-lg font-semibold tracking-tight">
-              {salaryDisplay(job.salary_min, job.salary_max, job.salary_visibility)}
+              {salaryDisplay(job.salary_min!, job.salary_max!, job.salary_visibility)}
             </span>
             <Badge variant="outline">
               {job.salary_visibility === "public" ? "Public" : "On request"}

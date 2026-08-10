@@ -189,7 +189,12 @@ export default async function SeekerDashboard({
                       {[
                         m.company,
                         m.location,
-                        salaryDisplay(m.salaryMin, m.salaryMax, m.salaryVisibility),
+                        // Guard: salaryDisplay no longer accepts null (bounds
+                        // NOT NULL since 0023); on_request jobs carry null by
+                        // design so the raw range never ships to the client.
+                        m.salaryMin != null && m.salaryMax != null
+                          ? salaryDisplay(m.salaryMin, m.salaryMax, m.salaryVisibility)
+                          : "Salary on request",
                       ]
                         .filter(Boolean)
                         .join(" · ") || "—"}

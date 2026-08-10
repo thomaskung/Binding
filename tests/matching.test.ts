@@ -17,15 +17,6 @@ describe("dealbreaker filter (mirrors match_candidates SQL — keep in sync)", (
     expect(passesDealbreakers({ min_salary: 100000 }, job)).toBe(true);
   });
 
-  it("passes when the job has no stated ceiling", () => {
-    expect(
-      passesDealbreakers(
-        { min_salary: 150000 },
-        { salary_max: null, work_setups: ["remote"], offers_equity: false },
-      ),
-    ).toBe(true);
-  });
-
   it("fails when work setups do not overlap", () => {
     expect(passesDealbreakers({ work_setups: ["onsite"] }, job)).toBe(false);
   });

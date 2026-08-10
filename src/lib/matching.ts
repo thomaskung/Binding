@@ -111,12 +111,12 @@ export function passesDealbreakers(
     work_setups?: string[];
     equity_required?: boolean;
   } | null,
-  job: { salary_max: number | null; work_setups: string[]; offers_equity: boolean },
+  // salary_max is NOT NULL since migration 0023.
+  job: { salary_max: number; work_setups: string[]; offers_equity: boolean },
 ): boolean {
   if (!dealbreakers) return true;
   if (
     dealbreakers.min_salary != null &&
-    job.salary_max != null &&
     job.salary_max < dealbreakers.min_salary
   ) {
     return false;
