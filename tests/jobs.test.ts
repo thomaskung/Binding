@@ -31,9 +31,10 @@ describe("salaryDisplay", () => {
   it("hides the range when on_request", () => {
     expect(salaryDisplay(180000, 220000, "on_request")).toBe("Salary on request");
   });
-  it("falls back when the range is incomplete even if public", () => {
-    expect(salaryDisplay(null, 220000, "public")).toBe("Salary on request");
-  });
+  // The "incomplete range" fallback is deliberately gone: both bounds are
+  // NOT NULL since migration 0023, so salaryDisplay takes plain numbers. The
+  // null-bounds path for on_request jobs lives at the callers (seeker cards
+  // strip the raw range for privacy and render "Salary on request" directly).
 });
 
 describe("relativeDayLabel", () => {

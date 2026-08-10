@@ -30,12 +30,14 @@ export function parseLineList(text: string): string[] {
 }
 
 export function salaryDisplay(
-  salaryMin: number | null,
-  salaryMax: number | null,
+  salaryMin: number,
+  salaryMax: number,
   visibility: SalaryVisibility,
 ): string {
   if (visibility === "on_request") return "Salary on request";
-  if (salaryMin == null || salaryMax == null) return "Salary on request";
+  // Both bounds are NOT NULL at the DB level since migration 0023 — salary is
+  // mandatory at posting time (DESIGN §4a); the stealth path is handled by the
+  // visibility branch above, never by null bounds.
   return `$${salaryMin.toLocaleString()} – $${salaryMax.toLocaleString()}`;
 }
 

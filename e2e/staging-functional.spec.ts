@@ -165,6 +165,7 @@ test.describe("Staging functional — matching pipeline", () => {
     await page.getByTestId("job-description").fill(
       "Backend engineer: distributed systems, Postgres, Kubernetes, event-driven pipelines for our payments platform.",
     );
+    await page.getByTestId("job-salary-min").fill("80000");
     await page.getByTestId("job-salary-max").fill("150000");
     await page.locator('input[name="work_setups"][value="remote"]').check();
     await page.getByTestId("save-job").click();
@@ -544,6 +545,7 @@ test.describe("Staging functional — dealbreaker & tier differentiation", () =>
     await recruiter.getByTestId("job-description").fill(
       "Backend engineer: distributed systems, Postgres, Kubernetes, event-driven pipelines for our payments platform.",
     );
+    await recruiter.getByTestId("job-salary-min").fill("90000");
     await recruiter.getByTestId("job-salary-max").fill("160000");
     await recruiter.locator('input[name="work_setups"][value="remote"]').check();
     await recruiter.getByTestId("job-offers-equity").check();

@@ -226,13 +226,6 @@ as $$
         where cand.setup = any(jp.work_setups::text[])
       )
     )
-    -- Dealbreaker: candidate requires equity -> job must offer it
-    and (
-      p.dealbreaker_matrix is null
-      or (p.dealbreaker_matrix->>'equity_required') is null
-      or (p.dealbreaker_matrix->>'equity_required')::boolean = false
-      or jp.offers_equity = true
-    )
     and (1 - (sv.embedding <=> jp.embedding)) >= p_threshold
   order by sv.embedding <=> jp.embedding
   limit p_top_n;

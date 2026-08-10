@@ -45,7 +45,12 @@ export function cardMeta(card: SeekerMatchCard): string {
   return [
     card.company,
     card.location,
-    salaryDisplay(card.salaryMin, card.salaryMax, card.salaryVisibility),
+    // salaryDisplay no longer accepts null (both bounds NOT NULL since
+    // migration 0023); on_request jobs carry null bounds by design (privacy —
+    // the raw range is never shipped to the client), so guard before calling it.
+    card.salaryMin != null && card.salaryMax != null
+      ? salaryDisplay(card.salaryMin, card.salaryMax, card.salaryVisibility)
+      : "Salary on request",
     card.workSetups.join(" / ") || null,
   ]
     .filter(Boolean)

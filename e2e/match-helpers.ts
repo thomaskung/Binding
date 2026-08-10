@@ -103,6 +103,7 @@ export async function createAndPublishJob(
   opts?: {
     jobTitle?: string;
     jobDescription?: string;
+    salaryMin?: string;
     salaryMax?: string;
     workSetup?: "remote" | "hybrid" | "onsite";
   },
@@ -114,6 +115,9 @@ export async function createAndPublishJob(
   await page
     .getByTestId("job-description")
     .fill(opts?.jobDescription ?? DEFAULT_MATCHING_JOB_DESCRIPTION);
+  // Both bounds are required since migration 0023 (salary is mandatory at
+  // posting time, DESIGN §4a) — fill the min too, or saveJob rejects.
+  await page.getByTestId("job-salary-min").fill(opts?.salaryMin ?? "80000");
   await page.getByTestId("job-salary-max").fill(opts?.salaryMax ?? "150000");
   await page.locator(`input[name="work_setups"][value="${opts?.workSetup ?? "remote"}"]`).check();
   await page.getByTestId("save-job").click();

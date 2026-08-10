@@ -69,6 +69,12 @@ export async function saveJob(formData: FormData) {
     requirements: parseLineList(String(formData.get("requirements") ?? "")),
   };
   if (!values.title || !values.description) throw new Error("title and description required");
+  // Salary is mandatory at posting time (DESIGN §4a); job_postings.salary_min/
+  // salary_max are NOT NULL since migration 0023.
+  if (values.salary_min == null || values.salary_max == null)
+    throw new Error("both salary bounds are required");
+  if (values.salary_min > values.salary_max)
+    throw new Error("minimum salary must not exceed maximum");
 
   if (id) {
     const { error } = await supabase.from("job_postings").update(values).eq("id", id);
