@@ -17,7 +17,7 @@ export default async function TrainingPage() {
         .select("id, track, type, title, description, module_count, credit_cost")
         .order("track")
         .order("credit_cost"),
-      supabase.from("profiles").select("seeker_tier").eq("id", session.userId).single(),
+      supabase.from("profiles").select("seeker_tier, career_path_program_id").eq("id", session.userId).single(),
       supabase.from("training_completions").select("program_id").eq("profile_id", session.userId),
       supabase
         .from("enterprise_training_assignments")
@@ -33,6 +33,7 @@ export default async function TrainingPage() {
       <TrainingHome
         seekerTier={profile?.seeker_tier === "pro" ? "pro" : "free"}
         creditBalance={balance}
+        currentCareerPathId={profile?.career_path_program_id}
         programs={(programs ?? []).map((p) => ({
           id: p.id,
           track: p.track as "career_path" | "compliance",
