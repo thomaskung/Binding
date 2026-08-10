@@ -467,6 +467,31 @@ export async function respondToOverride(revealId: string, response: "accepted" |
   revalidatePath("/seeker");
 }
 
+/** Set the seeker's chosen career-path training program (for the dashboard
+ * training-credits widget goal panel). Validates that the program exists and
+ * is track === 'career_path', then updates profiles.career_path_program_id. */
+export async function setCareerPath(programId: string): Promise<void> {
+  const session = await requireRole("seeker");
+  const supabase = await createSupabaseServerClient();
+
+  const { data: program, error } = await supabase
+    .from("training_programs")
+    .select("id, track")
+    .eq("id", programId)
+    .single();
+  if (error || !program) throw new Error("program not found");
+  if (program.track !== "career_path") throw new Error("only career-path programs can be chosen");
+
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({ career_path_program_id: programId })
+    .eq("id", session.userId);
+  if (updateError) throw new Error(`career path update failed: ${updateError.message}`);
+
+  revalidatePath("/seeker");
+  revalidatePath("/training");
+}
+
 /** Dev-only: flip seeker_tier for demoing the Pro match-band gate — no
  * billing integration exists yet (DESIGN.md/BUSINESS.md "Pro seeker
  * $9.99/mo" is a named strategy concept, not a built payment flow). Refuses

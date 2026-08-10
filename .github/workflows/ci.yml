@@ -84,6 +84,22 @@ jobs:
               return;
             }
 
+            // (a2) Dependabot PRs: NOT forks (same-repo branch), but GitHub
+            // still withholds repository secrets from pull_request workflow
+            // runs authored by dependabot[bot] — same underlying problem as
+            // (a), different trigger condition. Confirmed via two real CI
+            // runs (PRs #88/#89, 2026-08-10): VERCEL_API_TOKEN/ORG_ID/
+            // PROJECT_ID all rendered empty, so the preview-resolution step
+            // spun for its full 10-minute budget waiting on a Vercel API
+            // call that could never authenticate, then failed loudly — not a
+            // real dependency-compatibility regression.
+            const isDependabot = pr.user?.login === 'dependabot[bot]';
+            if (isDependabot) {
+              core.info('Skipping: Dependabot PR — staging secrets are not available to dependabot[bot]-triggered workflow runs.');
+              core.setOutput('skip', 'true');
+              return;
+            }
+
             // (b) PRs that touch supabase/migrations/: the PR's own migration
             // has not been applied to staging yet. This is NOT "staging's
             // schema is older than the PR" — deploy-staging.yml runs

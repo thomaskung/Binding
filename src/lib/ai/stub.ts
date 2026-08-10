@@ -146,4 +146,14 @@ export const stubProvider: AiProvider = {
     // The deterministic floor IS the stub output — safe by construction.
     return credentialsFloorSummary(rawCredentials);
   },
+
+  async careerAssist(
+    message: string,
+    history?: Array<{ role: "user" | "assistant"; content: string }>,
+  ): Promise<string> {
+    // Deterministic stub: echo back a canned response that includes the
+    // user's message so e2e/manual checks can confirm it reached the provider.
+    const historyNote = history && history.length > 0 ? ` (with ${history.length} prior messages)` : "";
+    return `Career assistant stub response${historyNote}: You wrote: "${message}"`;
+  },
 };

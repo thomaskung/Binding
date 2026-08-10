@@ -19,9 +19,6 @@ import {
   Input,
   Label,
   Separator,
-  Tabs,
-  TabsList,
-  TabsTrigger,
   Textarea,
 } from "@binding/ui";
 import {
@@ -138,6 +135,10 @@ function VisibilityControl({
 }) {
   const modes = availableModesFor(fieldKey);
   const hint = MODE_HINT[mode];
+  function cycleMode() {
+    const nextMode = modes[(modes.indexOf(mode) + 1) % modes.length]!;
+    onChange(nextMode);
+  }
   return (
     <div className="flex items-center justify-between gap-4 border-b border-border/60 py-2 last:border-b-0">
       <div className="min-w-0 flex-1">
@@ -147,33 +148,30 @@ function VisibilityControl({
         <div className="truncate text-sm">{rawValue || "—"}</div>
       </div>
       <div className="flex flex-col items-end gap-1">
-        <select
-          aria-label={`${label} visibility`}
-          className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium"
-          value={mode}
-          onChange={(e) => onChange(e.target.value as FieldVisibilityMode)}
+        <button
+          type="button"
+          aria-label={`${label} visibility: ${MODE_LABEL[mode]}. Click to change.`}
+          className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium hover:bg-secondary transition-colors"
+          onClick={cycleMode}
         >
-          {modes.map((m) => (
-            <option key={m} value={m}>
-              {MODE_LABEL[m]}
-            </option>
-          ))}
-        </select>
+          {MODE_LABEL[mode]}
+        </button>
         {hint && <span className="max-w-56 text-right text-xs text-muted-foreground">{hint}</span>}
       </div>
     </div>
   );
 }
 
-/** Structured profile page (SeekerProfile template): Internal/External view
- * tabs + a global view/edit mode. External is the recruiter-facing redacted
- * derivation (region-only location, salary per consent, per-field
- * visibility, gated resume). Legal/privacy controls the template omits —
- * per-field visibility, market-insights opt-in, profile visibility, the
- * reveal-override toggle — live in the Privacy card (never dropped by the
- * redesign, per the founder's standing rule). */
+/** Structured profile page (SeekerProfile template): per-field visibility
+ * cycling pills + a live "What recruiters see now" mirror panel. Pills allow
+ * seekers to cycle through visibility modes (visible/matching_only/hidden per
+ * field) inline; the mirror panel updates live and shows exactly what
+ * recruiters will see when a match is revealed (region-only location, salary
+ * per consent, per-field visibility gating, credentials summary). Legal/privacy
+ * controls the template omits — per-field visibility, market-insights opt-in,
+ * profile visibility, the reveal-override toggle — live in the Privacy card
+ * (never dropped by the redesign, per the founder's standing rule). */
 export function ProfileFields(props: ProfileFieldsProps) {
-  const [viewMode, setViewMode] = useState<"internal" | "external">("internal");
   const [editing, setEditing] = useState(false);
 
   const [displayName, setDisplayName] = useState(props.displayName);
@@ -198,8 +196,6 @@ export function ProfileFields(props: ProfileFieldsProps) {
   const [maintenanceConsented, setMaintenanceConsented] = useState(props.maintenanceConsented);
   const [status, setStatus] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-
-  const internal = viewMode === "internal";
 
   function setVisibility(key: ProfileFieldKey, mode: FieldVisibilityMode) {
     const next = { ...fieldVisibility, [key]: mode };
@@ -260,17 +256,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
   );
   const headlineShown = fieldMode(fieldVisibility, "headline") === "visible";
   const locationShown = fieldMode(fieldVisibility, "location") === "visible";
-
-  const shownSkills = internal ? skillsList : external.skills;
-  const shownRoles = internal ? desiredRolesList : external.desiredRoles;
-  const shownIndustries = internal ? industriesList : external.industries;
-  const shownHeadline = internal ? headline : headlineShown ? headline : "";
-  const shownLocation = internal
-    ? location
-    : locationShown && location
-      ? regionFromLocation(location)
-      : "";
-  const salaryShown = internal || (shareSalary && minSalary);
+  const salaryShownExternal = shareSalary && Boolean(minSalary);
 
   return (
     <main className="jb-fade mx-auto max-w-[960px] space-y-6 px-6 py-10">
@@ -283,67 +269,48 @@ export function ProfileFields(props: ProfileFieldsProps) {
             {props.seekerTier === "pro" && <Badge variant="outline">Pro</Badge>}
           </div>
           <p className="text-sm text-muted-foreground">
-            {internal
-              ? "How your profile looks to you"
-              : "How recruiters see you when a match is revealed"}
+            How your profile looks to you
           </p>
         </div>
-        {internal && (
-          <div className="flex items-center gap-2.5">
-            {editing ? (
-              <>
-                <Button variant="outline" disabled={pending} onClick={() => setEditing(false)}>
-                  Cancel
-                </Button>
-                <Button disabled={pending} onClick={save}>
-                  Save changes
-                </Button>
-              </>
-            ) : (
-              <Button variant="outline" onClick={() => setEditing(true)}>
-                Edit profile
+        <div className="flex items-center gap-2.5">
+          {editing ? (
+            <>
+              <Button variant="outline" disabled={pending} onClick={() => setEditing(false)}>
+                Cancel
               </Button>
-            )}
-          </div>
-        )}
+              <Button disabled={pending} onClick={save}>
+                Save changes
+              </Button>
+            </>
+          ) : (
+            <Button variant="outline" onClick={() => setEditing(true)}>
+              Edit profile
+            </Button>
+          )}
+        </div>
       </header>
-
-      <Tabs
-        value={viewMode}
-        onValueChange={(v) => {
-          setViewMode(v as "internal" | "external");
-          setEditing(false);
-        }}
-      >
-        <TabsList variant="line">
-          <TabsTrigger value="internal">Internal view</TabsTrigger>
-          <TabsTrigger value="external">External view</TabsTrigger>
-        </TabsList>
-      </Tabs>
 
       {status && <p className="text-sm text-muted-foreground">{status}</p>}
 
       {!editing && (
         <Card className="jb-lift" data-testid="profile-identity-banner">
           <CardContent className="flex flex-col gap-3 pt-6">
-            {shownHeadline && (
+            {headline && (
               <span className="text-xs font-semibold uppercase tracking-wider text-primary">
-                {shownHeadline}
+                {headline}
               </span>
             )}
             <div className="flex flex-wrap items-baseline justify-between gap-3">
               <h2 className="font-heading text-2xl font-semibold tracking-tight">
                 {displayName || "—"}
               </h2>
-              {internal && (
-                <span className="text-[13px] text-muted-foreground">
-                  {[props.email, phone].filter(Boolean).join(" · ")}
-                </span>
-              )}
+              <span className="text-[13px] text-muted-foreground">
+                {[props.email, phone].filter(Boolean).join(" · ")}
+              </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {shownLocation && (
-                <span className="text-[13px] text-muted-foreground">{shownLocation}</span>
+              {location && (
+                <span className="text-[13px] text-muted-foreground">{location}</span>
               )}
               <Badge className="bg-accent text-accent-foreground" variant="secondary">
                 {props.visibility === "active" ? "Actively looking" : "Not looking"}
@@ -385,32 +352,24 @@ export function ProfileFields(props: ProfileFieldsProps) {
                 </div>
               )}
               <Separator className="my-3.5" />
-              {internal ? (
-                editing ? (
-                  <div className="flex flex-col gap-2.5 text-left">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Email (never shown to recruiters)</Label>
-                      <Input value={props.email} disabled />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs" htmlFor="phone">Phone (never shown to recruiters)</Label>
-                      <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
-                    </div>
+              {editing ? (
+                <div className="flex flex-col gap-2.5 text-left">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Email (never shown to recruiters)</Label>
+                    <Input value={props.email} disabled />
                   </div>
-                ) : (
-                  <div className="flex flex-col gap-0.5 text-left">
-                    <span className="text-[13px]">{props.email}</span>
-                    <span className="text-[13px] text-muted-foreground">{phone || "—"}</span>
-                    <span className="mt-1 text-[11px] text-muted-foreground">
-                      Visible to you only. Never shared with recruiters.
-                    </span>
+                  <div className="space-y-1">
+                    <Label className="text-xs" htmlFor="phone">Phone (never shown to recruiters)</Label>
+                    <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
                   </div>
-                )
+                </div>
               ) : (
-                <div className="flex justify-center">
-                  <Button variant="outline" size="sm">
-                    Message via platform
-                  </Button>
+                <div className="flex flex-col gap-0.5 text-left">
+                  <span className="text-[13px]">{props.email}</span>
+                  <span className="text-[13px] text-muted-foreground">{phone || "—"}</span>
+                  <span className="mt-1 text-[11px] text-muted-foreground">
+                    Visible to you only. Never shared with recruiters.
+                  </span>
                 </div>
               )}
             </CardContent>
@@ -421,56 +380,50 @@ export function ProfileFields(props: ProfileFieldsProps) {
               <CardTitle className="text-sm">Resume</CardTitle>
             </CardHeader>
             <CardContent>
-              {internal ? (
-                <div className="flex flex-col gap-2.5">
-                  <span className="text-[13px] text-muted-foreground">
-                    {props.publishedText
-                      ? "Published — your redacted profile is live in the pool."
-                      : props.draftText
-                        ? "Draft saved — not yet published."
-                        : "No resume yet."}
-                  </span>
-                  <Button
-                    variant={props.draftText ? "outline" : "default"}
-                    size="sm"
-                    render={<Link href="/seeker/profile/resume" />}
-                  >
-                    Open resume editor
-                  </Button>
-                </div>
-              ) : (
+              <div className="flex flex-col gap-2.5">
                 <span className="text-[13px] text-muted-foreground">
-                  Available after this match is revealed.
+                  {props.publishedText
+                    ? "Published — your redacted profile is live in the pool."
+                    : props.draftText
+                      ? "Draft saved — not yet published."
+                      : "No resume yet."}
                 </span>
-              )}
+                <Button
+                  variant={props.draftText ? "outline" : "default"}
+                  size="sm"
+                  render={<Link href="/seeker/profile/resume" />}
+                >
+                  Open resume editor
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
-          {internal && (
-            <Card className="jb-lift">
-              <CardHeader>
-                <CardTitle className="text-sm">Points balance</CardTitle>
-                <CardAction>
-                  <Badge variant="secondary">{props.pointsBalance.toLocaleString()} points</Badge>
-                </CardAction>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {props.pointsHistory.map((row, i) => (
-                  <div key={i} className="flex items-center justify-between text-[13px]">
-                    <span className="text-muted-foreground">{row.label}</span>
-                    <span className="font-medium">{row.delta}</span>
-                  </div>
-                ))}
-                <Button variant="ghost" size="sm" render={<Link href="/seeker/points" />}>
-                  Full history →
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+          <Card className="jb-lift">
+            <CardHeader>
+              <CardTitle className="text-sm">Points balance</CardTitle>
+              <CardAction>
+                <Badge variant="secondary">{props.pointsBalance.toLocaleString()} points</Badge>
+              </CardAction>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {props.pointsHistory.map((row, i) => (
+                <div key={i} className="flex items-center justify-between text-[13px]">
+                  <span className="text-muted-foreground">{row.label}</span>
+                  <span className="font-medium">{row.delta}</span>
+                </div>
+              ))}
+              <Button variant="ghost" size="sm" render={<Link href="/seeker/points" />}>
+                Full history →
+              </Button>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Right column */}
-        <div className="flex flex-col gap-4">
+        {/* Right column: main content + mirror panel on lg */}
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1fr_320px]">
+          {/* Main content */}
+          <div className="flex flex-col gap-4">
           <Card className="jb-lift">
             <CardHeader>
               <CardTitle className="text-sm">Salary &amp; availability</CardTitle>
@@ -479,7 +432,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
               {!editing ? (
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex flex-col gap-0.5">
-                    {salaryShown && minSalary ? (
+                    {minSalary ? (
                       <>
                         <span className="text-lg font-semibold tracking-tight">
                           ${Number(minSalary).toLocaleString()}+
@@ -488,7 +441,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
                       </>
                     ) : (
                       <span className="text-sm text-muted-foreground">
-                        Salary expectations hidden by candidate
+                        No salary expectations set
                       </span>
                     )}
                   </div>
@@ -529,12 +482,12 @@ export function ProfileFields(props: ProfileFieldsProps) {
             <CardContent>
               {!editing ? (
                 <div className="flex flex-wrap gap-2">
-                  {shownSkills.length === 0 && (
+                  {skillsList.length === 0 && (
                     <span className="text-sm text-muted-foreground">
-                      {internal ? "No skills yet." : "Hidden by candidate."}
+                      No skills yet.
                     </span>
                   )}
-                  {shownSkills.map((s) => (
+                  {skillsList.map((s) => (
                     <Badge key={s} variant="secondary">
                       {s}
                     </Badge>
@@ -578,7 +531,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
                     winner&rdquo;), never the specifics. Hide it entirely below if you prefer.
                   </p>
                 </div>
-              ) : internal ? (
+              ) : (
                 <div className="space-y-1.5">
                   <p className="text-sm whitespace-pre-wrap">
                     {credentials || <span className="text-muted-foreground">None yet.</span>}
@@ -590,12 +543,6 @@ export function ProfileFields(props: ProfileFieldsProps) {
                       : props.credentialsSummary || "generated when you publish"}
                   </p>
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  {fieldMode(fieldVisibility, "credentials") === "hidden"
-                    ? "Hidden by candidate."
-                    : props.credentialsSummary || "—"}
-                </p>
               )}
             </CardContent>
           </Card>
@@ -605,105 +552,98 @@ export function ProfileFields(props: ProfileFieldsProps) {
               <CardTitle className="text-sm">Work experience</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3.5">
-              {internal ? (
-                !editing ? (
-                  <>
-                    {experience.length === 0 && (
-                      <span className="text-sm text-muted-foreground">No entries yet.</span>
-                    )}
-                    {(showAllExperience ? experience : experience.slice(0, 3)).map((job, i) => (
-                      <div key={job.id ?? i} className="flex flex-col gap-0.5">
-                        <span className="text-sm font-semibold">{job.role || "—"}</span>
-                        <span className="text-[13px] text-muted-foreground">
-                          {job.company}
-                          {job.startDate ? ` · ${datesLabel(job.startDate, job.endDate)}` : ""}
-                        </span>
-                      </div>
-                    ))}
-                    {experience.length > 3 && (
+              {!editing ? (
+                <>
+                  {experience.length === 0 && (
+                    <span className="text-sm text-muted-foreground">No entries yet.</span>
+                  )}
+                  {(showAllExperience ? experience : experience.slice(0, 3)).map((job, i) => (
+                    <div key={job.id ?? i} className="flex flex-col gap-0.5">
+                      <span className="text-sm font-semibold">{job.role || "—"}</span>
+                      <span className="text-[13px] text-muted-foreground">
+                        {job.company}
+                        {job.startDate ? ` · ${datesLabel(job.startDate, job.endDate)}` : ""}
+                      </span>
+                    </div>
+                  ))}
+                  {experience.length > 3 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowAllExperience((v) => !v)}
+                    >
+                      {showAllExperience ? "Show fewer" : `Show all ${experience.length} roles`}
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <>
+                  {experience.map((job, i) => (
+                    <div key={job.id ?? i} className="grid grid-cols-[1fr_1fr_auto_auto_auto] items-end gap-2">
+                      <Input
+                        aria-label="Role"
+                        value={job.role}
+                        onChange={(e) =>
+                          setExperience((rows) =>
+                            rows.map((r, idx) => (idx === i ? { ...r, role: e.target.value } : r)),
+                          )
+                        }
+                        placeholder="Role"
+                      />
+                      <Input
+                        aria-label="Company"
+                        value={job.company}
+                        onChange={(e) =>
+                          setExperience((rows) =>
+                            rows.map((r, idx) => (idx === i ? { ...r, company: e.target.value } : r)),
+                          )
+                        }
+                        placeholder="Company"
+                      />
+                      <Input
+                        aria-label="Start date"
+                        type="date"
+                        value={job.startDate}
+                        onChange={(e) =>
+                          setExperience((rows) =>
+                            rows.map((r, idx) => (idx === i ? { ...r, startDate: e.target.value } : r)),
+                          )
+                        }
+                      />
+                      <Input
+                        aria-label="End date"
+                        type="date"
+                        value={job.endDate ?? ""}
+                        onChange={(e) =>
+                          setExperience((rows) =>
+                            rows.map((r, idx) =>
+                              idx === i ? { ...r, endDate: e.target.value || null } : r,
+                            ),
+                          )
+                        }
+                      />
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setShowAllExperience((v) => !v)}
+                        onClick={() => setExperience((rows) => rows.filter((_, idx) => idx !== i))}
                       >
-                        {showAllExperience ? "Show fewer" : `Show all ${experience.length} roles`}
+                        Remove
                       </Button>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    {experience.map((job, i) => (
-                      <div key={job.id ?? i} className="grid grid-cols-[1fr_1fr_auto_auto_auto] items-end gap-2">
-                        <Input
-                          aria-label="Role"
-                          value={job.role}
-                          onChange={(e) =>
-                            setExperience((rows) =>
-                              rows.map((r, idx) => (idx === i ? { ...r, role: e.target.value } : r)),
-                            )
-                          }
-                          placeholder="Role"
-                        />
-                        <Input
-                          aria-label="Company"
-                          value={job.company}
-                          onChange={(e) =>
-                            setExperience((rows) =>
-                              rows.map((r, idx) => (idx === i ? { ...r, company: e.target.value } : r)),
-                            )
-                          }
-                          placeholder="Company"
-                        />
-                        <Input
-                          aria-label="Start date"
-                          type="date"
-                          value={job.startDate}
-                          onChange={(e) =>
-                            setExperience((rows) =>
-                              rows.map((r, idx) => (idx === i ? { ...r, startDate: e.target.value } : r)),
-                            )
-                          }
-                        />
-                        <Input
-                          aria-label="End date"
-                          type="date"
-                          value={job.endDate ?? ""}
-                          onChange={(e) =>
-                            setExperience((rows) =>
-                              rows.map((r, idx) =>
-                                idx === i ? { ...r, endDate: e.target.value || null } : r,
-                              ),
-                            )
-                          }
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setExperience((rows) => rows.filter((_, idx) => idx !== i))}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    ))}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setExperience((rows) => [
-                          ...rows,
-                          { role: "", company: "", industry: null, startDate: "", endDate: null },
-                        ])
-                      }
-                    >
-                      Add role
-                    </Button>
-                  </>
-                )
-              ) : (
-                <span className="text-sm text-muted-foreground">
-                  Recruiters never see raw work-history entries — only aggregate signals derived
-                  from them.
-                </span>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setExperience((rows) => [
+                        ...rows,
+                        { role: "", company: "", industry: null, startDate: "", endDate: null },
+                      ])
+                    }
+                  >
+                    Add role
+                  </Button>
+                </>
               )}
             </CardContent>
           </Card>
@@ -717,12 +657,12 @@ export function ProfileFields(props: ProfileFieldsProps) {
                 <p className="mb-1.5 text-xs text-muted-foreground">Desired roles</p>
                 {!editing ? (
                   <div className="flex flex-wrap gap-2">
-                    {shownRoles.length === 0 && (
+                    {desiredRolesList.length === 0 && (
                       <span className="text-sm text-muted-foreground">
-                        {internal ? "None yet." : "Hidden by candidate."}
+                        None yet.
                       </span>
                     )}
-                    {shownRoles.map((r) => (
+                    {desiredRolesList.map((r) => (
                       <Badge key={r} variant="outline">
                         {r}
                       </Badge>
@@ -773,12 +713,12 @@ export function ProfileFields(props: ProfileFieldsProps) {
                 <p className="mb-1.5 text-xs text-muted-foreground">Industries</p>
                 {!editing ? (
                   <div className="flex flex-wrap gap-2">
-                    {shownIndustries.length === 0 && (
+                    {industriesList.length === 0 && (
                       <span className="text-sm text-muted-foreground">
-                        {internal ? "None yet." : "Hidden by candidate."}
+                        None yet.
                       </span>
                     )}
-                    {shownIndustries.map((ind) => (
+                    {industriesList.map((ind) => (
                       <Badge key={ind} variant="outline">
                         {ind}
                       </Badge>
@@ -794,10 +734,10 @@ export function ProfileFields(props: ProfileFieldsProps) {
                 )}
               </div>
 
-              {internal && !editing && external.referencesAvailable && (
+              {!editing && referencesAvailable && (
                 <p className="text-xs text-muted-foreground">References available on request.</p>
               )}
-              {internal && editing && (
+              {editing && (
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
@@ -808,64 +748,59 @@ export function ProfileFields(props: ProfileFieldsProps) {
                 </label>
               )}
 
-              {internal && (
-                <>
-                  <Separator />
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[13px] font-medium">
-                        Share salary expectations with recruiters
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        When off, recruiters see your role only — not your salary range
-                      </span>
-                    </div>
-                    <Button
-                      variant={shareSalary ? "default" : "outline"}
-                      size="sm"
-                      disabled={pending}
-                      onClick={() => {
-                        const next = !shareSalary;
-                        setShareSalary(next);
-                        startTransition(async () => {
-                          const fd = new FormData();
-                          fd.set("draft_text", props.draftText);
-                          fd.set("display_name", displayName);
-                          fd.set("headline", headline);
-                          fd.set("phone", phone);
-                          fd.set("location", location);
-                          fd.set("skills", skillsText);
-                          fd.set("desired_roles", desiredRolesText);
-                          fd.set("industries", industriesText);
-                          if (referencesAvailable) fd.set("references_available", "on");
-                          if (next) fd.set("share_salary", "on");
-                          if (minSalary) fd.set("min_salary", minSalary);
-                          if (equityRequired) fd.set("equity_required", "on");
-                          fd.set("credentials", credentials);
-                          workSetups.forEach((s) => fd.append("work_setups", s));
-                          await saveDraft(fd);
-                        });
-                      }}
-                    >
-                      {shareSalary ? "Shared" : "Hidden"}
-                    </Button>
-                  </div>
-                </>
-              )}
+              <Separator />
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[13px] font-medium">
+                    Share salary expectations with recruiters
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    When off, recruiters see your role only — not your salary range
+                  </span>
+                </div>
+                <Button
+                  variant={shareSalary ? "default" : "outline"}
+                  size="sm"
+                  disabled={pending}
+                  onClick={() => {
+                    const next = !shareSalary;
+                    setShareSalary(next);
+                    startTransition(async () => {
+                      const fd = new FormData();
+                      fd.set("draft_text", props.draftText);
+                      fd.set("display_name", displayName);
+                      fd.set("headline", headline);
+                      fd.set("phone", phone);
+                      fd.set("location", location);
+                      fd.set("skills", skillsText);
+                      fd.set("desired_roles", desiredRolesText);
+                      fd.set("industries", industriesText);
+                      if (referencesAvailable) fd.set("references_available", "on");
+                      if (next) fd.set("share_salary", "on");
+                      if (minSalary) fd.set("min_salary", minSalary);
+                      if (equityRequired) fd.set("equity_required", "on");
+                      fd.set("credentials", credentials);
+                      workSetups.forEach((s) => fd.append("work_setups", s));
+                      await saveDraft(fd);
+                    });
+                  }}
+                >
+                  {shareSalary ? "Shared" : "Hidden"}
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
-          {internal && (
-            <Card className="jb-lift">
-              <CardHeader>
-                <CardTitle className="text-sm">Privacy</CardTitle>
-                <CardAction>
-                  <span className="text-xs text-muted-foreground">
-                    {visibleFieldCount} of {PRIVACY_FIELD_COUNT} visible
-                  </span>
-                </CardAction>
-              </CardHeader>
-              <CardContent className="space-y-4">
+          <Card className="jb-lift">
+            <CardHeader>
+              <CardTitle className="text-sm">Privacy</CardTitle>
+              <CardAction>
+                <span className="text-xs text-muted-foreground">
+                  {visibleFieldCount} of {PRIVACY_FIELD_COUNT} visible
+                </span>
+              </CardAction>
+            </CardHeader>
+            <CardContent className="space-y-4">
                 <div>
                   <VisibilityControl
                     fieldKey="headline"
@@ -1122,7 +1057,114 @@ export function ProfileFields(props: ProfileFieldsProps) {
                 </div>
               </CardContent>
             </Card>
-          )}
+          </div>
+
+          {/* Sticky recruiter preview panel */}
+          <Card className="jb-lift lg:sticky lg:top-6 lg:h-fit">
+            <CardHeader>
+              <CardTitle className="text-sm">What recruiters see now</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {headlineShown && headline && (
+                <div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Headline
+                  </span>
+                  <p className="text-sm">{headline}</p>
+                </div>
+              )}
+
+              {locationShown && location && (
+                <div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Location
+                  </span>
+                  <p className="text-sm">{regionFromLocation(location)}</p>
+                </div>
+              )}
+
+              {salaryShownExternal && minSalary && (
+                <div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Salary expectations
+                  </span>
+                  <p className="text-sm font-semibold">${Number(minSalary).toLocaleString()}+</p>
+                </div>
+              )}
+
+              {external.skills.length > 0 && (
+                <div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Skills
+                  </span>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {external.skills.map((s) => (
+                      <Badge key={s} variant="secondary" className="text-xs">
+                        {s}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {external.desiredRoles.length > 0 && (
+                <div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Desired roles
+                  </span>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {external.desiredRoles.map((r) => (
+                      <Badge key={r} variant="outline" className="text-xs">
+                        {r}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {external.industries.length > 0 && (
+                <div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Target industries
+                  </span>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {external.industries.map((ind) => (
+                      <Badge key={ind} variant="outline" className="text-xs">
+                        {ind}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {external.referencesAvailable && (
+                <div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    References
+                  </span>
+                  <p className="text-sm">Available on request</p>
+                </div>
+              )}
+
+              {fieldMode(fieldVisibility, "credentials") !== "hidden" && (
+                <div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Credentials
+                  </span>
+                  <p className="text-sm">{props.credentialsSummary || "—"}</p>
+                </div>
+              )}
+
+              <Separator />
+
+              <div className="space-y-2 text-xs text-muted-foreground">
+                <p>
+                  Recruiters never see: your name, contact information, raw Resume, or work-history
+                  entries. Only aggregate signals derived from your experience feed the match.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </main>

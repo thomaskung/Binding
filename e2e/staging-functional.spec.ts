@@ -156,7 +156,11 @@ test.describe("Staging functional — matching pipeline", () => {
     });
 
     await page.goto("/recruiter/jobs/new");
-    pipelineJobTitle = "Backend Engineer, Payments";
+    // Unique, not a fixed literal: on a shared, never-reset DB with real
+    // embeddings, a non-unique title can collide with leftover jobs from past
+    // runs, making a seeker-side `.filter({ hasText: pipelineJobTitle })`
+    // ambiguous — see smoke.spec.ts's fix for the same underlying bug class.
+    pipelineJobTitle = uniqueLabel("Backend Engineer, Payments");
     await page.getByTestId("job-title").fill(pipelineJobTitle);
     await page.getByTestId("job-description").fill(
       "Backend engineer: distributed systems, Postgres, Kubernetes, event-driven pipelines for our payments platform.",
@@ -184,7 +188,10 @@ test.describe("Staging functional — matching pipeline", () => {
     await signIn(page, pipelineSeekerEmail);
 
     await page.goto("/seeker/matches");
-    const matchCard = page.getByTestId("seeker-match-card").first();
+    // Filter by this pipeline's own job title, not .first() — the shared
+    // seeker's résumé can match many leftover jobs from past runs on this
+    // never-reset DB.
+    const matchCard = page.getByTestId("seeker-match-card").filter({ hasText: pipelineJobTitle }).first();
     await expect(matchCard).toBeVisible({ timeout: 60_000 });
     // Qualitative band badge — never a raw percentage on the seeker view.
     await expect(matchCard.getByText(/(High|Normal|Low) match/)).toBeVisible();
@@ -233,7 +240,9 @@ test.describe("Staging functional — reveal mechanics", () => {
     // Seeker expresses interest on the surfaced match.
     await signIn(seeker, pipelineSeekerEmail);
     await seeker.goto("/seeker/matches");
-    const matchCard = seeker.getByTestId("seeker-match-card").first();
+    // Filter by this pipeline's own job title, not .first() — same reasoning
+    // as test 7 above.
+    const matchCard = seeker.getByTestId("seeker-match-card").filter({ hasText: pipelineJobTitle }).first();
     await expect(matchCard).toBeVisible({ timeout: 60_000 });
     await matchCard.getByTestId("match-interested").click();
     await expect(matchCard.getByText("Interested", { exact: true })).toBeVisible({
@@ -251,6 +260,7 @@ test.describe("Staging functional — reveal mechanics", () => {
     await expect(recruiter.getByTestId("candidate-panel")).toBeVisible();
     countAiCall(); // ai.fitSummary on reveal
     await recruiter.getByTestId("reveal-candidate").click();
+    await recruiter.getByTestId("confirm-reveal").click();
     await expect(recruiter.getByTestId("revealed-name")).toHaveText(pipelineSeekerName, {
       timeout: 60_000,
     });

@@ -10,6 +10,7 @@ import { logPiiAccess } from "@/lib/pii-audit";
 import {
   appendLedger,
   countOverridesToday,
+  countRevealsForJob,
   countStandardRevealsToday,
   getBalance,
   isOverrideBlocked,
@@ -20,10 +21,11 @@ import {
   REVEAL_COMPENSATION,
   REVEAL_COST,
   REVEAL_DAILY_CAP,
-  revealCostForScore,
+  revealCostForRank,
   revealSpendGuard,
 } from "@/lib/points";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Save recruiter identity + company profile fields. */
 export async function saveRecruiterProfile(formData: FormData) {
@@ -138,6 +140,92 @@ export async function refineJobText(recruiterAuthoredJd: string): Promise<string
   return ai.refineJobDescription(assertJDTextOnly(recruiterAuthoredJd));
 }
 
+interface RevealJobInfo {
+  recruiter_id: string;
+  title: string;
+  description: string;
+}
+
+/** Shared reveal core: fit summary (private AI path only) -> insert
+ * reveal_requests -> ledger debit/credit -> mark match revealed -> open
+ * thread -> audit the identity disclosure. Used by both the single-candidate
+ * actions and bulkRevealCandidates so every reveal path stays in lockstep. */
+async function performReveal(
+  admin: SupabaseClient,
+  params: {
+    matchId: string;
+    profileId: string;
+    jobPostingId: string;
+    job: RevealJobInfo;
+    recruiterId: string;
+    path: "standard" | "override";
+    cost: number;
+    compensation: number;
+    score: number;
+    premiumRefund?: number;
+  },
+): Promise<string> {
+  const { data: vector } = await admin
+    .from("skill_vectors")
+    .select("redacted_text")
+    .eq("profile_id", params.profileId)
+    .single();
+  const ai = getAiProvider();
+  const fitSummary = await ai.fitSummary(
+    vector?.redacted_text ?? "",
+    `${params.job.title}\n\n${params.job.description}`,
+  );
+
+  const { data: reveal, error: revealError } = await admin
+    .from("reveal_requests")
+    .insert({
+      match_id: params.matchId,
+      job_posting_id: params.jobPostingId,
+      profile_id: params.profileId,
+      recruiter_id: params.recruiterId,
+      path: params.path,
+      status: params.path === "standard" ? "accepted" : "pending",
+      fit_summary: fitSummary,
+      premium_refund: params.premiumRefund ?? null,
+    })
+    .select("id")
+    .single();
+  if (revealError) throw revealError;
+
+  await appendLedger(admin, {
+    profileId: params.recruiterId,
+    event: params.path === "standard" ? "reveal_spend" : "override_spend",
+    amount: -params.cost,
+    revealRequestId: reveal.id,
+    note:
+      params.path === "standard"
+        ? `standard reveal (${Math.round(params.score * 100)}% match)`
+        : `override reveal (${Math.round(params.score * 100)}% match, ${params.premiumRefund} pts refundable)`,
+  });
+  await appendLedger(admin, {
+    profileId: params.profileId,
+    event: "reveal_compensation",
+    amount: params.compensation,
+    revealRequestId: reveal.id,
+    note: params.path === "standard" ? "profile revealed" : "profile override-revealed",
+  });
+
+  await admin.from("matches").update({ status: "revealed" }).eq("id", params.matchId);
+  await admin.from("message_threads").insert({ reveal_request_id: reveal.id });
+
+  // Cross-party identity disclosure — audit it (migration 0017; owner
+  // self-access is deliberately not logged, see src/lib/pii-audit.ts).
+  await logPiiAccess(admin, {
+    accessorId: params.recruiterId,
+    accessorRole: "recruiter",
+    subjectId: params.profileId,
+    resource: "candidate_identity",
+    action: params.path === "standard" ? "standard_reveal" : "override_reveal",
+  });
+
+  return reveal.id;
+}
+
 /** Standard reveal: candidate has opted in ("interested"). Atomically-ish:
  * debit recruiter -> create reveal -> compensate candidate -> open thread.
  * (True DB-transaction atomicity via a plpgsql function is a fast-follow;
@@ -159,8 +247,9 @@ export async function revealCandidate(matchId: string) {
     throw new Error("candidate has not expressed interest yet (override path ships post-MVP)");
   }
 
-  // Match-quality pricing (§4a): a stronger match costs more to reveal.
-  const cost = revealCostForScore(REVEAL_COST, match.score);
+  // Match-quality pricing (§4a) + same-role discount (rank 2+ within this job).
+  const rank = (await countRevealsForJob(admin, session.userId, match.job_posting_id)) + 1;
+  const cost = revealCostForRank(REVEAL_COST, match.score, rank);
 
   // Cap before balance — deterministic error ordering (revealSpendGuard
   // contract). The daily cap is the DESIGN.md §5 anti-enumeration control;
@@ -178,59 +267,16 @@ export async function revealCandidate(matchId: string) {
   });
   if (guardError) throw new Error(guardError);
 
-  // Fit summary from redacted text + JD — private AI path only.
-  const { data: vector } = await admin
-    .from("skill_vectors")
-    .select("redacted_text")
-    .eq("profile_id", match.profile_id)
-    .single();
-  const ai = getAiProvider();
-  const fitSummary = await ai.fitSummary(
-    vector?.redacted_text ?? "",
-    `${job.title}\n\n${job.description}`,
-  );
-
-  const { data: reveal, error: revealError } = await admin
-    .from("reveal_requests")
-    .insert({
-      match_id: match.id,
-      job_posting_id: match.job_posting_id,
-      profile_id: match.profile_id,
-      recruiter_id: session.userId,
-      path: "standard",
-      status: "accepted", // standard path = candidate already opted in
-      fit_summary: fitSummary,
-    })
-    .select("id")
-    .single();
-  if (revealError) throw new Error(`reveal failed: ${revealError.message}`);
-
-  await appendLedger(admin, {
-    profileId: session.userId,
-    event: "reveal_spend",
-    amount: -cost,
-    revealRequestId: reveal.id,
-    note: `standard reveal (${Math.round(match.score * 100)}% match)`,
-  });
-  await appendLedger(admin, {
+  await performReveal(admin, {
+    matchId: match.id,
     profileId: match.profile_id,
-    event: "reveal_compensation",
-    amount: REVEAL_COMPENSATION,
-    revealRequestId: reveal.id,
-    note: "profile revealed",
-  });
-
-  await admin.from("matches").update({ status: "revealed" }).eq("id", match.id);
-  await admin.from("message_threads").insert({ reveal_request_id: reveal.id });
-
-  // Cross-party identity disclosure — audit it (migration 0017; owner
-  // self-access is deliberately not logged, see src/lib/pii-audit.ts).
-  await logPiiAccess(admin, {
-    accessorId: session.userId,
-    accessorRole: "recruiter",
-    subjectId: match.profile_id,
-    resource: "candidate_identity",
-    action: "standard_reveal",
+    jobPostingId: match.job_posting_id,
+    job,
+    recruiterId: session.userId,
+    path: "standard",
+    cost,
+    compensation: REVEAL_COMPENSATION,
+    score: match.score,
   });
 
   revalidatePath(`/recruiter/jobs/${match.job_posting_id}`);
@@ -258,12 +304,14 @@ export async function overrideRevealCandidate(matchId: string) {
     throw new Error("override only applies to candidates who haven't responded yet");
   }
 
-  // Match-quality pricing (§4a): scale the total cost AND the engagement-premium
-  // refund by the same factor, so a declined premium-priced override refunds the
-  // right amount. The scaled refund is stored on the reveal_request (below) so
-  // both refund paths return exactly what was charged.
-  const cost = revealCostForScore(OVERRIDE_COST, match.score);
-  const premiumRefund = revealCostForScore(OVERRIDE_PREMIUM_REFUND, match.score);
+  // Match-quality pricing (§4a) + same-role discount (rank 2+ within this job):
+  // scale the total cost AND the engagement-premium refund by the same rank +
+  // tier factors, so a declined discounted override refunds the right amount.
+  // The scaled refund is stored on the reveal_request (below) so both refund
+  // paths return exactly what was charged.
+  const rank = (await countRevealsForJob(admin, session.userId, match.job_posting_id)) + 1;
+  const cost = revealCostForRank(OVERRIDE_COST, match.score, rank);
+  const premiumRefund = revealCostForRank(OVERRIDE_PREMIUM_REFUND, match.score, rank);
 
   const [{ data: candidate }, { data: consent }] = await Promise.all([
     admin.from("profiles").select("visibility").eq("id", match.profile_id).single(),
@@ -297,63 +345,227 @@ export async function overrideRevealCandidate(matchId: string) {
   });
   if (guardError) throw new Error(guardError);
 
-  const { data: vector } = await admin
-    .from("skill_vectors")
-    .select("redacted_text")
-    .eq("profile_id", match.profile_id)
-    .single();
-  const ai = getAiProvider();
-  const fitSummary = await ai.fitSummary(
-    vector?.redacted_text ?? "",
-    `${job.title}\n\n${job.description}`,
-  );
-
-  const { data: reveal, error: revealError } = await admin
-    .from("reveal_requests")
-    .insert({
-      match_id: match.id,
-      job_posting_id: match.job_posting_id,
-      profile_id: match.profile_id,
-      recruiter_id: session.userId,
-      path: "override",
-      status: "pending", // candidate decides; messaging locked until accepted
-      fit_summary: fitSummary,
-      premium_refund: premiumRefund, // scaled refund locked at charge time (§4a)
-    })
-    .select("id")
-    .single();
-  if (revealError) throw new Error(`override reveal failed: ${revealError.message}`);
-
-  await appendLedger(admin, {
-    profileId: session.userId,
-    event: "override_spend",
-    amount: -cost,
-    revealRequestId: reveal.id,
-    note: `override reveal (${Math.round(match.score * 100)}% match, ${premiumRefund} pts refundable)`,
-  });
-  await appendLedger(admin, {
+  await performReveal(admin, {
+    matchId: match.id,
     profileId: match.profile_id,
-    event: "reveal_compensation",
-    amount: OVERRIDE_COMPENSATION,
-    revealRequestId: reveal.id,
-    note: "profile override-revealed",
-  });
-
-  await admin.from("matches").update({ status: "revealed" }).eq("id", match.id);
-  await admin.from("message_threads").insert({ reveal_request_id: reveal.id });
-
-  // Cross-party identity disclosure (pre-opt-in — the higher-privacy-cost
-  // path) — audit it (migration 0017).
-  await logPiiAccess(admin, {
-    accessorId: session.userId,
-    accessorRole: "recruiter",
-    subjectId: match.profile_id,
-    resource: "candidate_identity",
-    action: "override_reveal",
+    jobPostingId: match.job_posting_id,
+    job,
+    recruiterId: session.userId,
+    path: "override",
+    cost,
+    compensation: OVERRIDE_COMPENSATION,
+    score: match.score,
+    premiumRefund,
   });
 
   revalidatePath(`/recruiter/jobs/${match.job_posting_id}`);
   revalidatePath(`/recruiter/jobs/${match.job_posting_id}/matches`);
+}
+
+export interface BulkRevealOutcome {
+  matchId: string;
+  outcome: "revealed" | "skipped" | "failed";
+  cost?: number;
+  reason?: string;
+}
+
+interface BulkCandidateRow {
+  id: string;
+  status: "surfaced" | "interested" | "declined" | "revealed";
+  score: number;
+  profile_id: string;
+  job_posting_id: string;
+  job_postings: RevealJobInfo | RevealJobInfo[];
+}
+
+/** Loads + validates the shared preconditions for a bulk operation: all
+ * matches exist, share one job posting, and that posting belongs to the
+ * calling recruiter. Returns matches sorted by score descending (server-side
+ * — client-provided order is never trusted) plus the resolved job. */
+async function loadBulkCandidates(
+  admin: SupabaseClient,
+  recruiterId: string,
+  matchIds: string[],
+): Promise<{ sorted: BulkCandidateRow[]; job: RevealJobInfo; jobPostingId: string }> {
+  const { data: matches, error } = await admin
+    .from("matches")
+    .select(
+      "id, status, score, profile_id, job_posting_id, job_postings(recruiter_id, title, description)",
+    )
+    .in("id", matchIds);
+  if (error) throw new Error(`failed to load matches: ${error.message}`);
+  if (!matches || matches.length !== matchIds.length) {
+    throw new Error("one or more matches not found");
+  }
+
+  const jobPostingIds = new Set(matches.map((m) => m.job_posting_id));
+  if (jobPostingIds.size > 1) {
+    throw new Error("bulk reveal must target candidates for a single job posting");
+  }
+
+  const rows = matches as unknown as BulkCandidateRow[];
+  const job = Array.isArray(rows[0]!.job_postings) ? rows[0]!.job_postings[0] : rows[0]!.job_postings;
+  if (!job || job.recruiter_id !== recruiterId) throw new Error("not your job posting");
+
+  const sorted = [...rows].sort((a, b) => b.score - a.score);
+  return { sorted, job, jobPostingId: rows[0]!.job_posting_id };
+}
+
+/** Bulk reveal for the Compare view. Processes candidates SEQUENTIALLY (not
+ * in parallel): ranks depend on prior successes within the batch, daily caps
+ * must be re-checked mid-batch, and balance checks must not race. Continues
+ * past individual failures rather than aborting the whole batch. */
+export async function bulkRevealCandidates(matchIds: string[]): Promise<BulkRevealOutcome[]> {
+  const session = await requireRole("recruiter");
+  const admin = createSupabaseAdminClient();
+  if (matchIds.length === 0) return [];
+
+  const { sorted, job, jobPostingId } = await loadBulkCandidates(admin, session.userId, matchIds);
+
+  let rank = (await countRevealsForJob(admin, session.userId, jobPostingId)) + 1;
+  const outcomes: BulkRevealOutcome[] = [];
+  let standardCapTripped = false;
+  let overrideCapTripped = false;
+
+  for (const match of sorted) {
+    if (match.status !== "interested" && match.status !== "surfaced") {
+      outcomes.push({
+        matchId: match.id,
+        outcome: "skipped",
+        reason: `match status '${match.status}' is not reveal-eligible`,
+      });
+      continue;
+    }
+    const path: "standard" | "override" = match.status === "interested" ? "standard" : "override";
+
+    if (path === "standard" && standardCapTripped) {
+      outcomes.push({ matchId: match.id, outcome: "skipped", reason: "daily reveal limit reached" });
+      continue;
+    }
+    if (path === "override" && overrideCapTripped) {
+      outcomes.push({ matchId: match.id, outcome: "skipped", reason: "daily override limit reached" });
+      continue;
+    }
+
+    try {
+      if (path === "override") {
+        const [{ data: candidate }, { data: consent }] = await Promise.all([
+          admin.from("profiles").select("visibility").eq("id", match.profile_id).single(),
+          admin
+            .from("consent_flags")
+            .select("reveal_override_enabled")
+            .eq("profile_id", match.profile_id)
+            .maybeSingle(),
+        ]);
+        if (!consent?.reveal_override_enabled) {
+          outcomes.push({ matchId: match.id, outcome: "skipped", reason: "candidate has disabled reveal-override" });
+          continue;
+        }
+        if (candidate?.visibility === "paused") {
+          outcomes.push({ matchId: match.id, outcome: "skipped", reason: "candidate profile paused" });
+          continue;
+        }
+        if (await isOverrideBlocked(admin, session.userId, match.profile_id)) {
+          outcomes.push({ matchId: match.id, outcome: "skipped", reason: "recent override decline — blocked" });
+          continue;
+        }
+      }
+
+      const cost =
+        path === "standard"
+          ? revealCostForRank(REVEAL_COST, match.score, rank)
+          : revealCostForRank(OVERRIDE_COST, match.score, rank);
+
+      const [usedToday, balance] = await Promise.all([
+        path === "standard"
+          ? countStandardRevealsToday(admin, session.userId)
+          : countOverridesToday(admin, session.userId),
+        getBalance(admin, session.userId),
+      ]);
+      const guardError = revealSpendGuard({
+        usedToday,
+        dailyCap: path === "standard" ? REVEAL_DAILY_CAP : OVERRIDE_DAILY_CAP,
+        balance,
+        cost,
+        kind: path === "standard" ? "reveal" : "override",
+      });
+      if (guardError) {
+        if (guardError.startsWith("daily")) {
+          if (path === "standard") standardCapTripped = true;
+          else overrideCapTripped = true;
+        }
+        outcomes.push({ matchId: match.id, outcome: "skipped", reason: guardError });
+        continue;
+      }
+
+      const premiumRefund =
+        path === "override" ? revealCostForRank(OVERRIDE_PREMIUM_REFUND, match.score, rank) : undefined;
+
+      await performReveal(admin, {
+        matchId: match.id,
+        profileId: match.profile_id,
+        jobPostingId: match.job_posting_id,
+        job,
+        recruiterId: session.userId,
+        path,
+        cost,
+        compensation: path === "standard" ? REVEAL_COMPENSATION : OVERRIDE_COMPENSATION,
+        score: match.score,
+        premiumRefund,
+      });
+
+      outcomes.push({ matchId: match.id, outcome: "revealed", cost });
+      rank += 1;
+    } catch (err) {
+      const code = (err as { code?: string } | null)?.code;
+      const message =
+        err instanceof Error ? err.message : ((err as { message?: string } | null)?.message ?? String(err));
+      if (code === "23505") {
+        outcomes.push({ matchId: match.id, outcome: "skipped", reason: "already revealed" });
+      } else {
+        outcomes.push({ matchId: match.id, outcome: "failed", reason: message });
+      }
+    }
+  }
+
+  revalidatePath(`/recruiter/jobs/${jobPostingId}`);
+  revalidatePath(`/recruiter/jobs/${jobPostingId}/matches`);
+  return outcomes;
+}
+
+export interface BulkRevealPreview {
+  matchId: string;
+  path?: "standard" | "override";
+  cost?: number;
+  reason?: string;
+}
+
+/** Read-only cost preview for the bulk-reveal confirmation dialog: same
+ * ranking/pricing logic as bulkRevealCandidates, no charge, no DB write.
+ * Daily-cap/consent/balance checks are NOT run here (those can only be
+ * authoritative at commit time) — this shows what each candidate would cost
+ * assuming the batch proceeds in score order. */
+export async function previewBulkRevealCost(matchIds: string[]): Promise<BulkRevealPreview[]> {
+  const session = await requireRole("recruiter");
+  const admin = createSupabaseAdminClient();
+  if (matchIds.length === 0) return [];
+
+  const { sorted, jobPostingId } = await loadBulkCandidates(admin, session.userId, matchIds);
+  let rank = (await countRevealsForJob(admin, session.userId, jobPostingId)) + 1;
+
+  const previews: BulkRevealPreview[] = [];
+  for (const match of sorted) {
+    if (match.status === "interested") {
+      previews.push({ matchId: match.id, path: "standard", cost: revealCostForRank(REVEAL_COST, match.score, rank) });
+      rank += 1;
+    } else if (match.status === "surfaced") {
+      previews.push({ matchId: match.id, path: "override", cost: revealCostForRank(OVERRIDE_COST, match.score, rank) });
+      rank += 1;
+    } else {
+      previews.push({ matchId: match.id, reason: `match status '${match.status}' is not reveal-eligible` });
+    }
+  }
+  return previews;
 }
 
 export async function sendMessage(threadId: string, body: string) {
@@ -374,9 +586,10 @@ export async function sendMessage(threadId: string, body: string) {
   revalidatePath(`/thread/${threadId}`);
 }
 
-/** Dev-only: flip recruiter_tier between 'free' and 'solo' for demoing tier
- * differentiation (BUSINESS.md §7) — no billing integration exists yet.
- * Refuses outside dev so this never ships as a real, unpaid upgrade path. */
+/** Dev-only: cycle recruiter_tier through free → solo → advanced → pro_saas → free
+ * for demoing tier differentiation (BUSINESS.md §7) — no billing integration
+ * exists yet. Refuses outside dev so this never ships as a real, unpaid upgrade
+ * path. */
 export async function toggleRecruiterTier() {
   if (process.env.NODE_ENV === "production") {
     throw new Error("dev-only action");
@@ -390,7 +603,13 @@ export async function toggleRecruiterTier() {
     .single();
   if (error) throw new Error(error.message);
 
-  const nextTier = profile.recruiter_tier === "solo" ? "free" : "solo";
+  const tierCycle: Record<string, string> = {
+    free: "solo",
+    solo: "advanced",
+    advanced: "pro_saas",
+    pro_saas: "free",
+  };
+  const nextTier = tierCycle[profile.recruiter_tier] ?? "free";
   const { error: updateError } = await supabase
     .from("profiles")
     .update({ recruiter_tier: nextTier })

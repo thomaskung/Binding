@@ -2,34 +2,157 @@
   "$schema": "https://opencode.ai/config.json",
   "model": "opencode-go/deepseek-v4-pro",
   "agent": {
-    "plan": {
-      "model": "opencode-go/deepseek-v4-pro"
-    },
     "build": {
-      "model": "opencode-go/deepseek-v4-flash"
-    },
-    "explore": {
       "model": "opencode-go/deepseek-v4-flash",
-      "mode": "all"
+      "color": "secondary",
+      "permission": {
+        "task": {
+          "*": "deny",
+          "explore": "allow",
+          "advise": "allow",
+          "general": "allow"
+        }
+      }
     },
-    "general": {
-      "model": "opencode-go/deepseek-v4-flash"
+    "plan": {
+      "model": "opencode-go/deepseek-v4-pro",
+      "color": "warning",
+      "permission": {
+        "edit": "deny",
+        "bash": {
+          "*": "deny",
+          "git *": "allow",
+          "gh *": "allow",
+          "ls *": "allow",
+          "rg *": "allow",
+          "cat *": "allow",
+          "find *": "allow",
+          "pnpm typecheck*": "allow",
+          "pnpm lint*": "allow",
+          "npx tsc*": "allow"
+        },
+        "task": {
+          "*": "deny",
+          "explore": "allow",
+          "advise": "allow"
+        },
+        "webfetch": "ask"
+      }
     },
     "advise": {
       "model": "opencode-go/deepseek-v4-pro",
+      "color": "accent",
       "permission": {
         "edit": "deny",
-        "bash": "deny",
-        "task": "deny"
+        "bash": {
+          "*": "ask",
+          "git *": "allow",
+          "gh *": "allow",
+          "ls *": "allow",
+          "rg *": "allow",
+          "cat *": "allow",
+          "find *": "allow",
+          "pnpm typecheck*": "allow",
+          "pnpm lint*": "allow",
+          "npx tsc*": "allow",
+          "supabase db query*": "allow",
+          "supabase migration list*": "allow",
+          "supabase projects list*": "allow",
+          "supabase login*": "allow",
+          "supabase link*": "allow",
+          "vercel whoami*": "allow",
+          "vercel link*": "allow",
+          "modal profile list*": "allow",
+          "rm -rf *": "deny",
+          "rm -fr *": "deny",
+          "git push --force*": "deny",
+          "git push -f *": "deny",
+          "git reset --hard*": "deny",
+          "gh repo delete *": "deny",
+          "gh secret *": "deny",
+          "sudo *": "deny",
+          "chmod -R *": "deny",
+          "chown -R *": "deny"
+        },
+        "task": "deny",
+        "webfetch": "ask",
+        "websearch": "ask"
+      }
+    },
+    "explore": {
+      "model": "opencode-go/deepseek-v4-flash",
+      "mode": "all",
+      "color": "success",
+      "permission": {
+        "edit": "deny",
+        "bash": {
+          "*": "deny",
+          "ls *": "allow",
+          "rg *": "allow",
+          "cat *": "allow",
+          "find *": "allow",
+          "git status *": "allow",
+          "git diff *": "allow",
+          "git log *": "allow",
+          "git show *": "allow"
+        },
+        "task": "deny",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "general": {
+      "model": "opencode-go/deepseek-v4-flash",
+      "color": "error",
+      "permission": {
+        "edit": "ask",
+        "bash": {
+          "*": "ask",
+          "git *": "allow",
+          "gh *": "allow",
+          "ls *": "allow",
+          "rg *": "allow",
+          "cat *": "allow",
+          "find *": "allow",
+          "pnpm typecheck*": "allow",
+          "pnpm lint*": "allow",
+          "rm -rf *": "deny",
+          "rm -fr *": "deny",
+          "git push --force*": "deny",
+          "git push -f *": "deny",
+          "git reset --hard*": "deny",
+          "gh repo delete *": "deny",
+          "gh secret *": "deny",
+          "sudo *": "deny",
+          "chmod -R *": "deny",
+          "chown -R *": "deny"
+        },
+        "task": "ask",
+        "webfetch": "ask",
+        "websearch": "ask"
       }
     }
   },
   "permission": {
+    "read": {
+      "*.env*": "ask",
+      "*": "allow"
+    },
     "edit": "allow",
     "bash": {
       "*": "ask",
       "git *": "allow",
       "gh *": "allow",
+      "pnpm *": "allow",
+      "node *": "allow",
+      "python3 *": "allow",
+      "npx *": "allow",
+      "supabase *": "allow",
+      "vercel *": "allow",
+      "modal *": "allow",
+      "find *": "allow",
+      "mkdir *": "allow",
+      "touch *": "allow",
       "uv *": "allow",
       "ruff *": "allow",
       "mypy *": "allow",
@@ -39,6 +162,17 @@
       "ls *": "allow",
       "rg *": "allow",
       "cat *": "allow",
+      "brew *": "ask",
+      "pnpm seed:*": "ask",
+      "supabase db push*": "ask",
+      "supabase db push --dry-run*": "allow",
+      "supabase db reset*": "ask",
+      "supabase projects delete*": "ask",
+      "supabase projects create*": "ask",
+      "vercel --prod*": "ask",
+      "modal deploy*": "ask",
+      "modal secret create*": "ask",
+      "modal token *": "ask",
       "rm -rf *": "deny",
       "rm -fr *": "deny",
       "git push --force*": "deny",

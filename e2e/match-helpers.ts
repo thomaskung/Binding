@@ -4,10 +4,23 @@ import { countAiCall, uniqueLabel } from "./staging-helpers";
 /** The recruiter match list defaults its min-match filter to 70%; drag it to
  * the floor (55%) so a stub/real match of any score stays visible. Shared by
  * the smoke + override specs (kept in a non-spec file so importing it doesn't
- * re-register another file's tests). */
+ * re-register another file's tests).
+ *
+ * WAITS for the slider (bounded) rather than a single `.count()` check —
+ * a one-shot check races client-side hydration on a slow/cold page load and
+ * can silently no-op while the slider is still mounting, leaving the 70%
+ * floor in effect and hiding a genuine match indefinitely (root-caused a
+ * 2026-08-10 post-merge smoke failure: the recruiter's "interested" card was
+ * real but below the un-widened floor). Falls back to a no-op if the slider
+ * genuinely never appears (e.g. a filter-less view). */
 export async function widenMatchFilter(page: Page) {
   const slider = page.getByTestId("filter-min-pct").getByRole("slider");
-  if (await slider.count()) await slider.press("Home");
+  try {
+    await slider.waitFor({ state: "visible", timeout: 15_000 });
+    await slider.press("Home");
+  } catch {
+    // Not present on this view — no-op, same as the old count()-based check.
+  }
 }
 
 /** Default matching text pair used by `publishMatchingProfile` /

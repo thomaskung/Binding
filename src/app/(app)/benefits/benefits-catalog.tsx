@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Separator } from "@binding/ui";
+import { Badge, Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Separator } from "@binding/ui";
 import { benefitTierProgress } from "@/lib/benefits";
 
 interface Partner {
@@ -31,25 +31,57 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 function PartnerCard({ partner, unlocked }: { partner: Partner; unlocked: boolean }) {
   const [revealed, setRevealed] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  const openDialog = () => {
+    setRevealed(true);
+    setDialogOpen(true);
+  };
+
   return (
-    <Card size="sm" className="jb-lift" data-testid="benefit-partner-card">
-      <CardHeader>
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-[15px]">{partner.partner_name}</CardTitle>
-          <Badge variant="outline">{CATEGORY_LABEL[partner.category] ?? partner.category}</Badge>
-        </div>
-        <CardDescription>{partner.discount_description}</CardDescription>
-      </CardHeader>
-      <Separator />
-      <CardContent>
-        {!unlocked ? (
-          <span className="text-xs text-muted-foreground">
-            Reach Tier {partner.tier_required} to unlock.
-          </span>
-        ) : revealed ? (
-          <div className="flex flex-col gap-2">
+    <>
+      <Card size="sm" className="jb-lift" data-testid="benefit-partner-card">
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-[15px]">{partner.partner_name}</CardTitle>
+            <Badge variant="outline">{CATEGORY_LABEL[partner.category] ?? partner.category}</Badge>
+          </div>
+          <CardDescription>{partner.discount_description}</CardDescription>
+        </CardHeader>
+        <Separator />
+        <CardContent>
+          {!unlocked ? (
+            <span className="text-xs text-muted-foreground">
+              Reach Tier {partner.tier_required} to unlock.
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              Same code for everyone at your tier — no personal tracking
+            </span>
+          )}
+        </CardContent>
+        <CardFooter>
+          <Button
+            variant={revealed || !unlocked ? "outline" : "default"}
+            size="sm"
+            className="w-full"
+            disabled={!unlocked || revealed}
+            data-testid={unlocked && !revealed ? "get-code" : undefined}
+            onClick={openDialog}
+          >
+            {!unlocked ? `Unlocks at Tier ${partner.tier_required}` : revealed ? "Code revealed" : "Get code"}
+          </Button>
+        </CardFooter>
+      </Card>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{partner.partner_name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
             <span
-              className="inline-block w-fit rounded-md bg-muted px-2.5 py-1.5 font-mono text-[15px] tracking-wide"
+              className="inline-block rounded-md bg-muted px-2.5 py-1.5 font-mono text-[15px] tracking-wide"
               data-testid="benefit-code"
             >
               {partner.code}
@@ -59,25 +91,17 @@ function PartnerCard({ partner, unlocked }: { partner: Partner; unlocked: boolea
               processes this payment.
             </span>
           </div>
-        ) : (
-          <span className="text-xs text-muted-foreground">
-            Same code for everyone at your tier — no personal tracking
-          </span>
-        )}
-      </CardContent>
-      <CardFooter>
-        <Button
-          variant={revealed || !unlocked ? "outline" : "default"}
-          size="sm"
-          className="w-full"
-          disabled={!unlocked || revealed}
-          data-testid={unlocked && !revealed ? "get-code" : undefined}
-          onClick={() => setRevealed(true)}
-        >
-          {!unlocked ? `Unlocks at Tier ${partner.tier_required}` : revealed ? "Code revealed" : "Get code"}
-        </Button>
-      </CardFooter>
-    </Card>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDialogOpen(false)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

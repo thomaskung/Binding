@@ -17,6 +17,8 @@ import { isStale } from "@/lib/profile";
 import { salaryDisplay } from "@/lib/jobs";
 import { loadSeekerContext, OverrideBanners } from "./seeker-data";
 import { MatchResponseButtons } from "./match-response";
+import { LoyaltyLadderCard } from "./loyalty-ladder-card";
+import TrainingCreditsCard from "./training-credits-card";
 
 const BAND_LABEL = { high: "High match", normal: "Normal match", low: "Low match" } as const;
 const BAND_VARIANT = { high: "default", normal: "secondary", low: "outline" } as const;
@@ -104,6 +106,19 @@ export default async function SeekerDashboard({
       )}
 
       <OverrideBanners context={context} />
+
+      <div className="grid gap-5 md:grid-cols-2">
+        <LoyaltyLadderCard
+          lifetimePoints={context.lifetimeEarnedPoints}
+          partnerUnlocks={context.partnerUnlocks}
+        />
+        <TrainingCreditsCard
+          balance={context.trainingCreditBalance}
+          ledger={context.recentTrainingLedger}
+          careerPathProgram={context.careerPathProgram}
+          trainingCompletionCount={context.trainingCompletionCount}
+        />
+      </div>
 
       {!published && (
         <>

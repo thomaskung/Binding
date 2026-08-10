@@ -5,11 +5,24 @@ import { useRef, useState, useTransition } from "react";
 import { AIDocumentCanvas, type AIDocumentSuggestion, Badge, Button } from "@binding/ui";
 import { PROFILE_QUICK_ACTIONS } from "@/lib/profile";
 import { publishProfile, refineProfileText, saveDraftText } from "../../actions";
+import { ResumeExportModal } from "./resume-export-modal";
 
 interface Props {
   draftText: string;
   redactedText: string | null;
   seekerTier: "free" | "pro";
+  displayName: string;
+  headline: string | null;
+  skills: string[];
+  desiredRoles: string[];
+  industries: string[];
+  experience: Array<{
+    role: string;
+    company: string;
+    startDate: string;
+    endDate: string | null;
+    industry: string | null;
+  }>;
 }
 
 interface DraftSuggestion {
@@ -33,6 +46,7 @@ export function ResumeCanvas(props: Props) {
   const [chatInput, setChatInput] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,6 +150,15 @@ export function ResumeCanvas(props: Props) {
           Upload resume PDF
         </Button>
         <div className="ml-auto flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pending}
+            onClick={() => setExportModalOpen(true)}
+            data-testid="export-button"
+          >
+            Export
+          </Button>
           <Button variant="outline" size="sm" disabled={pending} onClick={() => persistDraft(false)}>
             Save draft
           </Button>
@@ -215,6 +238,18 @@ export function ResumeCanvas(props: Props) {
           ← Back to profile
         </Button>
       </div>
+
+      <ResumeExportModal
+        open={exportModalOpen}
+        onOpenChange={setExportModalOpen}
+        seekerTier={props.seekerTier}
+        displayName={props.displayName}
+        headline={props.headline}
+        skills={props.skills}
+        desiredRoles={props.desiredRoles}
+        industries={props.industries}
+        experience={props.experience}
+      />
     </div>
   );
 }

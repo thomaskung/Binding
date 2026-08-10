@@ -8,10 +8,10 @@ export default async function ResumeCanvasPage() {
   const session = await requireRole("seeker");
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: profile }, { data: vector }] = await Promise.all([
+  const [{ data: profile }, { data: vector }, { data: experience }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("draft_text, seeker_tier")
+      .select("display_name, draft_text, headline, skills, desired_roles, industries, seeker_tier")
       .eq("id", session.userId)
       .single(),
     supabase
@@ -19,6 +19,10 @@ export default async function ResumeCanvasPage() {
       .select("redacted_text")
       .eq("profile_id", session.userId)
       .maybeSingle(),
+    supabase
+      .from("seeker_experience")
+      .select("role, company, industry, start_date, end_date")
+      .eq("profile_id", session.userId),
   ]);
 
   return (
@@ -26,6 +30,18 @@ export default async function ResumeCanvasPage() {
       draftText={profile?.draft_text ?? ""}
       redactedText={vector?.redacted_text ?? null}
       seekerTier={profile?.seeker_tier === "pro" ? "pro" : "free"}
+      displayName={profile?.display_name ?? ""}
+      headline={profile?.headline ?? null}
+      skills={profile?.skills ?? []}
+      desiredRoles={profile?.desired_roles ?? []}
+      industries={profile?.industries ?? []}
+      experience={(experience ?? []).map((e) => ({
+        role: e.role,
+        company: e.company,
+        startDate: e.start_date,
+        endDate: e.end_date,
+        industry: e.industry,
+      }))}
     />
   );
 }

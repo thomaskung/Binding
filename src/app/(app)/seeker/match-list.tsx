@@ -6,6 +6,7 @@ import { Badge, Button, Card, Select, SelectContent, SelectItem, SelectTrigger, 
 import type { MatchBand } from "@/lib/matching";
 import { salaryDisplay, type SalaryVisibility } from "@/lib/jobs";
 import { MatchResponseButtons } from "./match-response";
+import { FocusReview } from "./focus-review";
 
 export interface SeekerMatchCard {
   id: string;
@@ -28,16 +29,33 @@ export interface SeekerMatchCard {
   threadId: string | null;
 }
 
-const BAND_LABEL: Record<MatchBand, string> = {
+export const BAND_LABEL: Record<MatchBand, string> = {
   high: "High match",
   normal: "Normal match",
   low: "Low match",
 };
-const BAND_VARIANT: Record<MatchBand, "default" | "secondary" | "outline"> = {
+export const BAND_VARIANT: Record<MatchBand, "default" | "secondary" | "outline"> = {
   high: "default",
   normal: "secondary",
   low: "outline",
 };
+
+/** Assemble the meta-line for a match card: company, location, salary, work setups. */
+export function cardMeta(card: SeekerMatchCard): string {
+  return [
+    card.company,
+    card.location,
+    // salaryDisplay no longer accepts null (both bounds NOT NULL since
+    // migration 0023); on_request jobs carry null bounds by design (privacy —
+    // the raw range is never shipped to the client), so guard before calling it.
+    card.salaryMin != null && card.salaryMax != null
+      ? salaryDisplay(card.salaryMin, card.salaryMax, card.salaryVisibility)
+      : "Salary on request",
+    card.workSetups.join(" / ") || null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
 
 const STATUS_FILTERS = ["all", "surfaced", "interested", "revealed"] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
@@ -52,6 +70,7 @@ const SORT_LABEL: Record<SortKey, string> = {
 export function MatchList({ cards }: { cards: SeekerMatchCard[] }) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortBy, setSortBy] = useState<SortKey>("match");
+  const [focusMode, setFocusMode] = useState(false);
 
   const visible = useMemo(() => {
     const filtered =
@@ -74,6 +93,10 @@ export function MatchList({ cards }: { cards: SeekerMatchCard[] }) {
     );
   }
 
+  if (focusMode) {
+    return <FocusReview cards={cards} onExit={() => setFocusMode(false)} />;
+  }
+
   return (
     <div className="jb-fade space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -85,16 +108,26 @@ export function MatchList({ cards }: { cards: SeekerMatchCard[] }) {
             <TabsTrigger value="revealed">Revealed</TabsTrigger>
           </TabsList>
         </Tabs>
-        <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
-          <SelectTrigger style={{ width: 170 }}>
-            <SelectValue>{SORT_LABEL[sortBy]}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="match">Best match</SelectItem>
-            <SelectItem value="salary">Highest salary</SelectItem>
-            <SelectItem value="title">Title A–Z</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex gap-2">
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
+            <SelectTrigger style={{ width: 170 }}>
+              <SelectValue>{SORT_LABEL[sortBy]}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="match">Best match</SelectItem>
+              <SelectItem value="salary">Highest salary</SelectItem>
+              <SelectItem value="title">Title A–Z</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setFocusMode(true)}
+            disabled={!visible.some((c) => c.status === "surfaced")}
+          >
+            Review matches
+          </Button>
+        </div>
       </div>
 
       {visible.length === 0 ? (
@@ -106,6 +139,7 @@ export function MatchList({ cards }: { cards: SeekerMatchCard[] }) {
       ) : (
         <div className="flex flex-col gap-3">
           {visible.map((card) => {
+<<<<<<< HEAD
             const meta = [
               card.company,
               card.location,
@@ -120,6 +154,9 @@ export function MatchList({ cards }: { cards: SeekerMatchCard[] }) {
             ]
               .filter(Boolean)
               .join(" · ");
+=======
+            const meta = cardMeta(card);
+>>>>>>> origin/main
             return (
               <Card key={card.id} className="jb-lift" data-testid="seeker-match-card">
                 <div className="flex gap-4 px-4">

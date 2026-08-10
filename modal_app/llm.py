@@ -105,6 +105,11 @@ Example: "Patent US10,123,456 for a fraud-detection graph algorithm; AWS SA
 Pro; won FinTech HK 2023 Innovator award" -> "patent-holder (fraud detection) ·
 cloud-certified · industry award winner" /no_think"""
 
+CAREER_ASSIST_SYSTEM = """You are a career assistant helping job seekers with
+resume rewriting, cover letters, interview prep, and career-path guidance. Be
+concise and practical. Do NOT ask for or reference specific employer names,
+personal contact details, or other identifying information. /no_think"""
+
 
 @app.cls(
     image=image,
@@ -163,6 +168,8 @@ class Qwen:
             system = REFINE_JD_SYSTEM
         elif kind == "credentials":
             system = CREDENTIALS_SYSTEM
+        elif kind == "career_assist":
+            system = CAREER_ASSIST_SYSTEM
         else:
             system = REFINE_PROFILE_SYSTEM
         return {"refined": self._generate(system, body["text"])}

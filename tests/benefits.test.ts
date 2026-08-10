@@ -8,6 +8,7 @@ import {
   getLifetimeBenefitPoints,
   getLifetimeEarnedPoints,
   getLifetimeSpentPoints,
+  loyaltyLadderRows,
 } from "@/lib/benefits";
 
 describe("benefitTier (read-only signal from lifetime EARNED points)", () => {
@@ -154,5 +155,65 @@ describe("getLifetimeBenefitPoints (per-role routing)", () => {
       }),
     } as any;
     expect(await getLifetimeBenefitPoints(mock, "p-1", "recruiter")).toBe(10);
+  });
+});
+
+describe("loyaltyLadderRows (dashboard widget, per-tier ungrouped unlock counts)", () => {
+  it("marks tier reached when lifetime points >= threshold", () => {
+    const rows = loyaltyLadderRows(50, []);
+    expect(rows[0]?.reached).toBe(true); // tier 1, threshold 0
+    expect(rows[1]?.reached).toBe(true); // tier 2, threshold 50
+    expect(rows[2]?.reached).toBe(false); // tier 3, threshold 150
+  });
+
+  it("marks current tier only for the user's active tier", () => {
+    const rows = loyaltyLadderRows(75, []);
+    expect(rows[0]?.current).toBe(false); // tier 1
+    expect(rows[1]?.current).toBe(true); // tier 2 is current
+    expect(rows[2]?.current).toBe(false); // tier 3
+  });
+
+  it("marks top tier both reached and current when over max threshold", () => {
+    const rows = loyaltyLadderRows(200, []);
+    expect(rows[2]?.reached).toBe(true);
+    expect(rows[2]?.current).toBe(true);
+  });
+
+  it("counts partners per tier (not duplicated across lower tiers)", () => {
+    const partners = [
+      { tier_required: 1 },
+      { tier_required: 1 },
+      { tier_required: 2 },
+      { tier_required: 3 },
+      { tier_required: 3 },
+      { tier_required: 3 },
+    ];
+    const rows = loyaltyLadderRows(200, partners);
+    expect(rows[0]?.unlockedPartnerCount).toBe(2); // tier 1
+    expect(rows[1]?.unlockedPartnerCount).toBe(1); // tier 2
+    expect(rows[2]?.unlockedPartnerCount).toBe(3); // tier 3
+  });
+
+  it("returns 0 unlocked partners for tier with no matching partners", () => {
+    const partners = [{ tier_required: 1 }, { tier_required: 3 }];
+    const rows = loyaltyLadderRows(200, partners);
+    expect(rows[1]?.unlockedPartnerCount).toBe(0); // tier 2 has no partners
+  });
+
+  it("returns all three tiers with correct thresholds", () => {
+    const rows = loyaltyLadderRows(0, []);
+    expect(rows).toHaveLength(3);
+    expect(rows[0]?.tier).toBe(1);
+    expect(rows[0]?.threshold).toBe(0);
+    expect(rows[1]?.tier).toBe(2);
+    expect(rows[1]?.threshold).toBe(50);
+    expect(rows[2]?.tier).toBe(3);
+    expect(rows[2]?.threshold).toBe(150);
+  });
+
+  it("marks tier 1 reached from the start (zero points)", () => {
+    const rows = loyaltyLadderRows(0, []);
+    expect(rows[0]?.reached).toBe(true);
+    expect(rows[0]?.current).toBe(true);
   });
 });

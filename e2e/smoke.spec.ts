@@ -46,11 +46,21 @@ test("full reveal slice", async ({ browser }) => {
     name: uniqueLabel("Rex Recruiter"),
     company: uniqueLabel("Nimbus Search Group"),
   });
-  const { jobId } = await createAndPublishJob(recruiter);
+  const { jobId, jobTitle } = await createAndPublishJob(recruiter);
 
   // --- Seeker: match surfaced, express interest ---
+  // Filter by THIS run's own job title, not .first(): on a shared,
+  // never-reset staging DB, real embeddings mean this seeker's generic
+  // résumé can match many leftover jobs accumulated from past runs — .first()
+  // (sorted by score) has no guarantee of landing on the job this test just
+  // created. Root-caused a real post-merge smoke failure (2026-08-10): the
+  // seeker expressed interest on an unrelated leftover job, so this test's
+  // own recruiter/job never saw an "interested" candidate and the later
+  // assertion (line ~68) polled a locator that could never resolve, burning
+  // the full 420s test budget. jobTitle is already uniqueLabel()'d by
+  // createAndPublishJob, so this filter is unambiguous.
   await seeker.goto("/seeker/matches");
-  const matchCard = seeker.getByTestId("seeker-match-card").first();
+  const matchCard = seeker.getByTestId("seeker-match-card").filter({ hasText: jobTitle }).first();
   await expect(matchCard).toBeVisible({ timeout: 60_000 });
   await matchCard.getByTestId("match-interested").click();
   // exact: true — the status BADGE ("interested"), not the "I'm interested"
@@ -69,6 +79,7 @@ test("full reveal slice", async ({ browser }) => {
   await expect(recruiter.getByTestId("candidate-panel")).toBeVisible({ timeout: 15_000 });
   countAiCall(); // ai.fitSummary on reveal
   await recruiter.getByTestId("reveal-candidate").click();
+  await recruiter.getByTestId("confirm-reveal").click();
   await expect(recruiter.getByTestId("revealed-name")).toHaveText(seekerName, {
     timeout: 60_000,
   });
