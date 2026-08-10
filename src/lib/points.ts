@@ -48,6 +48,27 @@ export function revealCostForScore(baseCost: number, score: number): number {
   return Math.round(baseCost * matchPriceMultiplier(score));
 }
 
+// Same-role reveal discount: a 40% discount (0.6 multiplier) applies when
+// revealing a candidate who matches the same role as a previous reveal for
+// the same job (rank 2+). Rank 1 (first reveal) always pays full price.
+export const SAME_ROLE_DISCOUNT_MULTIPLIER = 0.6;
+
+/** Reveal cost with match-quality multiplier and optional same-role discount.
+ * Applies match-tier pricing first (round), then same-role discount if rank > 1.
+ * The two-step approach preserves the override invariant: cost = keptBase + refund
+ * when both are computed from this function with the same rank and score. */
+export function revealCostForRank(
+  baseCost: number,
+  score: number,
+  revealRankForJob: number,
+): number {
+  const multiplied = Math.round(baseCost * matchPriceMultiplier(score));
+  if (revealRankForJob > 1) {
+    return Math.round(multiplied * SAME_ROLE_DISCOUNT_MULTIPLIER);
+  }
+  return multiplied;
+}
+
 export async function getBalance(
   supabase: SupabaseClient,
   profileId: string,
@@ -231,6 +252,22 @@ export async function countOverridesToday(
   return count ?? 0;
 }
 
+/** Count reveals (standard path) already created for a specific job by a recruiter.
+ * Used to assign same-role reveal ranks (rank 1 = first reveal, rank 2+ = discounted). */
+export async function countRevealsForJob(
+  admin: SupabaseClient,
+  recruiterId: string,
+  jobPostingId: string,
+): Promise<number> {
+  const { count, error } = await admin
+    .from("reveal_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("recruiter_id", recruiterId)
+    .eq("job_posting_id", jobPostingId);
+  if (error) throw new Error(`reveal count for job failed: ${error.message}`);
+  return count ?? 0;
+}
+
 /** 30-day re-override block: true if this recruiter has a declined/expired
  * override against this candidate inside the window (any job). */
 export async function isOverrideBlocked(
@@ -292,4 +329,25 @@ export async function expireStaleOverride(
     });
   }
   return true;
+}
+
+/** Pure function: sort candidates by score (descending) and annotate with
+ * reveal rank for same-role discount eligibility. Rank 1 = first reveal
+ * (full price), rank 2+ = subsequent reveals (discounted). Unit-testable
+ * without any database access.
+ *
+ * @param candidates Array of candidates with a numeric score field
+ * @param startingRank Rank to assign to the highest-scoring candidate (typically 1)
+ * @returns Candidates sorted by score descending, each with added rank field
+ */
+export function assignRevealRanks<T extends { score: number }>(
+  candidates: T[],
+  startingRank: number,
+): Array<T & { rank: number }> {
+  return candidates
+    .sort((a, b) => b.score - a.score)
+    .map((candidate, index) => ({
+      ...candidate,
+      rank: startingRank + index,
+    }));
 }

@@ -1,138 +1,278 @@
+import Link from "next/link";
+import { Badge, Button, Card, CardContent, Progress } from "@binding/ui";
 import { requireRole } from "@/lib/auth";
-import { REVEAL_COST, revealCostForScore } from "@/lib/points";
-import { coerceRecruiterTier, recruiterTierLabel } from "@/lib/recruiter-tier";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { Badge } from "@binding/ui";
-import { PipelineList, type PipelineCard } from "./pipeline-list";
+import {
+  detectStalePostings,
+  detectExpiringReveals,
+  computePostingMomentum,
+  computeAggregateFunnel,
+  daysUntilOverrideExpiry,
+  type MatchRow,
+  type RevealRequestRow,
+  type FunnelStage,
+} from "@/lib/pipeline-funnel";
 
-interface StrengthRow {
-  profile_id: string;
-  redacted_text: string;
-  seniority_band: string | null;
-  years_experience: number | null;
-  skills: string[] | null;
-  industries: string[] | null;
-  desired_roles: string[] | null;
-  region: string | null;
-  credentials_summary: string | null;
+interface JobPostingWithStatus {
+  id: string;
+  title: string;
+  status: "draft" | "active" | "closed";
 }
 
-/** Recruiter Dashboard (RecruiterMatchDashboard template): the aggregate
- * candidate pipeline across every one of the recruiter's roles. Reveal and
- * override actions stay on the per-job matches page — this view routes into
- * them. Salary expectations are deliberately absent pre-reveal: the
- * match_candidates RPC exposes only score + redacted text (privacy layer).
+/**
+ * Pipeline command-center (RecruiterDashboard in DESIGN.md): high-level
+ * recruiter funnel + alerts + posting health.
+ *
+ * Single aggregate query for matches (no RPC calls), filtered by recruiter's
+ * job IDs. Posting health computed from match cardinality per job.
  */
-export default async function RecruiterDashboard() {
+export default async function RecruiterPipelineCommandCenter() {
   const session = await requireRole("recruiter");
   const supabase = await createSupabaseServerClient();
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("recruiter_tier")
-    .eq("id", session.userId)
-    .maybeSingle();
-  const recruiterTier = coerceRecruiterTier(profile?.recruiter_tier);
-
   const { data: jobs } = await supabase
     .from("job_postings")
-    .select("id, title")
-    .eq("recruiter_id", session.userId);
+    .select("id, title, status")
+    .eq("recruiter_id", session.userId)
+    .order("created_at", { ascending: false });
 
   const jobIds = (jobs ?? []).map((j) => j.id);
-  const titleByJob = new Map((jobs ?? []).map((j) => [j.id, j.title]));
-
-  const [{ data: matches }, { data: reveals }, candidateTextResults] = await Promise.all([
-    jobIds.length
-      ? supabase
-          .from("matches")
-          .select("id, job_posting_id, profile_id, score, status")
-          .in("job_posting_id", jobIds)
-          .order("score", { ascending: false })
-      : Promise.resolve({ data: [] as never[] }),
-    jobIds.length
-      ? supabase
-          .from("reveal_requests")
-          .select(
-            "profile_id, job_posting_id, status, profiles!reveal_requests_profile_id_fkey(display_name), message_threads(id)",
-          )
-          .in("job_posting_id", jobIds)
-      : Promise.resolve({ data: [] as never[] }),
-    Promise.all(
-      jobIds.map((jobId) =>
-        supabase
-          .rpc("match_candidates", { p_job_id: jobId, p_threshold: 0, p_top_n: 100 })
-          .then(({ data }) => ({ jobId, rows: (data ?? []) as StrengthRow[] })),
-      ),
-    ),
-  ]);
-
-  const strengthByJobProfile = new Map<string, StrengthRow>();
-  for (const { jobId, rows } of candidateTextResults) {
-    for (const row of rows) strengthByJobProfile.set(`${jobId}:${row.profile_id}`, row);
-  }
-
-  const revealByJobProfile = new Map(
-    (reveals ?? []).map((r) => [`${r.job_posting_id}:${r.profile_id}`, r]),
+  const jobsById = new Map(
+    (jobs ?? []).map((j) => [j.id, j as JobPostingWithStatus])
   );
 
-  const cards: PipelineCard[] = (matches ?? []).map((m) => {
-    const reveal = revealByJobProfile.get(`${m.job_posting_id}:${m.profile_id}`);
-    const revealedProfile = reveal
-      ? Array.isArray(reveal.profiles)
-        ? reveal.profiles[0]
-        : reveal.profiles
-      : null;
-    const thread = reveal
-      ? Array.isArray(reveal.message_threads)
-        ? reveal.message_threads[0]
-        : reveal.message_threads
-      : null;
-    const strength = strengthByJobProfile.get(`${m.job_posting_id}:${m.profile_id}`);
+  // Single aggregate query: all matches for this recruiter's jobs
+  const { data: matchRows } = jobIds.length
+    ? await supabase
+        .from("matches")
+        .select("job_posting_id, status, created_at")
+        .in("job_posting_id", jobIds)
+    : { data: [] as MatchRow[] };
+
+  const matches = (matchRows ?? []) as MatchRow[];
+
+  // Aggregate funnel across all jobs
+  const aggregateFunnel = computeAggregateFunnel(matches);
+
+  // Posting-health data: matches per job + momentum
+  const matchesByJob = new Map<string, MatchRow[]>();
+  for (const match of matches) {
+    const key = match.job_posting_id;
+    if (!matchesByJob.has(key)) {
+      matchesByJob.set(key, []);
+    }
+    matchesByJob.get(key)!.push(match);
+  }
+
+  const postingHealth = (jobs ?? []).map((job) => {
+    const jobMatches = matchesByJob.get(job.id) ?? [];
+    const momentum = computePostingMomentum(jobMatches);
     return {
-      id: m.id,
-      jobId: m.job_posting_id,
-      jobTitle: titleByJob.get(m.job_posting_id) ?? "Role",
-      score: m.score,
-      status: m.status,
-      revealedName: m.status === "revealed" ? (revealedProfile?.display_name ?? null) : null,
-      text: strength?.redacted_text ?? "",
-      seniorityBand: strength?.seniority_band ?? null,
-      yearsExperience: strength?.years_experience ?? null,
-      skills: strength?.skills ?? [],
-      industries: strength?.industries ?? [],
-      desiredRoles: strength?.desired_roles ?? [],
-      region: strength?.region ?? null,
-      credentialsSummary: strength?.credentials_summary ?? null,
-      threadId: reveal?.status === "accepted" ? (thread?.id ?? null) : null,
-      // Only the opt-in-gated standard path is priced here (interested =
-      // candidate opted in). Mirrors revealCandidate's charge exactly so the
-      // card never shows a price different from what's spent. Surfaced
-      // candidates may be override-priced (25 base) — left unpriced here.
-      revealCost:
-        m.status === "interested" ? revealCostForScore(REVEAL_COST, m.score) : null,
+      id: job.id,
+      title: job.title,
+      status: job.status,
+      cohortSize: jobMatches.length,
+      momentum,
     };
   });
 
+  // Alerts: stale postings & expiring reveals
+  const stalePostingIds = detectStalePostings(matches);
+
+  const { data: reveals } = jobIds.length
+    ? await supabase
+        .from("reveal_requests")
+        .select("job_posting_id, profile_id, path, status, created_at")
+        .in("job_posting_id", jobIds)
+    : { data: [] as RevealRequestRow[] };
+
+  const expiringReveals = detectExpiringReveals((reveals ?? []) as RevealRequestRow[]);
+
+  // Format funnel for display
+  const funnelStats: FunnelStage[] = [
+    {
+      key: "matched",
+      label: "Matched",
+      value: aggregateFunnel.matched,
+      pct: 100,
+    },
+    {
+      key: "interested",
+      label: "Interested",
+      value: aggregateFunnel.interested,
+      pct:
+        aggregateFunnel.matched === 0
+          ? 0
+          : Math.round((aggregateFunnel.interested / aggregateFunnel.matched) * 100),
+    },
+    {
+      key: "revealed",
+      label: "Revealed",
+      value: aggregateFunnel.revealed,
+      pct:
+        aggregateFunnel.matched === 0
+          ? 0
+          : Math.round((aggregateFunnel.revealed / aggregateFunnel.matched) * 100),
+    },
+  ];
+
   return (
-    <main className="jb-fade mx-auto max-w-2xl space-y-6 px-6 py-14">
+    <main className="jb-fade mx-auto max-w-4xl space-y-8 px-6 py-14">
       <header className="flex flex-col gap-1.5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-          Candidate pipeline
-        </p>
-        <div className="flex items-center gap-3">
-          <h1 className="font-heading text-[30px] font-medium leading-tight tracking-tight">
-            Candidate matches
-          </h1>
-          {recruiterTier !== "free" && (
-            <Badge variant="outline">{recruiterTierLabel(recruiterTier)}</Badge>
-          )}
-        </div>
-        <p className="text-[15px] text-muted-foreground">
-          {cards.length} candidate{cards.length === 1 ? "" : "s"} match your open roles
+        <h1 className="font-heading text-[28px] font-semibold leading-tight tracking-tight">
+          Pipeline
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Conversion funnel across your {(jobs ?? []).length} job posting
+          {(jobs ?? []).length === 1 ? "" : "s"}
         </p>
       </header>
-      <PipelineList cards={cards} />
+
+      {/* Conversion funnel */}
+      <Card className="jb-lift jb-fade">
+        <CardContent className="flex flex-wrap items-center gap-6 pt-6">
+          {funnelStats.map((f) => (
+            <div key={f.key} className="min-w-0 flex-1">
+              <div className="jb-serif text-2xl font-semibold leading-none tracking-tight">
+                {f.value}
+              </div>
+              <div className="mt-1 text-[10.5px] text-muted-foreground">{f.label}</div>
+              <Progress value={f.pct} className="mt-1.5 h-1.5" />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Alerts section */}
+      <section className="space-y-3">
+        <h2 className="font-heading text-[15px] font-semibold tracking-tight">Alerts</h2>
+        {stalePostingIds.size === 0 && expiringReveals.length === 0 ? (
+          <Card className="jb-fade">
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+              All caught up. No stale postings or expiring reveals.
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {/* Stale postings */}
+            {Array.from(stalePostingIds.entries()).map(([jobId, _]) => {
+              const posting = jobsById.get(jobId);
+              if (!posting) return null;
+              return (
+                <Card key={`stale-${jobId}`} className="jb-lift jb-fade">
+                  <CardContent className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-semibold">No new matches in 7 days</p>
+                      <p className="text-sm text-muted-foreground">{posting.title}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      render={<Link href={`/recruiter/jobs/${jobId}`} />}
+                    >
+                      Review posting
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+
+            {/* Expiring reveals */}
+            {expiringReveals.map((reveal) => {
+              const posting = jobsById.get(reveal.job_posting_id);
+              if (!posting) return null;
+              const daysLeft = daysUntilOverrideExpiry(reveal.created_at);
+              return (
+                <Card key={`expiring-${reveal.profile_id}-${reveal.job_posting_id}`} className="jb-lift jb-fade">
+                  <CardContent className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-semibold">Reveal expiring in {daysLeft} day{daysLeft === 1 ? "" : "s"}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {posting.title} · Candidate approval pending
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      render={<Link href={`/recruiter/jobs/${reveal.job_posting_id}/matches`} />}
+                    >
+                      View reveals
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Posting health */}
+      <section className="space-y-3">
+        <h2 className="font-heading text-[15px] font-semibold tracking-tight">Posting health</h2>
+        {(jobs ?? []).length === 0 ? (
+          <Card className="jb-fade">
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+              No postings yet. Create a job to start matching candidates.
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {postingHealth.map((posting) => {
+              const momentum = posting.momentum;
+              const trendColor =
+                momentum.trend === "up"
+                  ? "text-green-600"
+                  : momentum.trend === "down"
+                    ? "text-red-600"
+                    : "text-muted-foreground";
+              const trendSymbol =
+                momentum.trend === "up" ? "↑" : momentum.trend === "down" ? "↓" : "→";
+
+              return (
+                <Card key={posting.id} className="jb-lift jb-fade">
+                  <CardContent className="flex flex-wrap items-center gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                          href={`/recruiter/jobs/${posting.id}`}
+                          className="font-heading text-[15px] font-semibold tracking-tight hover:underline"
+                        >
+                          {posting.title}
+                        </Link>
+                        <Badge
+                          variant={
+                            posting.status === "active"
+                              ? "default"
+                              : posting.status === "draft"
+                                ? "outline"
+                                : "secondary"
+                          }
+                        >
+                          {posting.status.charAt(0).toUpperCase() + posting.status.slice(1)}
+                        </Badge>
+                      </div>
+                      <div className="mt-1.5 flex items-center gap-4 text-sm text-muted-foreground">
+                        <span>{posting.cohortSize} match{posting.cohortSize === 1 ? "" : "es"}</span>
+                        <span className={trendColor}>
+                          {trendSymbol} {momentum.thisWeek} this week
+                          {momentum.lastWeek > 0 && ` (was ${momentum.lastWeek})`}
+                        </span>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      render={<Link href={`/recruiter/jobs/${posting.id}`} />}
+                    >
+                      View details
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </main>
   );
 }
