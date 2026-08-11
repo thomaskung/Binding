@@ -1,4 +1,4 @@
--- 0023: enforce salary_min/salary_max NOT NULL (close DESIGN §4a open question).
+-- 0024: enforce salary_min/salary_max NOT NULL (close DESIGN §4a open question).
 -- The columns are nullable today (0001), the editor only counts both bounds as
 -- one complete field, and saveJob writes null for empty form fields — so a
 -- half-filled salary range is creatable. DESIGN §4a derives a seniority pricing

@@ -226,7 +226,7 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
               </div>
               <div className="text-sm text-muted-foreground">
                 {/* salaryDisplay no longer accepts null (bounds NOT NULL since
-                    migration 0023); guard the live "Candidate sees" preview —
+                    migration 0024); guard the live "Candidate sees" preview —
                     an unfilled range during editing renders "Salary on request". */}
                 {salaryMin.trim() && salaryMax.trim()
                   ? salaryDisplay(Number(salaryMin), Number(salaryMax), visibility)

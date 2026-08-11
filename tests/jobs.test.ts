@@ -32,7 +32,7 @@ describe("salaryDisplay", () => {
     expect(salaryDisplay(180000, 220000, "on_request")).toBe("Salary on request");
   });
   // The "incomplete range" fallback is deliberately gone: both bounds are
-  // NOT NULL since migration 0023, so salaryDisplay takes plain numbers. The
+  // NOT NULL since migration 0024, so salaryDisplay takes plain numbers. The
   // null-bounds path for on_request jobs lives at the callers (seeker cards
   // strip the raw range for privacy and render "Salary on request" directly).
 });

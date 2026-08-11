@@ -115,7 +115,7 @@ export async function createAndPublishJob(
   await page
     .getByTestId("job-description")
     .fill(opts?.jobDescription ?? DEFAULT_MATCHING_JOB_DESCRIPTION);
-  // Both bounds are required since migration 0023 (salary is mandatory at
+  // Both bounds are required since migration 0024 (salary is mandatory at
   // posting time, DESIGN §4a) — fill the min too, or saveJob rejects.
   await page.getByTestId("job-salary-min").fill(opts?.salaryMin ?? "80000");
   await page.getByTestId("job-salary-max").fill(opts?.salaryMax ?? "150000");
