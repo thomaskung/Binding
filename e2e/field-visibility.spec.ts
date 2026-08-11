@@ -46,24 +46,36 @@ test("hidden and matching_only fields are excluded from what recruiters see; vis
   await expect(page.getByText("Profile fields saved.")).toBeVisible({ timeout: 30_000 });
 
   // Per-field visibility lives in the Privacy card (always active, not
-  // gated behind edit mode). Each change persists via a server action —
+  // gated behind edit mode). Each control is a cycling pill button
+  // (profile-fields.tsx VisibilityControl) — click it until its aria-label
+  // reports the target mode. Each change persists via a server action —
   // wait for the committed-write signal after each one, or navigating away
   // can cancel the in-flight save.
-  await page.getByLabel("Skills visibility").selectOption("hidden");
-  await expect(page.getByText("Visibility updated.")).toBeVisible({ timeout: 30_000 });
-  await page.getByLabel("Target industries visibility").selectOption("matching_only");
-  await expect(page.getByText("Visibility updated.")).toBeVisible({ timeout: 30_000 });
+  async function cycleVisibilityTo(label: string, target: string) {
+    const button = page.getByLabel(label);
+    for (let i = 0; i < 4; i++) {
+      if ((await button.getAttribute("aria-label"))?.includes(`${target}.`)) return;
+      await button.click();
+      await expect(page.getByText("Visibility updated.")).toBeVisible({ timeout: 30_000 });
+    }
+    throw new Error(`could not cycle ${label} to ${target}`);
+  }
+  await cycleVisibilityTo("Skills visibility", "Hidden");
+  await cycleVisibilityTo("Target industries visibility", "Matching only");
 
   // Belt-and-suspenders settle check before publishing: the "Visibility
-  // updated." toast is a shared status string reused by both selects (it's
+  // updated." toast is a shared status string reused by both pills (it's
   // cleared to null synchronously on each change, then re-set post-commit —
   // see profile-fields.tsx), so a reload-and-assert-persisted-value round
   // trip removes any doubt that BOTH writes actually committed server-side
   // before we navigate away and publish (an in-flight save can be cancelled
   // by navigation, per the comment above).
   await page.reload();
-  await expect(page.getByLabel("Skills visibility")).toHaveValue("hidden");
-  await expect(page.getByLabel("Target industries visibility")).toHaveValue("matching_only");
+  await expect(page.getByLabel("Skills visibility")).toHaveAttribute("aria-label", /Hidden/);
+  await expect(page.getByLabel("Target industries visibility")).toHaveAttribute(
+    "aria-label",
+    /Matching only/,
+  );
 
   await publishMatchingProfile(page, {
     resumeText:

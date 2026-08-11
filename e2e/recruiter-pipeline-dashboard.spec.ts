@@ -44,9 +44,10 @@ test("pipeline command-center funnel + alerts + posting health, and Candidates p
   const job1Title = uniqueLabel("Pipeline Fresh Role");
   const job2Title = uniqueLabel("Pipeline Stale Role");
 
+  // Migration 0004 dropped the `role` enum in favor of is_seeker/is_recruiter
+  // flags (dual-role accounts) — only the flags are valid columns today.
   const { error: recruiterProfileError } = await admin.from("profiles").insert({
     id: recruiterUser.id,
-    role: "recruiter",
     is_recruiter: true,
     display_name: recruiterName,
   });
@@ -55,7 +56,6 @@ test("pipeline command-center funnel + alerts + posting health, and Candidates p
   for (const candidate of [candidateA, candidateB, candidateC]) {
     const { error } = await admin.from("profiles").insert({
       id: candidate.id,
-      role: "seeker",
       is_seeker: true,
       display_name: uniqueLabel("Pipeline Candidate"),
     });
