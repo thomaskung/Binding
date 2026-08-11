@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { createAndPublishJob, publishMatchingProfile, widenMatchFilter } from "./match-helpers";
 import { completeRecruiterOnboarding } from "./recruiter-onboarding";
 import { completeSeekerOnboarding } from "./seeker-onboarding";
-import { countAiCall, ensureStagingUser, signIn, stagingContext, uniqueLabel } from "./staging-helpers";
+import { countAiCall, ensureStagingUser, signIn, stagingAdminClient, stagingContext, uniqueLabel } from "./staging-helpers";
 
 /**
  * Walking-skeleton smoke: the full slice against hosted staging (real Modal
@@ -68,7 +68,7 @@ test("full reveal slice", async ({ browser }) => {
   // write commits (that race let the recruiter see a stale "surfaced" state).
   await expect(matchCard.getByText("Interested", { exact: true })).toBeVisible({ timeout: 15_000 });
 
-  // --- Recruiter: reveal (100 -> 90 pts) ---
+  // --- Recruiter: reveal (100 -> dynamic pts) ---
   // Reveal happens from the detail panel that pops out when a card is
   // clicked. Widen the min-match filter (default 70%) so the fresh match is
   // never hidden, then open the interested candidate's panel.
@@ -84,8 +84,22 @@ test("full reveal slice", async ({ browser }) => {
     timeout: 60_000,
   });
   await expect(recruiter.getByTestId("fit-summary")).toBeVisible({ timeout: 60_000 });
+
+  // Reveal cost is dynamic (§4a): score ≥ 0.8 → 2× (20 pts), ≥ 0.65 → 1.5×
+  // (15 pts), else flat (10 pts). Read the match score to compute the exact
+  // balance instead of hardcoding "90" (a high-scoring match costs 20).
+  const { data: matchRow } = await stagingAdminClient()
+    .from("matches")
+    .select("score")
+    .eq("job_posting_id", jobId)
+    .eq("profile_id", seekerUser.id)
+    .maybeSingle();
+  const score = matchRow?.score ?? 0;
+  const expectedCost = score >= 0.8 ? 20 : score >= 0.65 ? 15 : 10;
+  const expectedBalance = 100 - expectedCost;
+
   await recruiter.goto("/recruiter/jobs");
-  await expect(recruiter.getByTestId("points-balance")).toHaveText("90 points");
+  await expect(recruiter.getByTestId("points-balance")).toHaveText(`${expectedBalance} points`);
 
   // --- Messaging, both directions ---
   await recruiter.goto(`/recruiter/jobs/${jobId}`);
