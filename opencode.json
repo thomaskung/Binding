@@ -41,11 +41,11 @@
     },
     "advise": {
       "model": "opencode-go/deepseek-v4-pro",
-      "color": "accent",
+      "color": "#9d7cd8",
       "permission": {
         "edit": "deny",
         "bash": {
-          "*": "ask",
+          "*": "deny",
           "git *": "allow",
           "gh *": "allow",
           "ls *": "allow",
