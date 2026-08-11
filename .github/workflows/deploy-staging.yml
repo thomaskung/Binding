@@ -178,6 +178,10 @@ jobs:
           # MODAL_API_TOKEN is required, not optional, for this job.
           MODAL_API_TOKEN: ${{ secrets.MODAL_API_TOKEN }}
           E2E_WARM_MODAL: '1'
+          # Shared never-reset staging DB accumulates identical-embedding
+          # seekers that crowd fresh ones out of match_candidates' top-20;
+          # raise for the test run so the smoke match always surfaces.
+          MATCH_TOP_N: '500'
 
       - name: Stop background Modal keep-warm loop
         if: always()
