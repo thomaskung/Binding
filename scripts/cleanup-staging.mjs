@@ -16,13 +16,21 @@ if (!url || !key) {
 const admin = createClient(url, key, { auth: { persistSession: false } });
 
 const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-const { data: users, error } = await admin.auth.admin.listUsers();
-if (error) {
-  console.error("listUsers failed:", error.message);
-  process.exit(1);
+
+// listUsers is paginated (50 per page by default) — fetch every page or the
+// oldest (stale) users, which sort later, are never seen.
+const allUsers = [];
+for (let page = 1; ; page++) {
+  const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+  if (error) {
+    console.error("listUsers failed:", error.message);
+    process.exit(1);
+  }
+  allUsers.push(...data.users);
+  if (data.users.length < 200) break;
 }
 
-const stale = users.users.filter(
+const stale = allUsers.filter(
   (u) => u.email?.endsWith("@staging.local") && new Date(u.created_at) < new Date(cutoff),
 );
 
