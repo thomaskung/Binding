@@ -5,7 +5,11 @@ on:
   # weekly cadence those would accumulate for up to 7 days between sweeps
   # instead of 1.
   schedule:
-    - cron: '0 4 * * *'
+    # 2:30 UTC, BEFORE the 3am nightly e2e-staging run — otherwise the
+    # accumulated @staging.local seekers (same generic embedding text) crowd
+    # fresh per-run seekers out of match_candidates' top-20 (MATCH_TOP_N),
+    # and smoke/override/compare/pipeline tests see no match card.
+    - cron: '30 2 * * *'
   workflow_dispatch:
 
 jobs:
