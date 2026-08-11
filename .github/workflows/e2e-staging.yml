@@ -203,6 +203,14 @@ jobs:
           # Modal right before tests" step above for why even three warm-up
           # passes weren't always enough.
           E2E_WARM_MODAL: '1'
+          # The shared, never-reset staging DB accumulates @staging.local
+          # seekers (all embedded with the same generic matching text, scoring
+          # ~0.89 against every "Backend Engineer" job). With the default
+          # MATCH_TOP_N=20 they crowd fresh per-run seekers out of
+          # match_candidates' top-20, so smoke/pipeline/compare never see a
+          # match card. Raise it for the test run so fresh seekers always rank
+          # in (product default stays 20).
+          MATCH_TOP_N: '500'
       - name: Stop background Modal keep-warm loop
         if: always()
         run: |

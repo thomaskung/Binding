@@ -35,18 +35,26 @@ test("full reveal slice", async ({ browser }) => {
   const recruiterUser = await ensureStagingUser("recruiter");
   const seekerName = uniqueLabel("Demo Seeker");
 
-  // --- Seeker: onboard (wizard-skip, free) then publish profile (paste-text path) ---
-  await signIn(seeker, seekerUser.email);
-  await completeSeekerOnboarding(seeker, { name: seekerName });
-  await publishMatchingProfile(seeker);
-
-  // --- Recruiter: onboard then create + publish job ---
+  // --- Recruiter: onboard then create + publish job FIRST ---
+  // Job-first order: the job's publish runs refreshMatchesForJob against all
+  // THEN-active seekers, which is crowded on the shared never-reset DB (300+
+  // leftover seekers with identical embeddings fill match_candidates' top-20,
+  // MATCH_TOP_N). Publishing the job before the seeker instead lets the
+  // seeker's publish run refreshMatchesForProfile (seeker-side, uncrowded —
+  // a fresh seeker matches few jobs), which deterministically creates the
+  // match. The helper contract allows either order; job-first is the one that
+  // doesn't depend on the crowded top-20.
   await signIn(recruiter, recruiterUser.email);
   await completeRecruiterOnboarding(recruiter, {
     name: uniqueLabel("Rex Recruiter"),
     company: uniqueLabel("Nimbus Search Group"),
   });
   const { jobId, jobTitle } = await createAndPublishJob(recruiter);
+
+  // --- Seeker: onboard (wizard-skip, free) then publish profile (paste-text path) ---
+  await signIn(seeker, seekerUser.email);
+  await completeSeekerOnboarding(seeker, { name: seekerName });
+  await publishMatchingProfile(seeker);
 
   // --- Seeker: match surfaced, express interest ---
   // Filter by THIS run's own job title, not .first(): on a shared,
