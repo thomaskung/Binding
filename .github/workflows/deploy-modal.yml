@@ -3,9 +3,16 @@ name: Deploy Modal (on-demand)
 # Manual Modal deploy for the demo / after the endpoints have been torn down.
 # Uses the MODAL_TOKEN_ID/SECRET already stored as GitHub Actions secrets — the
 # credentials never leave CI. After deploy, writes the resolved endpoint URLs
-# into the Vercel staging project env (AI_PROVIDER=modal + the five MODAL_*_URL
+# into the Vercel staging project env (AI_PROVIDER=modal + the six MODAL_*_URL
 # vars + MODAL_API_TOKEN) via the Vercel API so the deployed app immediately
-# talks to the fresh endpoints. See src/lib/ai/modal.ts for the env-var contract.
+# talks to the fresh endpoints. See src/lib/ai/modal.ts for the env-var
+# contract.
+#
+# Three production apps (all scaledown_window=120s). No separate E2E apps: the
+# E2E suite runs in parallel (~10 min), so the production apps' 120s scaledown
+# keeps containers warm naturally across the run. The MODAL_*_URL vars are
+# stored as PLAIN Vercel vars so CI workflows can READ them back and warm the
+# endpoints before a test run (the URLs are bearer-token-gated, not secret).
 
 on:
   workflow_dispatch:
@@ -33,19 +40,23 @@ jobs:
           # Pin everything to the 'main' environment so secret-create and
           # deploy can't diverge into different Modal environments.
           modal secret create binding-api-token MODAL_API_TOKEN="$APP_BEARER" --force -e main
+
+          # Stop + redeploy. set -euo pipefail makes ANY failed deploy fail the
+          # job loudly — a broken app never gets silently promoted to staging.
           modal app stop binding-embeddings -e main 2>/dev/null || true
           modal app stop binding-llm -e main 2>/dev/null || true
-          modal app stop jumponboard-embeddings -e main 2>/dev/null || true
-          modal app stop jumponboard-llm -e main 2>/dev/null || true
+          modal app stop binding-llm-small -e main 2>/dev/null || true
           sleep 5
-          modal deploy modal_app/embeddings.py -e main 2>&1 | tee embed.log
-          modal deploy modal_app/llm.py -e main 2>&1 | tee llm.log
 
-          EMBED=$(grep -Eo 'https://[a-z0-9.-]+\.modal\.run' embed.log | grep -i embed | head -1)
+          modal deploy modal_app/llm-small.py -e main 2>&1 | tee llm-small.log
+          modal deploy modal_app/llm.py -e main 2>&1 | tee llm.log
+          modal deploy modal_app/embeddings.py -e main 2>&1 | tee embed.log
+
           # CI-side auth test: CI holds the same GH secret that baked the Modal
           # secret, so this MUST be 200 once propagated — proves the endpoint
           # accepts the GH-secret value (isolates propagation/caching vs a
           # local value mismatch). Retry through the cold start.
+          EMBED=$(grep -Eo 'https://[a-z0-9.-]+\.modal\.run' embed.log | grep -i embed | head -1)
           for i in 1 2 3 4; do
             code=$(curl -s -o /dev/null -w '%{http_code}' -m 180 -X POST "$EMBED" \
               -H "content-type: application/json" -H "authorization: Bearer $APP_BEARER" \
@@ -56,6 +67,9 @@ jobs:
           done
 
           # Map each endpoint to the env var name src/lib/ai/modal.ts expects.
+          # Each deploy log contains URLs from ONE app only, so `grep -i`
+          # disambiguates the two /refine endpoints (llm-small.log -> the
+          # credentials refine; llm.log -> the profile/jd/career refine).
           # Writes to GITHUB_ENV so the Vercel-wiring step below can read them.
           echo "## Modal endpoints" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
@@ -71,30 +85,38 @@ jobs:
             # Also set it in THIS step's shell so the summary below can read it.
             export "$2=$url"
           }
-          map_url "embed"       MODAL_EMBED_URL   embed.log
-          map_url "redact"      MODAL_REDACT_URL  llm.log
-          map_url "fit-summary" MODAL_SUMMARY_URL llm.log
-          map_url "refine"      MODAL_REFINE_URL  llm.log
-          map_url "extract"     MODAL_EXTRACT_URL llm.log
+          map_url "redact"      MODAL_REDACT_URL       llm.log
+          map_url "refine"      MODAL_CREDENTIALS_URL  llm-small.log
+          map_url "extract"     MODAL_EXTRACT_URL      llm.log
+          map_url "fit-summary" MODAL_SUMMARY_URL      llm.log
+          map_url "refine"      MODAL_REFINE_URL       llm.log
+          map_url "embed"       MODAL_EMBED_URL        embed.log
 
-          echo "MODAL_EMBED_URL=$MODAL_EMBED_URL" >> "$GITHUB_STEP_SUMMARY"
-          echo "MODAL_REDACT_URL=$MODAL_REDACT_URL" >> "$GITHUB_STEP_SUMMARY"
-          echo "MODAL_SUMMARY_URL=$MODAL_SUMMARY_URL" >> "$GITHUB_STEP_SUMMARY"
-          echo "MODAL_REFINE_URL=$MODAL_REFINE_URL" >> "$GITHUB_STEP_SUMMARY"
-          echo "MODAL_EXTRACT_URL=$MODAL_EXTRACT_URL" >> "$GITHUB_STEP_SUMMARY"
+          for name in \
+            MODAL_REDACT_URL MODAL_CREDENTIALS_URL MODAL_EXTRACT_URL MODAL_SUMMARY_URL MODAL_REFINE_URL MODAL_EMBED_URL; do
+            echo "$name=${!name}" >> "$GITHUB_STEP_SUMMARY"
+          done
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Wire endpoints into Vercel staging env
         run: |
           set -euo pipefail
           # idempotent upsert per var: delete any existing value, then create.
-          for name in AI_PROVIDER MODAL_EMBED_URL MODAL_REDACT_URL MODAL_SUMMARY_URL MODAL_REFINE_URL MODAL_EXTRACT_URL MODAL_API_TOKEN; do
+          # MODAL_*_URL vars are PLAIN so CI workflows can read them back to
+          # warm the endpoints before a test run (the URLs are bearer-token
+          # gated, not secret). MODAL_API_TOKEN stays encrypted (from the GH
+          # secret) and AI_PROVIDER is a fixed value.
+          for name in AI_PROVIDER MODAL_EMBED_URL MODAL_REDACT_URL MODAL_CREDENTIALS_URL MODAL_SUMMARY_URL MODAL_REFINE_URL MODAL_EXTRACT_URL MODAL_API_TOKEN; do
             case "$name" in
               AI_PROVIDER)        value="modal" ;;
               MODAL_API_TOKEN)    value="${{ secrets.MODAL_API_TOKEN }}" ;;
               *)                  value="${!name}" ;;
             esac
-            echo "Upserting $name (len=${#value})"
+            vtype="encrypted"
+            case "$name" in
+              MODAL_EMBED_URL|MODAL_REDACT_URL|MODAL_CREDENTIALS_URL|MODAL_SUMMARY_URL|MODAL_REFINE_URL|MODAL_EXTRACT_URL) vtype="plain" ;;
+            esac
+            echo "Upserting $name (len=${#value}, type=$vtype)"
 
             # find existing env var id(s) for this key in production/preview
             existing=$(curl -s "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}/env?teamId=${{ secrets.VERCEL_ORG_ID }}" \
@@ -108,7 +130,7 @@ jobs:
             curl -s -X POST "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}/env?teamId=${{ secrets.VERCEL_ORG_ID }}" \
               -H "Authorization: Bearer ${{ secrets.VERCEL_API_TOKEN }}" \
               -H "Content-Type: application/json" \
-              -d "{\"key\":\"$name\",\"value\":$(python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$value"),\"type\":\"encrypted\",\"target\":[\"production\",\"preview\"]}" \
+              -d "{\"key\":\"$name\",\"value\":$(python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$value"),\"type\":\"$vtype\",\"target\":[\"production\",\"preview\"]}" \
               | python3 -c "import sys,json; d=json.load(sys.stdin); print('  created:', d.get('key'), 'id:', d.get('id'))"
           done
 

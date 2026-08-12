@@ -2,13 +2,22 @@ import { credentialsFloorSummary, credentialsLooksSafe } from "@/lib/credentials
 import type { AiProvider, ExtractedProfileFields, JDTextOnly, RedactionResult } from "./types";
 
 /**
- * Private-LLM provider: self-hosted Qwen3 8B + Qwen3-Embedding-0.6B on Modal
- * (see modal_app/). All candidate-derived data stays on this path — never a
- * frontier API (DESIGN.md privacy rule).
+ * Private-LLM provider: self-hosted Qwen3 small + medium models + embeddings on
+ * Modal (see modal_app/). All candidate-derived data stays on this path —
+ * never a frontier API (DESIGN.md privacy rule).
+ *
+ * Three production apps, all scaledown_window=120s:
+ *   - binding-llm-small  (0.6B) — credentials generalization only
+ *   - binding-llm        (1.7B) — redact / extract / fit-summary / refine
+ *   - binding-embeddings — 1024-dim embeddings
+ * No separate E2E apps: the E2E suite runs in parallel (~10 min), so the
+ * production apps' 120s scaledown keeps containers warm naturally across the
+ * run. Endpoint URLs come from the MODAL_*_URL env vars (Vercel).
  */
 
 interface ModalConfig {
   redactUrl: string;
+  credentialsUrl: string;
   summaryUrl: string;
   refineUrl: string;
   embedUrl: string;
@@ -18,17 +27,18 @@ interface ModalConfig {
 
 function config(): ModalConfig {
   const redactUrl = process.env.MODAL_REDACT_URL;
+  const credentialsUrl = process.env.MODAL_CREDENTIALS_URL;
   const summaryUrl = process.env.MODAL_SUMMARY_URL;
   const refineUrl = process.env.MODAL_REFINE_URL;
   const embedUrl = process.env.MODAL_EMBED_URL;
   const extractUrl = process.env.MODAL_EXTRACT_URL;
   const apiToken = process.env.MODAL_API_TOKEN;
-  if (!redactUrl || !summaryUrl || !refineUrl || !embedUrl || !extractUrl || !apiToken) {
+  if (!redactUrl || !credentialsUrl || !summaryUrl || !refineUrl || !embedUrl || !extractUrl || !apiToken) {
     throw new Error(
-      "AI_PROVIDER=modal requires MODAL_REDACT_URL, MODAL_SUMMARY_URL, MODAL_REFINE_URL, MODAL_EMBED_URL, MODAL_EXTRACT_URL and MODAL_API_TOKEN",
+      "AI_PROVIDER=modal requires MODAL_REDACT_URL, MODAL_CREDENTIALS_URL, MODAL_SUMMARY_URL, MODAL_REFINE_URL, MODAL_EMBED_URL, MODAL_EXTRACT_URL and MODAL_API_TOKEN",
     );
   }
-  return { redactUrl, summaryUrl, refineUrl, embedUrl, extractUrl, apiToken };
+  return { redactUrl, credentialsUrl, summaryUrl, refineUrl, embedUrl, extractUrl, apiToken };
 }
 
 async function post<T>(url: string, token: string, body: unknown): Promise<T> {
@@ -104,13 +114,13 @@ export const modalProvider: AiProvider = {
   async generalizeCredentials(rawCredentials: string): Promise<string> {
     const floor = credentialsFloorSummary(rawCredentials);
     if (!rawCredentials.trim()) return "";
-    // Ask the self-hosted model to generalize; but the deterministic floor is
-    // the guarantee — if the model output still carries a specific identifier
-    // (or the call fails), fall back to the floor. The model can only ever
-    // REMOVE specifics, never smuggle one through.
+    // Ask the self-hosted small model (0.6B) to generalize; but the
+    // deterministic floor is the guarantee — if the model output still carries
+    // a specific identifier (or the call fails), fall back to the floor. The
+    // model can only ever REMOVE specifics, never smuggle one through.
     try {
       const c = config();
-      const { refined } = await post<{ refined: string }>(c.refineUrl, c.apiToken, {
+      const { refined } = await post<{ refined: string }>(c.credentialsUrl, c.apiToken, {
         text: rawCredentials,
         kind: "credentials",
       });

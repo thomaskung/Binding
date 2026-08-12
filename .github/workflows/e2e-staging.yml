@@ -42,6 +42,31 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '22', cache: 'pnpm' }
       - run: pnpm install
+      - name: Fetch Modal URLs from Vercel
+        # The production Modal apps' URLs (stored as plain-text Vercel vars by
+        # deploy-modal.yml) so the warm-up curls + global-setup below point at
+        # the right endpoints. No hardcoded URLs.
+        env:
+          VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          ALL=$(curl -s "https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}" \
+            -H "Authorization: Bearer ${VERCEL_API_TOKEN}")
+          for name in MODAL_REDACT_URL MODAL_CREDENTIALS_URL MODAL_SUMMARY_URL MODAL_REFINE_URL MODAL_EMBED_URL MODAL_EXTRACT_URL; do
+            value=$(echo "$ALL" | python3 -c "
+import sys, json
+envs = json.load(sys.stdin).get('envs', [])
+m = next((e for e in envs if e['key'] == '$name'), None)
+print(m['value'] if m else '')
+")
+            if [ -n "$value" ]; then
+              echo "${name}=${value}" >> "$GITHUB_ENV"
+            else
+              echo "::warning::$name not found in Vercel env — tests will fail on Modal calls"
+            fi
+          done
       - name: Modal warm-up
         # Warm the embedder AND the LLM endpoints, RETRYING until each returns
         # 200 — a single cold-start request often returns before the container
@@ -53,26 +78,24 @@ jobs:
         # so the generic {"text":"warmup"} shape used everywhere else throws
         # an unhandled KeyError server-side (HTTP 500) on every attempt —
         # confirmed via modal-logs.yml, `KeyError: 'candidate'` at llm.py:141.
-        # This predates this workflow revision; fit-summary was never
-        # actually warmed by this loop before.
         run: |
-          for url in \
-            "https://thomaskung--binding-embeddings-embedder-embed.modal.run" \
-            "https://thomaskung--binding-llm-qwen-redact.modal.run" \
-            "https://thomaskung--binding-llm-qwen-refine.modal.run" \
-            "https://thomaskung--binding-llm-qwen-extract.modal.run"; do
+          for entry in "MODAL_EMBED_URL|text|warmup" "MODAL_REDACT_URL|text|warmup" "MODAL_CREDENTIALS_URL|text|warmup" "MODAL_REFINE_URL|text|warmup" "MODAL_EXTRACT_URL|text|warmup"; do
+            var="${entry%%|*}"; url="${!var}"
+            key=$(echo "$entry" | cut -d'|' -f2)
+            val="${entry##*|}"
+            body="{\"${key}\":\"${val}\"}"
             for i in $(seq 1 5); do
               code=$(curl -s -m 120 -X POST "$url" \
                 -H "Authorization: Bearer ${{ secrets.MODAL_API_TOKEN }}" \
                 -H "Content-Type: application/json" \
-                -d '{"text":"warmup"}' -o /dev/null -w "%{http_code}" || echo "000")
+                -d "$body" -o /dev/null -w "%{http_code}" || echo "000")
               echo "warm $url attempt $i -> $code"
               [ "$code" = "200" ] && break
               sleep 5
             done
           done
           for i in $(seq 1 5); do
-            code=$(curl -s -m 120 -X POST "https://thomaskung--binding-llm-qwen-fit-summary.modal.run" \
+            code=$(curl -s -m 120 -X POST "$MODAL_SUMMARY_URL" \
               -H "Authorization: Bearer ${{ secrets.MODAL_API_TOKEN }}" \
               -H "Content-Type: application/json" \
               -d '{"candidate":"warmup","job":"warmup"}' -o /dev/null -w "%{http_code}" || echo "000")
@@ -95,29 +118,27 @@ jobs:
           done
       - run: npx playwright install chromium
       - name: Re-warm Modal right before tests
-        # The earlier warm-up runs BEFORE `playwright install` (5+ min). Modal
-        # scale-to-zero (scaledown_window=120s) drops the LLM containers back
-        # to cold by the time the tests actually run, so test 5's publish
-        # (redact+embed) blows its 60s budget on a cold model load. Re-warm
-        # immediately before the suite so every endpoint is genuinely warm.
+        # The earlier warm-up runs BEFORE `playwright install` (5+ min). Even
+        # with the E2E apps' 3600s window this re-warm is a cheap safety net —
+        # the first warm-up may have run while the apps were still deploying.
         run: |
-          for url in \
-            "https://thomaskung--binding-embeddings-embedder-embed.modal.run" \
-            "https://thomaskung--binding-llm-qwen-redact.modal.run" \
-            "https://thomaskung--binding-llm-qwen-refine.modal.run" \
-            "https://thomaskung--binding-llm-qwen-extract.modal.run"; do
+          for entry in "MODAL_EMBED_URL|text|warmup" "MODAL_REDACT_URL|text|warmup" "MODAL_CREDENTIALS_URL|text|warmup" "MODAL_REFINE_URL|text|warmup" "MODAL_EXTRACT_URL|text|warmup"; do
+            var="${entry%%|*}"; url="${!var}"
+            key=$(echo "$entry" | cut -d'|' -f2)
+            val="${entry##*|}"
+            body="{\"${key}\":\"${val}\"}"
             for i in $(seq 1 3); do
               code=$(curl -s -m 120 -X POST "$url" \
                 -H "Authorization: Bearer ${{ secrets.MODAL_API_TOKEN }}" \
                 -H "Content-Type: application/json" \
-                -d '{"text":"warmup"}' -o /dev/null -w "%{http_code}" || echo "000")
+                -d "$body" -o /dev/null -w "%{http_code}" || echo "000")
               echo "pre-test warm $url attempt $i -> $code"
               [ "$code" = "200" ] && break
               sleep 3
             done
           done
           for i in $(seq 1 3); do
-            code=$(curl -s -m 120 -X POST "https://thomaskung--binding-llm-qwen-fit-summary.modal.run" \
+            code=$(curl -s -m 120 -X POST "$MODAL_SUMMARY_URL" \
               -H "Authorization: Bearer ${{ secrets.MODAL_API_TOKEN }}" \
               -H "Content-Type: application/json" \
               -d '{"candidate":"warmup","job":"warmup"}' -o /dev/null -w "%{http_code}" || echo "000")
@@ -125,45 +146,6 @@ jobs:
             [ "$code" = "200" ] && break
             sleep 3
           done
-      - name: Start background Modal keep-warm loop
-        # The suite runs serially (`workers: 1`) across 15 spec files, ~40
-        # minutes total. Every warm-up above is a ONE-TIME ping before the
-        # suite starts — nothing keeps Modal warm DURING the run. Modal's
-        # `scaledown_window=120` means any endpoint idle for 2+ minutes mid-run
-        # (very likely across a 40-minute suite — most spec files don't hit
-        # every endpoint) scales back to zero, and the next real test call
-        # eats a full cold start that blows its 60-90s UI timeout — this is
-        # the actual cause of the "element(s) not found" flakes that have
-        # failed 4 of the last 5 nightly runs (2026-08-07 through -10),
-        # despite the pre-test warm-up reporting 200 for every endpoint each
-        # time. Fix: ping every endpoint every 90s (under the 120s window) in
-        # a background loop for the lifetime of the test step, so nothing
-        # ever goes idle long enough to scale down mid-suite.
-        run: |
-          (
-            while true; do
-              sleep 90
-              for url in \
-                "https://thomaskung--binding-embeddings-embedder-embed.modal.run" \
-                "https://thomaskung--binding-llm-qwen-redact.modal.run" \
-                "https://thomaskung--binding-llm-qwen-refine.modal.run" \
-                "https://thomaskung--binding-llm-qwen-extract.modal.run"; do
-                code=$(curl -s -m 30 -X POST "$url" \
-                  -H "Authorization: Bearer $MODAL_API_TOKEN" \
-                  -H "Content-Type: application/json" \
-                  -d '{"text":"keepwarm"}' -o /dev/null -w "%{http_code}" || echo "000")
-                echo "keepwarm $url -> $code"
-              done
-              code=$(curl -s -m 30 -X POST "https://thomaskung--binding-llm-qwen-fit-summary.modal.run" \
-                -H "Authorization: Bearer $MODAL_API_TOKEN" \
-                -H "Content-Type: application/json" \
-                -d '{"candidate":"keepwarm","job":"keepwarm"}' -o /dev/null -w "%{http_code}" || echo "000")
-              echo "keepwarm fit-summary -> $code"
-            done
-          ) > /tmp/keepwarm.log 2>&1 &
-          echo "KEEPWARM_PID=$!" >> "$GITHUB_ENV"
-        env:
-          MODAL_API_TOKEN: ${{ secrets.MODAL_API_TOKEN }}
       - name: Run functional tests
         id: tests
         # Now runs the WHOLE suite (all 13 spec files, no path argument — the
@@ -194,6 +176,14 @@ jobs:
           # globalSetup's Modal warm-up needs the same token the curl
           # warm-up steps above use.
           MODAL_API_TOKEN: ${{ secrets.MODAL_API_TOKEN }}
+          # Production Modal app URLs (fetched from Vercel above) so
+          # global-setup warms the right endpoints.
+          MODAL_REDACT_URL: ${{ env.MODAL_REDACT_URL }}
+          MODAL_CREDENTIALS_URL: ${{ env.MODAL_CREDENTIALS_URL }}
+          MODAL_SUMMARY_URL: ${{ env.MODAL_SUMMARY_URL }}
+          MODAL_REFINE_URL: ${{ env.MODAL_REFINE_URL }}
+          MODAL_EMBED_URL: ${{ env.MODAL_EMBED_URL }}
+          MODAL_EXTRACT_URL: ${{ env.MODAL_EXTRACT_URL }}
           # Makes Playwright's globalSetup warm the Modal endpoints too, right
           # at the start of the test process. This is NOT redundant with the
           # three curl warm-up steps above: those run BEFORE `pnpm install`/
@@ -211,14 +201,6 @@ jobs:
           # match card. Raise it for the test run so fresh seekers always rank
           # in (product default stays 20).
           MATCH_TOP_N: '500'
-      - name: Stop background Modal keep-warm loop
-        if: always()
-        run: |
-          if [ -n "$KEEPWARM_PID" ]; then
-            kill "$KEEPWARM_PID" 2>/dev/null || true
-          fi
-          echo "--- keepwarm log ---"
-          cat /tmp/keepwarm.log 2>/dev/null || true
 
       # Report failures onto ONE rolling issue instead of opening a new one per
       # run. The previous version called issues.create() unconditionally, which

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 // Mock all Modal env vars so config() doesn't throw
 vi.stubEnv("AI_PROVIDER", "modal");
 vi.stubEnv("MODAL_REDACT_URL", "https://mock.modal.run/redact");
+vi.stubEnv("MODAL_CREDENTIALS_URL", "https://mock.modal.run/credentials");
 vi.stubEnv("MODAL_SUMMARY_URL", "https://mock.modal.run/summary");
 vi.stubEnv("MODAL_REFINE_URL", "https://mock.modal.run/refine");
 vi.stubEnv("MODAL_EMBED_URL", "https://mock.modal.run/embed");

@@ -1,15 +1,20 @@
-"""Qwen3 8B on Modal serverless GPU — private LLM path for all
-candidate-derived text (DESIGN.md privacy rule: this data never reaches a
-frontier API).
+"""Qwen3 1.7B on Modal serverless GPU — the MEDIUM generation app for
+recruiter-facing and structured-output operations (redact / fit-summary /
+extract / non-credentials refine). Redaction lives here on the 1.7B because
+the 0.6B small app returned resumes near-verbatim (weak date/school/scale
+generalization) — the founder-resume test needs better redaction quality.
+Only credentials generalization stays on the 0.6B small app (llm-small.py,
+deterministic-floor fallback). All candidate-derived text stays on this private
+path (DESIGN.md privacy rule: this data never reaches a frontier API).
 
 Endpoints (POST, JSON, Bearer auth via MODAL_API_TOKEN secret):
   /redact       {"text": ...}                          -> {"redactedText": ...}
   /fit-summary  {"candidate": ..., "job": ...}         -> {"summary": ...}
-  /refine       {"text": ..., "kind": "profile"|"job_description"} -> {"refined": ...}
+  /refine       {"text": ..., "kind": "profile"|"job_description"|"career_assist"} -> {"refined": ...}
   /extract      {"text": ...}                          -> {"skills":[], "roles":[], "industries":[], "experience":[]}
 
 Deploy: modal deploy modal_app/llm.py
-Budget: scale-to-zero; a single L4 handles Qwen3-8B AWQ. At MVP volume
+Budget: scale-to-zero; T4 handles Qwen3-1.7B comfortably. At MVP volume
 (hundreds of calls/day) this stays comfortably inside the $30/mo Starter
 credit. Watch the Modal dashboard weekly; see modal_app/README.md.
 """
@@ -17,13 +22,15 @@ credit. Watch the Modal dashboard weekly; see modal_app/README.md.
 import os
 
 import modal
-from fastapi import Header
+from fastapi import Header, HTTPException
 
 # Qwen3-1.7B (was Qwen3-8B-AWQ): the 8B couldn't load within Modal's ~151s
 # sync web-endpoint window on an L4, so cold calls always 303'd. The 1.7B
 # loads in well under the window → reliable on-demand, no keep-warm cost.
-# This is the generation model (redaction / fit-summary / refine / extract)
-# ONLY — matching quality is unaffected (separate Qwen3-Embedding model).
+# This is the MEDIUM generation model (redact / fit-summary / extract /
+# non-credentials refine) — redaction moved back here (2026-08-12) because
+# the 0.6B redaction was near-verbatim; only credentials stayed on the small
+# app. Matching quality is unaffected (separate Qwen3-Embedding).
 MODEL_ID = "Qwen/Qwen3-1.7B"
 
 app = modal.App("binding-llm")
@@ -40,10 +47,16 @@ def _download_model():
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
-    .pip_install("vllm>=0.9", "fastapi[standard]", "huggingface_hub[hf_transfer]")
-    # VLLM_USE_V1=0: the V1 engine crashes on this L4 during startup KV-cache
-    # profiling (_dummy_sampler_run → topk_topp_sampler.forward_cuda). The V0
-    # engine skips that path and is far more robust in this container.
+    # Pin vllm to 0.10.x: newer releases (>=0.11) dropped the V0 engine, and
+    # the V1 engine crashes on this GPU class during startup KV-cache profiling
+    # (_dummy_sampler_run -> topk_topp_sampler.forward_cuda) — confirmed in the
+    # Aug 2026 redeploy (vllm 0.27.1, "Engine core initialization failed" on
+    # T4). 0.10.x honors VLLM_USE_V1=0 and its V0 engine skips that path.
+    # transformers<5: vllm 0.10.x crashes on transformers>=5 ("Qwen2Tokenizer
+    # has no attribute all_special_tokens_extended" — get_cached_tokenizer).
+    .pip_install("vllm==0.10.2", "transformers<5", "fastapi[standard]", "huggingface_hub[hf_transfer]")
+    # VLLM_USE_V1=0: force the V0 engine (the V1 default crashes at startup on
+    # this GPU class). V0 loads faster and is far more robust in this container.
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "VLLM_USE_V1": "0"})
     .run_function(_download_model)
 )
@@ -91,20 +104,6 @@ against candidate profiles: clear responsibilities, concrete required skills,
 standard terminology, no fluff. Do NOT add requirements that aren't implied.
 Output only the improved text. /no_think"""
 
-CREDENTIALS_SYSTEM = """You generalize a candidate's credentials (awards,
-certifications, patents, publications) into a SHORT, de-identified summary for
-a recruiter — enough to signal strength, never enough to identify the person.
-RULES:
-- Keep the category and rough count/scale: "patent-holder", "2 patents",
-  "cloud-certified", "industry award winner", "published author".
-- REMOVE every specific: patent numbers, exact award names/titles, years,
-  issuing body names, URLs, employer names, any proper noun that fingerprints.
-- Never invent credentials the input doesn't state.
-- Output ONE line, categories separated by " · ", no commentary.
-Example: "Patent US10,123,456 for a fraud-detection graph algorithm; AWS SA
-Pro; won FinTech HK 2023 Innovator award" -> "patent-holder (fraud detection) ·
-cloud-certified · industry award winner" /no_think"""
-
 CAREER_ASSIST_SYSTEM = """You are a career assistant helping job seekers with
 resume rewriting, cover letters, interview prep, and career-path guidance. Be
 concise and practical. Do NOT ask for or reference specific employer names,
@@ -113,7 +112,7 @@ personal contact details, or other identifying information. /no_think"""
 
 @app.cls(
     image=image,
-    gpu="L4",
+    gpu="T4",
     scaledown_window=120,  # scale to zero quickly — credit guardrail
     # APAC region pin (DESIGN.md §5/§12, 2026-07-28): raw resume text is
     # redacted here, so processing runs in-region rather than Modal's
@@ -164,10 +163,13 @@ class Qwen:
     def refine(self, body: dict, authorization: str = Header(default="")):
         _auth(authorization)
         kind = body.get("kind")
+        # Credentials generalization moved to llm-small.py (0.6B). Rejecting it
+        # here makes a config-swap fail loudly instead of silently paying for
+        # the 1.7B on a task the small model should handle.
+        if kind == "credentials":
+            raise HTTPException(status_code=400, detail="credentials handled by binding-llm-small")
         if kind == "job_description":
             system = REFINE_JD_SYSTEM
-        elif kind == "credentials":
-            system = CREDENTIALS_SYSTEM
         elif kind == "career_assist":
             system = CAREER_ASSIST_SYSTEM
         else:
@@ -186,8 +188,6 @@ class Qwen:
 
 
 def _auth(authorization: str) -> None:
-    from fastapi import HTTPException
-
     expected = os.environ.get("MODAL_API_TOKEN", "")
     if not expected or authorization != f"Bearer {expected}":
         raise HTTPException(status_code=401, detail="bad token")

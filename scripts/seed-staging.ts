@@ -32,10 +32,12 @@ for (const line of readFileSync(".env.local", "utf8").split("\n")) {
 const SUPA_URL = env.SUPABASE_SERVICE_URL;
 const SUPA_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
 const MODAL_TOKEN = env.MODAL_API_TOKEN;
-const EMBED_URL =
-  env.MODAL_EMBED_URL || "https://thomaskung--binding-embeddings-embedder-embed.modal.run";
+// Non-null assertion: the runtime guard below is the real check. It's used
+// inside closures, where TS control-flow narrowing doesn't propagate.
+const EMBED_URL = env.MODAL_EMBED_URL!;
 if (!SUPA_URL || !SUPA_KEY) throw new Error("missing SUPABASE_SERVICE_URL / SERVICE_ROLE_KEY");
 if (!MODAL_TOKEN) throw new Error("missing MODAL_API_TOKEN");
+if (!EMBED_URL) throw new Error("missing MODAL_EMBED_URL — set it in .env.local (no hardcoded Modal URLs)");
 if (!/supabase\.co/.test(SUPA_URL)) throw new Error(`refusing: SUPABASE_SERVICE_URL is not hosted (${SUPA_URL})`);
 const admin = createClient(SUPA_URL, SUPA_KEY, { auth: { persistSession: false } });
 

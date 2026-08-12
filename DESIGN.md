@@ -347,11 +347,15 @@ sections above remain the target architecture.
   Previously on Cloudflare Workers but migrated for simpler DX during
   staging/prototype phase.
 - **AI serving**: Modal Starter plan ($30/mo recurring credit), not
-  pay-as-you-go Modal/Baseten. Models: **Qwen3-1.7B** (generation —
-  redaction/fit-summary/refine/extract) + **Qwen3-Embedding-0.6B** (1024-dim
-  embeddings, the matching path). A deterministic **stub provider** is the
-  dev/CI default (`AI_PROVIDER=stub`) — zero network, zero cost, fully
-  testable slice; `modal` is live on staging (2026-08-04).
+  pay-as-you-go Modal/Baseten. Models: **Qwen3-1.7B** (medium generation —
+  redact/fit-summary/extract/refine) + **Qwen3-0.6B** (small generation —
+  credentials generalization only, deterministic-floor fallback) +
+  **Qwen3-Embedding-0.6B** (1024-dim embeddings, the matching path). A
+  deterministic **stub provider** is the dev/CI default (`AI_PROVIDER=stub`) —
+  zero network, zero cost, fully testable slice; `modal` is live on staging
+  (2026-08-04). Three production apps, all `scaledown_window=120s`; no separate
+  E2E apps — the E2E suite runs in parallel (~10 min), so the 120s scaledown
+  keeps containers warm naturally. See `modal_app/README.md`.
   - **Generation model was Qwen3-8B-AWQ** — downsized to 1.7B (2026-08-04):
     the 8B couldn't load within Modal's ~151s sync web-endpoint window on an
     L4 (every cold call 303'd), and its vllm V1 engine crashed on startup
@@ -360,6 +364,19 @@ sections above remain the target architecture.
     ~20s, reliable on-demand, no keep-warm cost. Matching quality is
     unaffected (it uses the separate embedding model). Redaction/fit-summary
     quality at 1.7B is adequate for MVP; revisit if it proves thin.
+  - **App split for cost (2026-08-12)**: redaction + credentials generalization
+    were first moved to a Qwen3-0.6B app (they are the highest-frequency
+    generation calls), but the founder-resume test showed the 0.6B returned
+    resumes near-verbatim (weak date/school/scale generalization) — so
+    **redaction moved back to the 1.7B** while only credentials generalization
+    (a short summarization with a deterministic floor fallback,
+    `src/lib/credentials.ts`) stays on the 0.6B. Both generation apps run on
+    T4 (moved from L4). The CI keep-warm ping loops were retired: the E2E suite
+    runs in parallel (~10 min), so the 120s scaledown keeps production
+    containers warm naturally across the run — CI no longer burns GPU time
+    keeping containers alive, and there are no E2E variant apps. vLLM is pinned
+    `vllm==0.10.2` + `transformers<5` (V0 engine only — see
+    `modal_app/README.md` for why looser pins break on T4).
   - **Endpoint auth** reads the `Authorization` header via FastAPI
     `Header(...)` — a bare `str = ""` param binds as a *query* parameter, so
     header-based Bearer auth silently 401s (fixed 2026-08-04). `modal_app/`

@@ -3,7 +3,12 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-export const TEST_RUN_ID = Date.now().toString(36);
+// Unique per WORKER (pid + module-load time), not just per run: the suite runs
+// in parallel (`workers: 4`), and each worker is a separate process that sets
+// its own TEST_RUN_ID at module load. Without the pid, two workers starting in
+// the same millisecond would collide on email/label namespaces. With it, labels
+// and test-user emails are guaranteed unique across the whole parallel run.
+export const TEST_RUN_ID = `${Date.now().toString(36)}-${process.pid.toString(36)}`;
 const PASSWORD = "J0B!Demo#2026$secure";
 
 let _labelCounter = 0;

@@ -8,40 +8,38 @@ import { aiCounterFile } from "./staging-helpers";
 // (a) Reset the disk-backed Modal call counter (see staging-helpers.ts) so
 // every run starts at zero, regardless of what a previous run left behind.
 //
-// (b) Optionally warm the Modal endpoints. This is deliberately a SECOND,
-// independent warm-up pass from the nightly workflow's `curl` loop
-// (.github/workflows/e2e-staging.yml): that one runs before `pnpm install` /
-// `playwright install`, which is 5+ minutes ahead of the first spec, and
-// Modal's `scaledown_window=120s` means the containers have re-cooled by
-// the time tests actually start hitting them — hence the workflow's own
-// "re-warm right before tests" step. This global-setup warm-up runs
-// immediately before the suite (no install step in between), so it is the
-// warm-up that actually matters for cold-start budgets. Both passes are
-// intentional, not redundant.
+// (b) Optionally warm the Modal endpoints. Endpoint URLs come from env vars
+// (MODAL_*_URL), set by the CI workflow to the E2E Modal apps
+// (binding-*-e2e) it just fetched from Vercel. No hardcoded URLs.
 //
 // Opt-in via E2E_WARM_MODAL=1: the PR gate (unlike the nightly workflow)
 // does not want to touch Modal at all — it leaves this unset so plain
 // `pnpm e2e` runs never warm (or spend against) a live Modal endpoint by
 // surprise.
-// Each endpoint needs a body matching its own schema (modal_app/llm.py's
-// module docstring). A generic `{"text":"warmup"}` ping works for
-// redact/refine/extract (they all read `body["text"]`), but `fit_summary`
-// reads `body["candidate"]`/`body["job"]` with no fallback — sending it the
-// generic shape throws an unhandled KeyError server-side (HTTP 500) on every
-// single warm-up attempt, every time, for every caller that has ever pinged
-// it (confirmed via modal-logs.yml: `KeyError: 'candidate'` at llm.py:141).
-// Fixed here 2026-08-07 — this bug predates this file; fit-summary has
-// effectively never been warmed by anything.
-const MODAL_ENDPOINTS: Array<{ url: string; body: Record<string, string> }> = [
-  { url: "https://thomaskung--binding-embeddings-embedder-embed.modal.run", body: { text: "warmup" } },
-  { url: "https://thomaskung--binding-llm-qwen-redact.modal.run", body: { text: "warmup" } },
-  {
-    url: "https://thomaskung--binding-llm-qwen-fit-summary.modal.run",
-    body: { candidate: "warmup", job: "warmup" },
-  },
-  { url: "https://thomaskung--binding-llm-qwen-refine.modal.run", body: { text: "warmup" } },
-  { url: "https://thomaskung--binding-llm-qwen-extract.modal.run", body: { text: "warmup" } },
+// Each endpoint needs a body matching its own schema (modal_app/llm*.py
+// module docstrings). A generic `{"text":"warmup"}` ping works for
+// redact/refine/extract/credentials (they all read `body["text"]`), but
+// `fit_summary` reads `body["candidate"]`/`body["job"]` with no fallback —
+// sending it the generic shape throws an unhandled KeyError server-side
+// (HTTP 500) on every single warm-up attempt (see e2e-staging.yml).
+const TEXT_ENDPOINTS: Array<{ varName: string; body: Record<string, string> }> = [
+  { varName: "MODAL_EMBED_URL", body: { text: "warmup" } },
+  { varName: "MODAL_REDACT_URL", body: { text: "warmup" } },
+  { varName: "MODAL_CREDENTIALS_URL", body: { text: "warmup" } },
+  { varName: "MODAL_REFINE_URL", body: { text: "warmup" } },
+  { varName: "MODAL_EXTRACT_URL", body: { text: "warmup" } },
 ];
+
+function endpointFor(varName: string, body: Record<string, string>): { url: string; body: Record<string, string> } {
+  const url = process.env[varName];
+  if (!url) {
+    throw new Error(
+      `Missing ${varName} env var — cannot warm endpoint. The CI workflow must ` +
+        "fetch the E2E Modal URLs from Vercel and export them as MODAL_*_URL.",
+    );
+  }
+  return { url, body };
+}
 
 async function warmEndpoint(url: string, body: Record<string, string>): Promise<void> {
   for (let attempt = 1; attempt <= 5; attempt++) {
@@ -71,8 +69,11 @@ export default async function globalSetup(): Promise<void> {
   fs.rmSync(file, { force: true });
 
   if (process.env.E2E_WARM_MODAL === "1") {
-    for (const { url, body } of MODAL_ENDPOINTS) {
-      await warmEndpoint(url, body);
+    for (const { varName, body } of TEXT_ENDPOINTS) {
+      await warmEndpoint(endpointFor(varName, body).url, body);
     }
+    // fit-summary needs the candidate/job shape.
+    const summary = endpointFor("MODAL_SUMMARY_URL", { candidate: "warmup", job: "warmup" });
+    await warmEndpoint(summary.url, summary.body);
   }
 }

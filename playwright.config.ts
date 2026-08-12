@@ -34,9 +34,13 @@ export default defineConfig({
   // Generous: staging is a cold-startable Vercel deployment and the journey
   // specs legitimately run 50s+ when healthy (plus Modal cold starts).
   timeout: 120_000,
-  // One shared staging database — serial keeps cross-spec state deterministic
-  // even though each spec owns its own users.
-  workers: 1,
+  // One shared staging database — each spec owns its own users/labels (unique
+  // per worker via TEST_RUN_ID's pid suffix), so spec files can run in
+  // parallel without cross-spec state interference. Parallel also keeps the
+  // suite ~4x faster, which is what lets production Modal apps (120s
+  // scaledown_window) stay warm naturally across the run — no keep-warm pings,
+  // no separate E2E Modal apps.
+  workers: 4,
   fullyParallel: false,
   use: {
     baseURL,
