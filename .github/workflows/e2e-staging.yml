@@ -55,12 +55,7 @@ jobs:
           ALL=$(curl -s "https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}" \
             -H "Authorization: Bearer ${VERCEL_API_TOKEN}")
           for name in MODAL_REDACT_URL MODAL_CREDENTIALS_URL MODAL_SUMMARY_URL MODAL_REFINE_URL MODAL_EMBED_URL MODAL_EXTRACT_URL; do
-            value=$(echo "$ALL" | python3 -c "
-import sys, json
-envs = json.load(sys.stdin).get('envs', [])
-m = next((e for e in envs if e['key'] == '$name'), None)
-print(m['value'] if m else '')
-")
+            value=$(echo "$ALL" | python3 -c "import sys,json; d=json.load(sys.stdin); print(next((e['value'] for e in d.get('envs',[]) if e['key']=='$name'), ''))" 2>/dev/null || echo "")
             if [ -n "$value" ]; then
               echo "${name}=${value}" >> "$GITHUB_ENV"
             else
