@@ -94,13 +94,13 @@ jobs:
             # Also set it in THIS step's shell so the summary below can read it.
             export "$2=$url"
           }
-          map_url "redact"      MODAL_REDACT_URL       llm-small.log
+          map_url "redact"      MODAL_REDACT_URL       llm.log
           map_url "refine"      MODAL_CREDENTIALS_URL  llm-small.log
           map_url "extract"     MODAL_EXTRACT_URL      llm.log
           map_url "fit-summary" MODAL_SUMMARY_URL      llm.log
           map_url "refine"      MODAL_REFINE_URL       llm.log
           map_url "embed"       MODAL_EMBED_URL        embed.log
-          map_url "redact"      E2E_MODAL_REDACT_URL       llm-small-e2e.log
+          map_url "redact"      E2E_MODAL_REDACT_URL       llm-e2e.log
           map_url "refine"      E2E_MODAL_CREDENTIALS_URL  llm-small-e2e.log
           map_url "extract"     E2E_MODAL_EXTRACT_URL      llm-e2e.log
           map_url "fit-summary" E2E_MODAL_SUMMARY_URL      llm-e2e.log

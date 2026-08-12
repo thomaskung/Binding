@@ -12,14 +12,16 @@ E2E app (scaledown 3600s) via the `MODAL_E2E` env var:
 
 | Job | Model | GPU | Prod app | E2E app |
 |---|---|---|---|---|
-| Redaction, credentials generalization | Qwen/Qwen3-0.6B (vLLM, T4) | T4 | `binding-llm-small` | `binding-llm-small-e2e` |
-| Fit summaries, extraction, refinement | Qwen/Qwen3-1.7B (vLLM, T4) | T4 | `binding-llm` | `binding-llm-e2e` |
+| Redaction, fit summaries, extraction, refinement | Qwen/Qwen3-1.7B (vLLM, T4) | T4 | `binding-llm` | `binding-llm-e2e` |
+| Credentials generalization | Qwen/Qwen3-0.6B (vLLM, T4) | T4 | `binding-llm-small` | `binding-llm-small-e2e` |
 | Embeddings (1024-dim, matches `vector(1024)` columns) | Qwen/Qwen3-Embedding-0.6B (T4) | T4 | `binding-embeddings` | `binding-embeddings-e2e` |
 
-The split exists so each model can be sized / fine-tuned independently:
-redact + credentials are high-frequency, low-quality-sensitivity (both have
-deterministic fallbacks), so they run on the cheap 0.6B; fit-summary / extract
-/ refine need the 1.7B for recruiter-facing prose and structured JSON.
+The split exists so each model can be sized / fine-tuned independently.
+Redaction runs on the 1.7B because the 0.6B returned resumes near-verbatim
+(weak date/school/scale generalization) — the founder-resume test needs better
+redaction quality. Credentials generalization runs on the cheap 0.6B: it is a
+short summarization with a deterministic floor fallback
+(`src/lib/credentials.ts`), so a weak model can never leak a specific.
 
 The E2E apps keep `scaledown_window=3600` so long CI suites (which run
 serially across ~40 minutes) never re-cold-start mid-run. Production stays at
@@ -61,14 +63,14 @@ Copy the printed endpoint URLs plus the token into the Next.js env
 
 ```
 AI_PROVIDER=modal
-MODAL_REDACT_URL=...         # binding-llm-small      /redact
+MODAL_REDACT_URL=...         # binding-llm            /redact
 MODAL_CREDENTIALS_URL=...    # binding-llm-small      /refine (credentials only)
 MODAL_EXTRACT_URL=...        # binding-llm            /extract
 MODAL_SUMMARY_URL=...        # binding-llm            /fit-summary
 MODAL_REFINE_URL=...         # binding-llm            /refine (profile/jd/career)
 MODAL_EMBED_URL=...          # binding-embeddings     /embed
 MODAL_API_TOKEN=...
-E2E_MODAL_REDACT_URL=...     # binding-llm-small-e2e  (CI only)
+E2E_MODAL_REDACT_URL=...     # binding-llm-e2e        (CI only)
 E2E_MODAL_CREDENTIALS_URL=...
 E2E_MODAL_EXTRACT_URL=...
 E2E_MODAL_SUMMARY_URL=...

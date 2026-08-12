@@ -1,10 +1,14 @@
-"""Qwen3 0.6B on Modal serverless GPU — the CHEAP small-model app for the
-high-frequency, low-quality-sensitivity generation operations (redact +
-credentials generalization). Deliberately DECOUPLED from llm.py so each model
-can be fine-tuned / sized independently (see the cost-reduction plan).
+"""Qwen3 0.6B on Modal serverless GPU — the CHEAP small-model app for
+credentials generalization only. Deliberately DECOUPLED from llm.py so each
+model can be fine-tuned / sized independently (see the cost-reduction plan).
 
-Endpoints (POST, JSON, Bearer auth via MODAL_API_TOKEN secret):
-  /redact  {"text": ...}                          -> {"redactedText": ...}
+Why credentials-only here: redaction moved back to the 1.7B medium app
+(llm.py) because the 0.6B returned resumes near-verbatim (weak date/school/
+scale generalization) — the founder-resume test requires better redaction
+quality. Credentials generalization is a short summarization with a
+deterministic floor fallback (src/lib/credentials.ts), so the 0.6B is plenty.
+
+Endpoint (POST, JSON, Bearer auth via MODAL_API_TOKEN secret):
   /refine  {"text": ..., "kind": "credentials"}   -> {"refined": ...}
            kind != "credentials" -> 400 (this app only handles credentials)
 
@@ -51,16 +55,6 @@ image = (
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "VLLM_USE_V1": "0"})
     .run_function(_download_model)
 )
-
-REDACT_SYSTEM = """You redact resumes for a privacy-first hiring platform.
-Rewrite the resume text with ALL of the following removed or generalized:
-- names, emails, phone numbers, addresses, links
-- current/previous employer names (replace with e.g. "[a regional bank]")
-- school names (replace with e.g. "[a Hong Kong university]")
-- exact years/dates (generalize: "8 years experience", "[YEAR]")
-- any detail that could identify the person in a small talent pool
-Keep ALL skills, achievements (with scale generalized), and seniority signals.
-Output only the redacted text, no commentary. /no_think"""
 
 CREDENTIALS_SYSTEM = """You generalize a candidate's credentials (awards,
 certifications, patents, publications) into a SHORT, de-identified summary for
@@ -114,11 +108,6 @@ class QwenSmall:
 
         text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
         return text.strip()
-
-    @modal.fastapi_endpoint(method="POST")
-    def redact(self, body: dict, authorization: str = Header(default="")):
-        _auth(authorization)
-        return {"redactedText": self._generate(REDACT_SYSTEM, body["text"])}
 
     @modal.fastapi_endpoint(method="POST")
     def refine(self, body: dict, authorization: str = Header(default="")):

@@ -1,11 +1,14 @@
 """Qwen3 1.7B on Modal serverless GPU — the MEDIUM generation app for
-recruiter-facing and structured-output operations (fit-summary / extract /
-non-credentials refine). Redaction + credentials generalization live on the
-cheaper 0.6B small app (llm-small.py) — this app deliberately does NOT serve
-them. All candidate-derived text stays on this private path (DESIGN.md privacy
-rule: this data never reaches a frontier API).
+recruiter-facing and structured-output operations (redact / fit-summary /
+extract / non-credentials refine). Redaction lives here on the 1.7B because
+the 0.6B small app returned resumes near-verbatim (weak date/school/scale
+generalization) — the founder-resume test needs better redaction quality.
+Only credentials generalization stays on the 0.6B small app (llm-small.py,
+deterministic-floor fallback). All candidate-derived text stays on this private
+path (DESIGN.md privacy rule: this data never reaches a frontier API).
 
 Endpoints (POST, JSON, Bearer auth via MODAL_API_TOKEN secret):
+  /redact       {"text": ...}                          -> {"redactedText": ...}
   /fit-summary  {"candidate": ..., "job": ...}         -> {"summary": ...}
   /refine       {"text": ..., "kind": "profile"|"job_description"|"career_assist"} -> {"refined": ...}
   /extract      {"text": ...}                          -> {"skills":[], "roles":[], "industries":[], "experience":[]}
@@ -27,9 +30,10 @@ from fastapi import Header, HTTPException
 # Qwen3-1.7B (was Qwen3-8B-AWQ): the 8B couldn't load within Modal's ~151s
 # sync web-endpoint window on an L4, so cold calls always 303'd. The 1.7B
 # loads in well under the window → reliable on-demand, no keep-warm cost.
-# This is the MEDIUM generation model (fit-summary / extract / non-credentials
-# refine) ONLY — redaction + credentials moved to the cheaper 0.6B small app
-# (llm-small.py); matching quality is unaffected (separate Qwen3-Embedding).
+# This is the MEDIUM generation model (redact / fit-summary / extract /
+# non-credentials refine) — redaction moved back here (2026-08-12) because
+# the 0.6B redaction was near-verbatim; only credentials stayed on the small
+# app. Matching quality is unaffected (separate Qwen3-Embedding).
 MODEL_ID = "Qwen/Qwen3-1.7B"
 
 IS_E2E = os.environ.get("MODAL_E2E", "0") == "1"
@@ -63,6 +67,16 @@ image = (
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "VLLM_USE_V1": "0"})
     .run_function(_download_model)
 )
+
+REDACT_SYSTEM = """You redact resumes for a privacy-first hiring platform.
+Rewrite the resume text with ALL of the following removed or generalized:
+- names, emails, phone numbers, addresses, links
+- current/previous employer names (replace with e.g. "[a regional bank]")
+- school names (replace with e.g. "[a Hong Kong university]")
+- exact years/dates (generalize: "8 years experience", "[YEAR]")
+- any detail that could identify the person in a small talent pool
+Keep ALL skills, achievements (with scale generalized), and seniority signals.
+Output only the redacted text, no commentary. /no_think"""
 
 SUMMARY_SYSTEM = """You summarize candidate-role fit for a recruiter in 2-3
 sentences. Be concrete about overlapping skills and gaps. Never invent facts
@@ -140,6 +154,11 @@ class Qwen:
 
         text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
         return text.strip()
+
+    @modal.fastapi_endpoint(method="POST")
+    def redact(self, body: dict, authorization: str = Header(default="")):
+        _auth(authorization)
+        return {"redactedText": self._generate(REDACT_SYSTEM, body["text"])}
 
     @modal.fastapi_endpoint(method="POST")
     def fit_summary(self, body: dict, authorization: str = Header(default="")):
