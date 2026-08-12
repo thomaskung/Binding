@@ -347,11 +347,16 @@ sections above remain the target architecture.
   Previously on Cloudflare Workers but migrated for simpler DX during
   staging/prototype phase.
 - **AI serving**: Modal Starter plan ($30/mo recurring credit), not
-  pay-as-you-go Modal/Baseten. Models: **Qwen3-1.7B** (generation —
-  redaction/fit-summary/refine/extract) + **Qwen3-Embedding-0.6B** (1024-dim
-  embeddings, the matching path). A deterministic **stub provider** is the
-  dev/CI default (`AI_PROVIDER=stub`) — zero network, zero cost, fully
-  testable slice; `modal` is live on staging (2026-08-04).
+  pay-as-you-go Modal/Baseten. Models: **Qwen3-1.7B** (medium generation —
+  fit-summary/extract/refine) + **Qwen3-0.6B** (small generation — redact +
+  credentials generalization, the high-frequency low-sensitivity paths) +
+  **Qwen3-Embedding-0.6B** (1024-dim embeddings, the matching path). A
+  deterministic **stub provider** is the dev/CI default (`AI_PROVIDER=stub`) —
+  zero network, zero cost, fully testable slice; `modal` is live on staging
+  (2026-08-04). Each Modal source file deploys BOTH a production app
+  (`scaledown_window=120`) and an E2E app (`scaledown_window=3600`, CI-only)
+  via the `MODAL_E2E` env var; `modal.ts` routes CI traffic to the E2E apps via
+  the `e2e_modal=1` cookie. See `modal_app/README.md`.
   - **Generation model was Qwen3-8B-AWQ** — downsized to 1.7B (2026-08-04):
     the 8B couldn't load within Modal's ~151s sync web-endpoint window on an
     L4 (every cold call 303'd), and its vllm V1 engine crashed on startup
@@ -360,6 +365,18 @@ sections above remain the target architecture.
     ~20s, reliable on-demand, no keep-warm cost. Matching quality is
     unaffected (it uses the separate embedding model). Redaction/fit-summary
     quality at 1.7B is adequate for MVP; revisit if it proves thin.
+  - **Redaction + credentials moved to Qwen3-0.6B (2026-08-12, cost pass)**:
+    they are the highest-frequency generation calls but the lowest quality
+    sensitivity — redaction is guaranteed by the deterministic layer
+    (`src/lib/redact-known.ts`), credentials by the deterministic floor
+    (`src/lib/credentials.ts`) — so the cheap 0.6B runs them on a T4. The
+    1.7B (also moved from L4 to T4) keeps fit-summary/extract/refine, which
+    need recruiter-facing prose and structured JSON. Both apps were split so
+    each can be micro-sized or fine-tuned independently. The CI keep-warm
+    loops were retired: E2E apps' 3600s scaledown keeps them warm across
+    suites without burning GPU time keeping production containers alive.
+    vLLM is pinned `vllm==0.10.2` + `transformers<5` (V0 engine only — see
+    `modal_app/README.md` for why looser pins break on T4).
   - **Endpoint auth** reads the `Authorization` header via FastAPI
     `Header(...)` — a bare `str = ""` param binds as a *query* parameter, so
     header-based Bearer auth silently 401s (fixed 2026-08-04). `modal_app/`

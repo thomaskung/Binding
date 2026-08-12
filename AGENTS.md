@@ -59,8 +59,10 @@
 **Modal**
 - Auth: `modal token set --token-id <ID> --token-secret <SECRET>` (values from `.env.local` comment; profile `thomaskung`)
 - API secret: `modal secret create binding-api-token MODAL_API_TOKEN=<value>`
-- Deploy: `modal deploy modal_app/embeddings.py` + `modal deploy modal_app/llm.py`
-- Endpoint URLs printed on deploy; set as Vercel env vars for `AI_PROVIDER=modal`
+- Deploy (3 apps × production + E2E variants; `MODAL_E2E=1` flips app name + `scaledown_window` 120→3600):
+  `modal deploy modal_app/llm-small.py` + `modal deploy modal_app/llm.py` + `modal deploy modal_app/embeddings.py` (+ same three with `MODAL_E2E=1` for CI)
+- Endpoint URLs printed on deploy; set as Vercel env vars for `AI_PROVIDER=modal` (production `MODAL_*_URL` + E2E `E2E_MODAL_*_URL` — see `modal_app/README.md`)
+- vLLM pins: `vllm==0.10.2` + `transformers<5` (V0 engine only — looser pins crash on T4)
 
 **Supabase** (hosted only — no local stack)
 - Hosted project ref: `qjqaeuzpsefawqwlfwlf` (region `ap-southeast-1`)

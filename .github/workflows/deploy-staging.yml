@@ -70,11 +70,21 @@ jobs:
       # No working-directory: paths are repo-relative — combining
       # working-directory: modal_app with modal_app/… paths resolved to
       # modal_app/modal_app/… and would fail whenever this job triggered.
+      #
+      # Deploys BOTH endpoint sets from the same three source files: MODAL_E2E
+      # flips the app name (binding-*-e2e) and scaledown_window (3600s for CI).
+      # set -euo pipefail makes a failed deploy fail the job loudly instead of
+      # silently promoting a broken app to staging.
       - name: Deploy Modal apps
         run: |
+          set -euo pipefail
           modal token set --token-id "${{ secrets.MODAL_TOKEN_ID }}" --token-secret "${{ secrets.MODAL_TOKEN_SECRET }}"
-          modal deploy modal_app/embeddings.py
+          modal deploy modal_app/llm-small.py
           modal deploy modal_app/llm.py
+          modal deploy modal_app/embeddings.py
+          MODAL_E2E=1 modal deploy modal_app/llm-small.py
+          MODAL_E2E=1 modal deploy modal_app/llm.py
+          MODAL_E2E=1 modal deploy modal_app/embeddings.py
 
   # Post-merge smoke: nothing previously ran against staging between a merge
   # landing and the 3am nightly (e2e-staging.yml), so a broken merge could sit
@@ -101,51 +111,38 @@ jobs:
 
       - run: pnpm exec playwright install --with-deps chromium
 
-      - name: Start background Modal keep-warm loop
-        # smoke.spec.ts's own globalSetup warm-up (below) is a ONE-TIME ping
-        # before the test starts. The test itself then makes several real,
-        # sequential Modal calls (seeker redact+embed, job embed, reveal
-        # fitSummary) across multiple onboarding/UI steps — Modal's
-        # `scaledown_window=120` means any endpoint idle 2+ minutes between
-        # those calls (e.g. while a cold Vercel lambda or UI step is slow)
-        # scales back to zero, and the next real call eats a fresh cold
-        # start. Confirmed cause of the 2026-08-10 post-merge failure (run
-        # 31389935601): globalSetup warm-up alone took ~4 minutes, then the
-        # test still timed out at its 420s budget waiting on a later step —
-        # same "element/state never appeared in time" signature as the
-        # nightly's chronic flake (e2e-staging.yml), fixed there the same
-        # way. Ping every endpoint every 90s (under the 120s window) for the
-        # lifetime of this one test.
-        run: |
-          (
-            while true; do
-              sleep 90
-              for url in \
-                "https://thomaskung--binding-embeddings-embedder-embed.modal.run" \
-                "https://thomaskung--binding-llm-qwen-redact.modal.run" \
-                "https://thomaskung--binding-llm-qwen-refine.modal.run" \
-                "https://thomaskung--binding-llm-qwen-extract.modal.run"; do
-                code=$(curl -s -m 30 -X POST "$url" \
-                  -H "Authorization: Bearer $MODAL_API_TOKEN" \
-                  -H "Content-Type: application/json" \
-                  -d '{"text":"keepwarm"}' -o /dev/null -w "%{http_code}" || echo "000")
-                echo "keepwarm $url -> $code"
-              done
-              code=$(curl -s -m 30 -X POST "https://thomaskung--binding-llm-qwen-fit-summary.modal.run" \
-                -H "Authorization: Bearer $MODAL_API_TOKEN" \
-                -H "Content-Type: application/json" \
-                -d '{"candidate":"keepwarm","job":"keepwarm"}' -o /dev/null -w "%{http_code}" || echo "000")
-              echo "keepwarm fit-summary -> $code"
-            done
-          ) > /tmp/keepwarm.log 2>&1 &
-          echo "KEEPWARM_PID=$!" >> "$GITHUB_ENV"
+      # The E2E Modal apps (binding-*-e2e) have scaledown_window=3600, so the
+      # whole smoke run stays warm WITHOUT a keep-warm ping loop. This step
+      # reads their URLs (stored as plain-text Vercel vars by deploy-modal.yml)
+      # so the warm-up + test steps below use env vars, never hardcoded URLs.
+      - name: Fetch E2E Modal URLs from Vercel
         env:
-          MODAL_API_TOKEN: ${{ secrets.MODAL_API_TOKEN }}
+          VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          ALL=$(curl -s "https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}" \
+            -H "Authorization: Bearer ${VERCEL_API_TOKEN}")
+          for name in MODAL_REDACT_URL MODAL_CREDENTIALS_URL MODAL_SUMMARY_URL MODAL_REFINE_URL MODAL_EMBED_URL MODAL_EXTRACT_URL; do
+            e2e_key="E2E_${name}"
+            value=$(echo "$ALL" | python3 -c "
+import sys, json
+envs = json.load(sys.stdin).get('envs', [])
+m = next((e for e in envs if e['key'] == '$e2e_key'), None)
+print(m['value'] if m else '')
+")
+            if [ -n "$value" ]; then
+              echo "${name}=${value}" >> "$GITHUB_ENV"
+            else
+              echo "::warning::$e2e_key not found in Vercel env — tests will fail on Modal calls"
+            fi
+          done
 
       # smoke.spec.ts runs ALONE, in its own `playwright test` invocation, so
       # its globalSetup warm-up (E2E_WARM_MODAL=1) fires immediately before
       # the ONE test that actually needs Modal — nothing else can run first
-      # and eat into the 120s scaledown_window.
+      # and eat into the scaledown_window.
       #
       # This used to be one command listing smoke.spec.ts FIRST alongside the
       # 5 Modal-free specs, which looks like it should work but doesn't:
@@ -158,7 +155,7 @@ jobs:
       # back down, and the test's redact+embed call blew its 90s budget.
       # Confirmed from two real CI failures on 2026-08-07 (runs 31156056325,
       # 31159384735) before splitting this into two invocations.
-      - name: Run smoke against staging (Modal-warmed, runs alone)
+      - name: Run smoke against staging (runs alone)
         run: npx playwright test e2e/smoke.spec.ts
         env:
           E2E_BASE_URL: https://binding-staging.vercel.app
@@ -173,24 +170,25 @@ jobs:
           E2E_STAGING_SECRET: ${{ secrets.E2E_STAGING_SECRET }}
           # smoke.spec.ts hits Modal (a real publish/reveal round trip) —
           # warm the endpoints first, same reasoning as the nightly's
-          # globalSetup pass in e2e-staging.yml. There's no curl warm-up step
-          # here (unlike the nightly), so globalSetup is the ONLY warm path —
-          # MODAL_API_TOKEN is required, not optional, for this job.
+          # globalSetup pass in e2e-staging.yml. globalSetup is the ONLY warm
+          # path here (the E2E apps' 3600s window covers the whole run), so
+          # MODAL_API_TOKEN + the fetched E2E URLs are required.
           MODAL_API_TOKEN: ${{ secrets.MODAL_API_TOKEN }}
+          MODAL_REDACT_URL: ${{ env.MODAL_REDACT_URL }}
+          MODAL_CREDENTIALS_URL: ${{ env.MODAL_CREDENTIALS_URL }}
+          MODAL_SUMMARY_URL: ${{ env.MODAL_SUMMARY_URL }}
+          MODAL_REFINE_URL: ${{ env.MODAL_REFINE_URL }}
+          MODAL_EMBED_URL: ${{ env.MODAL_EMBED_URL }}
+          MODAL_EXTRACT_URL: ${{ env.MODAL_EXTRACT_URL }}
+          # Route this run's Modal calls to the E2E apps: the cookie set by
+          # stagingContext() (when E2E_MODAL=1) makes modal.ts pick the
+          # E2E_ prefixed Vercel vars server-side.
+          E2E_MODAL: '1'
           E2E_WARM_MODAL: '1'
           # Shared never-reset staging DB accumulates identical-embedding
           # seekers that crowd fresh ones out of match_candidates' top-20;
           # raise for the test run so the smoke match always surfaces.
           MATCH_TOP_N: '500'
-
-      - name: Stop background Modal keep-warm loop
-        if: always()
-        run: |
-          if [ -n "$KEEPWARM_PID" ]; then
-            kill "$KEEPWARM_PID" 2>/dev/null || true
-          fi
-          echo "--- keepwarm log ---"
-          cat /tmp/keepwarm.log 2>/dev/null || true
 
       # The 5 Modal-free specs from the PR gate (ci.yml, job `e2e`), run
       # separately and without E2E_WARM_MODAL — they never touch Modal, so

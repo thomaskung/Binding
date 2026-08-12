@@ -71,7 +71,7 @@ Notes:
   RLS as the privacy enforcement layer. GitHub Actions cron pings `/api/health`
   every 3 days to dodge the 7-day free-tier pause
 - **AI**: provider-agnostic adapter (`src/lib/ai/`) — deterministic **stub** for
-  dev/CI (zero cost/network), **Qwen3 8B + Qwen3-Embedding-0.6B on Modal**
+  dev/CI (zero cost/network), **Qwen3 0.6B + 1.7B + Qwen3-Embedding-0.6B on Modal**
   ($30/mo Starter credit) for real inference; deploy per `modal_app/README.md`
 - **Privacy rule** (enforced by types + tests): candidate-derived data only ever
   hits the self-hosted Modal path, never a frontier API
