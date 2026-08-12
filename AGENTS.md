@@ -53,8 +53,9 @@
 - Auth: token in `.env.local` (`VERCEL_API_TOKEN`)
 - Link: `vercel link --project jumponboard-staging`
 - Deploy: `vercel --prod --yes`
-- Project ID: `prj_Ss1Qm2DUjBCVnAT4B4wCWa61T3js`, Org: `team_CdIwdiwt4WNwzkO5q43UP29H`
+- Project ID: `prj_UHvpq7yF6pFr1L4OkZtEBf6jwKG8` (project was renamed `jumponboard-staging` → `binding-staging`; the old `prj_Ss1Qm2DUjBCVnAT4B4wCWa61T3js` no longer exists), Org: `team_CdIwdiwt4WNwzkO5q43UP29H`
 - Staging URL: `https://binding-staging.vercel.app`
+- **Keep the GH secret `VERCEL_PROJECT_ID` in sync with the ID above** — `deploy-modal.yml`'s env-wiring step uses it and 404s on the stale value.
 
 **Modal**
 - Auth: `modal token set --token-id <ID> --token-secret <SECRET>` (values from `.env.local` comment; profile `thomaskung`)
