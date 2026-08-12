@@ -691,8 +691,9 @@ test.describe("Staging functional — dealbreaker & tier differentiation", () =>
 
     await admin.from("profiles").update({ recruiter_tier: "solo" }).eq("id", user.id);
 
-    // Dashboard shows Solo badge.
-    await page.goto("/recruiter");
+    // Candidates view shows the tier badge (moved here from /recruiter in the
+    // Pipeline/Candidates split — /recruiter now only shows posting statuses).
+    await page.goto("/recruiter/candidates");
     await expect(page.getByText("Solo").first()).toBeVisible({ timeout: 10_000 });
 
     await ctx.close();

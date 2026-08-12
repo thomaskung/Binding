@@ -53,18 +53,21 @@ export async function completeSeekerOnboarding(
   if (opts.resumeText) {
     await page.getByTestId("onboarding-resume-paste").fill(opts.resumeText);
     countAiCall(); // ai.extractProfileFields
-    await page.getByTestId("onboarding-extract").click();
     // Modal round-trip on a possibly-cold lambda — match the 60s headroom
-    // staging-functional.spec.ts gives every other AI-backed wait.
+    // staging-functional.spec.ts gives every other AI-backed wait. The extract
+    // and finish clicks themselves are Modal boundaries too: give them the
+    // same generous action timeout (the button may sit in `pending` while the
+    // lambda cold-starts) instead of the 30s Playwright default.
+    await page.getByTestId("onboarding-extract").click({ timeout: 90_000 });
     await expect(page.getByTestId("onboarding-continue-dealbreakers")).toBeEnabled({
       timeout: 60_000,
     });
-    await page.getByTestId("onboarding-continue-dealbreakers").click();
+    await page.getByTestId("onboarding-continue-dealbreakers").click({ timeout: 90_000 });
     // finish() awaits publishProfile() → ai.redact + ai.embed. Counted HERE so
     // the cost lives next to the click that causes it and callers can't drift.
     countAiCall(); // ai.redact (publishProfile, via onboarding-finish)
     countAiCall(); // ai.embed  (publishProfile, via onboarding-finish)
-    await page.getByTestId("onboarding-finish").click();
+    await page.getByTestId("onboarding-finish").click({ timeout: 90_000 });
   } else {
     await page.getByTestId("wizard-skip").click();
   }
