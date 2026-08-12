@@ -141,11 +141,14 @@ test("pipeline command-center funnel + alerts + posting health, and Candidates p
 
   // --- Alerts: stale posting (job2) + expiring override reveal (job1/C) ---
   await expect(recruiter.getByText("No new matches in 7 days")).toBeVisible();
-  await expect(recruiter.getByText(job2Title)).toBeVisible();
+  // job2Title appears TWICE on /recruiter: as the stale-alert paragraph AND as
+  // the posting link in the health section. Scope to the first so the strict
+  // locator doesn't fail on the ambiguity (both prove the title renders).
+  await expect(recruiter.getByText(job2Title).first()).toBeVisible();
   await expect(recruiter.getByText(/Reveal expiring in \d+ days?/)).toBeVisible();
 
   // --- Posting health: cohort sizes per job (3 on job1, 2 on job2) ---
-  await expect(recruiter.getByText(job1Title)).toBeVisible();
+  await expect(recruiter.getByText(job1Title).first()).toBeVisible();
   await expect(recruiter.getByText("3 matches")).toBeVisible();
   await expect(recruiter.getByText("2 matches")).toBeVisible();
 

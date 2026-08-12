@@ -85,6 +85,9 @@ test("Compare view: select two interested candidates, bulk reveal, second gets t
   await expect(recruiter.getByTestId("compare-confirm-dialog")).toBeVisible({ timeout: 15_000 });
 
   // --- Preview: authoritative pre-charge cost, one full price + one discounted ---
+  // previewBulkRevealCost is async (RPC) — wait for both rows to render before
+  // reading, or allTextContents() can catch an empty array on a slow round trip.
+  await expect(recruiter.getByTestId("compare-preview-cost")).toHaveCount(2, { timeout: 15_000 });
   const previewCosts = await recruiter.getByTestId("compare-preview-cost").allTextContents();
   expect(previewCosts).toHaveLength(2);
   const previewNums = previewCosts.map((c) => Number(c.replace(/[^\d]/g, "")));
