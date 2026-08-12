@@ -25,7 +25,9 @@ import { aiCounterFile } from "./staging-helpers";
 const TEXT_ENDPOINTS: Array<{ varName: string; body: Record<string, string> }> = [
   { varName: "MODAL_EMBED_URL", body: { text: "warmup" } },
   { varName: "MODAL_REDACT_URL", body: { text: "warmup" } },
-  { varName: "MODAL_CREDENTIALS_URL", body: { text: "warmup" } },
+  // credentials endpoint requires kind:"credentials" — anything else is a 400
+  // (its fail-loud guard). Include the kind so the warm-up is a clean 200.
+  { varName: "MODAL_CREDENTIALS_URL", body: { text: "warmup", kind: "credentials" } },
   { varName: "MODAL_REFINE_URL", body: { text: "warmup" } },
   { varName: "MODAL_EXTRACT_URL", body: { text: "warmup" } },
 ];
