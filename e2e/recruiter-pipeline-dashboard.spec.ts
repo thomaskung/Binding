@@ -69,6 +69,9 @@ test("pipeline command-center funnel + alerts + posting health, and Candidates p
       title: job1Title,
       description: "Fresh posting for the pipeline dashboard e2e scenario.",
       status: "active",
+      // salary bounds are NOT NULL since migration 0024.
+      salary_min: 80000,
+      salary_max: 150000,
     })
     .select("id")
     .single();
@@ -81,6 +84,8 @@ test("pipeline command-center funnel + alerts + posting health, and Candidates p
       title: job2Title,
       description: "Stale posting for the pipeline dashboard e2e scenario.",
       status: "active",
+      salary_min: 80000,
+      salary_max: 150000,
     })
     .select("id")
     .single();
