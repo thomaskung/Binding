@@ -5,9 +5,6 @@ Endpoint (POST, JSON, Bearer auth):
   /embed  {"text": ...} -> {"embedding": [1024 floats]}
 
 Deploy: modal deploy modal_app/embeddings.py
-Deploy E2E variant: MODAL_E2E=1 modal deploy modal_app/embeddings.py
-  - MODAL_E2E controls the app name (binding-embeddings-e2e) and scaledown
-    (3600s for CI, vs 120s for production) so long CI runs never re-cold-start.
 """
 
 import os
@@ -17,11 +14,7 @@ from fastapi import Header, HTTPException
 
 MODEL_ID = "Qwen/Qwen3-Embedding-0.6B"
 
-IS_E2E = os.environ.get("MODAL_E2E", "0") == "1"
-APP_NAME = "binding-embeddings-e2e" if IS_E2E else "binding-embeddings"
-SCALEDOWN_WINDOW = 3600 if IS_E2E else 120
-
-app = modal.App(APP_NAME)
+app = modal.App("binding-embeddings")
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -32,7 +25,7 @@ image = (
 @app.cls(
     image=image,
     gpu="T4",
-    scaledown_window=SCALEDOWN_WINDOW,
+    scaledown_window=120,
     # APAC region pin — same rationale as llm.py's Qwen class (embedding
     # input is redacted-but-candidate-derived text; keep it in-region).
     region="ap",

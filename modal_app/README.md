@@ -7,26 +7,26 @@ we control.
 
 ## Models
 
-Three source files; each deploys BOTH a production app (scaledown 120s) and an
-E2E app (scaledown 3600s) via the `MODAL_E2E` env var:
+Three production apps, all `scaledown_window=120s`:
 
-| Job | Model | GPU | Prod app | E2E app |
-|---|---|---|---|---|
-| Redaction, fit summaries, extraction, refinement | Qwen/Qwen3-1.7B (vLLM, T4) | T4 | `binding-llm` | `binding-llm-e2e` |
-| Credentials generalization | Qwen/Qwen3-0.6B (vLLM, T4) | T4 | `binding-llm-small` | `binding-llm-small-e2e` |
-| Embeddings (1024-dim, matches `vector(1024)` columns) | Qwen/Qwen3-Embedding-0.6B (T4) | T4 | `binding-embeddings` | `binding-embeddings-e2e` |
+| Job | Model | GPU | App |
+|---|---|---|---|
+| Redaction, fit summaries, extraction, refinement | Qwen/Qwen3-1.7B (vLLM, T4) | T4 | `binding-llm` |
+| Credentials generalization | Qwen/Qwen3-0.6B (vLLM, T4) | T4 | `binding-llm-small` |
+| Embeddings (1024-dim, matches `vector(1024)` columns) | Qwen/Qwen3-Embedding-0.6B (T4) | T4 | `binding-embeddings` |
 
-The split exists so each model can be sized / fine-tuned independently.
 Redaction runs on the 1.7B because the 0.6B returned resumes near-verbatim
 (weak date/school/scale generalization) — the founder-resume test needs better
 redaction quality. Credentials generalization runs on the cheap 0.6B: it is a
 short summarization with a deterministic floor fallback
 (`src/lib/credentials.ts`), so a weak model can never leak a specific.
 
-The E2E apps keep `scaledown_window=3600` so long CI suites (which run
-serially across ~40 minutes) never re-cold-start mid-run. Production stays at
-120s. `modal.ts` routes CI traffic to the E2E apps via the `e2e_modal=1`
-cookie; human QA on staging hits production Modal.
+There are **no separate E2E Modal apps**. The E2E suite runs in parallel
+(`workers: 4`, ~10 min vs ~40 min serial), so the production apps' 120s
+scaledown keeps containers warm naturally across the run — every worker hits
+Modal every few seconds, so no endpoint idles long enough to cool down. CI
+warms the endpoints once before the suite (curl + Playwright globalSetup), then
+parallel test calls keep them up.
 
 Model choices re-verified against mid-2026 leaderboards (MEMORY.md entry);
 re-check before major version bumps, not just at design time.
@@ -51,15 +51,10 @@ modal secret create binding-api-token MODAL_API_TOKEN=<generate a long random st
 modal deploy modal_app/llm-small.py
 modal deploy modal_app/llm.py
 modal deploy modal_app/embeddings.py
-# E2E variants (scaledown 3600s) — deployed by CI; optional to run by hand:
-MODAL_E2E=1 modal deploy modal_app/llm-small.py
-MODAL_E2E=1 modal deploy modal_app/llm.py
-MODAL_E2E=1 modal deploy modal_app/embeddings.py
 ```
 
 Copy the printed endpoint URLs plus the token into the Next.js env
-(`.env.local` / Vercel environment variables). The production URLs go in the
-`MODAL_*_URL` vars; the E2E URLs go in the `E2E_MODAL_*_URL` vars:
+(`.env.local` / Vercel environment variables):
 
 ```
 AI_PROVIDER=modal
@@ -70,26 +65,18 @@ MODAL_SUMMARY_URL=...        # binding-llm            /fit-summary
 MODAL_REFINE_URL=...         # binding-llm            /refine (profile/jd/career)
 MODAL_EMBED_URL=...          # binding-embeddings     /embed
 MODAL_API_TOKEN=...
-E2E_MODAL_REDACT_URL=...     # binding-llm-e2e        (CI only)
-E2E_MODAL_CREDENTIALS_URL=...
-E2E_MODAL_EXTRACT_URL=...
-E2E_MODAL_SUMMARY_URL=...
-E2E_MODAL_REFINE_URL=...
-E2E_MODAL_EMBED_URL=...
 ```
 
 ## Credit-budget guardrails ($30/mo Starter credit)
 
-- All apps **scale to zero**; idle cost is zero. Production at 120s, E2E at
-  3600s (CI-only, so the long window never touches real traffic).
+- All apps **scale to zero** (`scaledown_window=120`); idle cost is zero.
 - Cold start is tens of seconds (up to ~100s on T4) — acceptable for
   publish/reveal flows, which are explicit user actions, not hot paths.
 - One AI pass per **explicit publish** (profile or job), never per keystroke —
   enforced app-side.
-- The E2E apps are only active during CI runs (nightly ~40 min + post-merge
-  smoke ~10 min), so their idle cost is near-zero. The keep-warm ping loops
-  were retired when the E2E apps' 3600s scaledown made them unnecessary —
-  CI no longer burns GPU time keeping production containers alive.
+- The CI keep-warm ping loops were retired. E2E runs in parallel (~10 min) so
+  the 120s scaledown keeps production containers warm naturally — CI no longer
+  burns GPU time keeping containers alive, and there are no E2E variant apps.
 - Check the Modal usage dashboard **weekly** during beta. If burn trends past
   ~$25/mo: batch embeds, cap refine calls per user per day, or drop an
   operation to a smaller model variant.

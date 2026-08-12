@@ -71,8 +71,6 @@ jobs:
       # working-directory: modal_app with modal_app/… paths resolved to
       # modal_app/modal_app/… and would fail whenever this job triggered.
       #
-      # Deploys BOTH endpoint sets from the same three source files: MODAL_E2E
-      # flips the app name (binding-*-e2e) and scaledown_window (3600s for CI).
       # set -euo pipefail makes a failed deploy fail the job loudly instead of
       # silently promoting a broken app to staging.
       - name: Deploy Modal apps
@@ -82,9 +80,6 @@ jobs:
           modal deploy modal_app/llm-small.py
           modal deploy modal_app/llm.py
           modal deploy modal_app/embeddings.py
-          MODAL_E2E=1 modal deploy modal_app/llm-small.py
-          MODAL_E2E=1 modal deploy modal_app/llm.py
-          MODAL_E2E=1 modal deploy modal_app/embeddings.py
 
   # Post-merge smoke: nothing previously ran against staging between a merge
   # landing and the 3am nightly (e2e-staging.yml), so a broken merge could sit
@@ -111,11 +106,12 @@ jobs:
 
       - run: pnpm exec playwright install --with-deps chromium
 
-      # The E2E Modal apps (binding-*-e2e) have scaledown_window=3600, so the
-      # whole smoke run stays warm WITHOUT a keep-warm ping loop. This step
-      # reads their URLs (stored as plain-text Vercel vars by deploy-modal.yml)
-      # so the warm-up + test steps below use env vars, never hardcoded URLs.
-      - name: Fetch E2E Modal URLs from Vercel
+      # The production Modal apps (scaledown 120s) stay warm naturally during
+      # the smoke run because it makes its Modal calls within 120s of the
+      # warm-up. This step reads their URLs (stored as plain-text Vercel vars
+      # by deploy-modal.yml) so the warm-up + test steps below use env vars,
+      # never hardcoded URLs.
+      - name: Fetch Modal URLs from Vercel
         env:
           VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -125,17 +121,16 @@ jobs:
           ALL=$(curl -s "https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}" \
             -H "Authorization: Bearer ${VERCEL_API_TOKEN}")
           for name in MODAL_REDACT_URL MODAL_CREDENTIALS_URL MODAL_SUMMARY_URL MODAL_REFINE_URL MODAL_EMBED_URL MODAL_EXTRACT_URL; do
-            e2e_key="E2E_${name}"
             value=$(echo "$ALL" | python3 -c "
 import sys, json
 envs = json.load(sys.stdin).get('envs', [])
-m = next((e for e in envs if e['key'] == '$e2e_key'), None)
+m = next((e for e in envs if e['key'] == '$name'), None)
 print(m['value'] if m else '')
 ")
             if [ -n "$value" ]; then
               echo "${name}=${value}" >> "$GITHUB_ENV"
             else
-              echo "::warning::$e2e_key not found in Vercel env — tests will fail on Modal calls"
+              echo "::warning::$name not found in Vercel env — tests will fail on Modal calls"
             fi
           done
 
@@ -180,10 +175,6 @@ print(m['value'] if m else '')
           MODAL_REFINE_URL: ${{ env.MODAL_REFINE_URL }}
           MODAL_EMBED_URL: ${{ env.MODAL_EMBED_URL }}
           MODAL_EXTRACT_URL: ${{ env.MODAL_EXTRACT_URL }}
-          # Route this run's Modal calls to the E2E apps: the cookie set by
-          # stagingContext() (when E2E_MODAL=1) makes modal.ts pick the
-          # E2E_ prefixed Vercel vars server-side.
-          E2E_MODAL: '1'
           E2E_WARM_MODAL: '1'
           # Shared never-reset staging DB accumulates identical-embedding
           # seekers that crowd fresh ones out of match_candidates' top-20;

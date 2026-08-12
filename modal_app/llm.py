@@ -14,9 +14,6 @@ Endpoints (POST, JSON, Bearer auth via MODAL_API_TOKEN secret):
   /extract      {"text": ...}                          -> {"skills":[], "roles":[], "industries":[], "experience":[]}
 
 Deploy: modal deploy modal_app/llm.py
-Deploy E2E variant: MODAL_E2E=1 modal deploy modal_app/llm.py
-  - MODAL_E2E controls the app name (binding-llm-e2e) and scaledown
-    (3600s for CI, vs 120s for production) so long CI runs never re-cold-start.
 Budget: scale-to-zero; T4 handles Qwen3-1.7B comfortably. At MVP volume
 (hundreds of calls/day) this stays comfortably inside the $30/mo Starter
 credit. Watch the Modal dashboard weekly; see modal_app/README.md.
@@ -36,11 +33,7 @@ from fastapi import Header, HTTPException
 # app. Matching quality is unaffected (separate Qwen3-Embedding).
 MODEL_ID = "Qwen/Qwen3-1.7B"
 
-IS_E2E = os.environ.get("MODAL_E2E", "0") == "1"
-APP_NAME = "binding-llm-e2e" if IS_E2E else "binding-llm"
-SCALEDOWN_WINDOW = 3600 if IS_E2E else 120
-
-app = modal.App(APP_NAME)
+app = modal.App("binding-llm")
 
 
 def _download_model():
@@ -120,7 +113,7 @@ personal contact details, or other identifying information. /no_think"""
 @app.cls(
     image=image,
     gpu="T4",
-    scaledown_window=SCALEDOWN_WINDOW,  # 120s prod / 3600s e2e — credit guardrail
+    scaledown_window=120,  # scale to zero quickly — credit guardrail
     # APAC region pin (DESIGN.md §5/§12, 2026-07-28): raw resume text is
     # redacted here, so processing runs in-region rather than Modal's
     # implicit US default (~1.5x broad-region price multiplier accepted).

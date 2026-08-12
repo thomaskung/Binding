@@ -3,7 +3,12 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-export const TEST_RUN_ID = Date.now().toString(36);
+// Unique per WORKER (pid + module-load time), not just per run: the suite runs
+// in parallel (`workers: 4`), and each worker is a separate process that sets
+// its own TEST_RUN_ID at module load. Without the pid, two workers starting in
+// the same millisecond would collide on email/label namespaces. With it, labels
+// and test-user emails are guaranteed unique across the whole parallel run.
+export const TEST_RUN_ID = `${Date.now().toString(36)}-${process.pid.toString(36)}`;
 const PASSWORD = "J0B!Demo#2026$secure";
 
 let _labelCounter = 0;
@@ -281,17 +286,5 @@ export async function stagingContext(browser: Browser) {
     },
     extraHTTPHeaders: headers,
   });
-
-  // When E2E_MODAL=1 the suite drives the E2E Modal apps (binding-*-e2e,
-  // scaledown 3600s). The e2e_modal cookie makes modal.ts (server-side) pick
-  // the E2E_ prefixed Vercel env vars, so every Modal call in this context
-  // routes to the CI-only apps. Human QA on staging sends no cookie and hits
-  // production Modal. The cookie must be set on the context before any page
-  // is opened (domain/path match every Vercel staging request).
-  if (env("E2E_MODAL") === "1") {
-    await ctx.addCookies([
-      { name: "e2e_modal", value: "1", domain: new URL(env("E2E_BASE_URL", "https://binding-staging.vercel.app")).hostname, path: "/" },
-    ]);
-  }
   return ctx;
 }

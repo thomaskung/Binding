@@ -4,18 +4,15 @@ name: Deploy Modal (on-demand)
 # Uses the MODAL_TOKEN_ID/SECRET already stored as GitHub Actions secrets — the
 # credentials never leave CI. After deploy, writes the resolved endpoint URLs
 # into the Vercel staging project env (AI_PROVIDER=modal + the six MODAL_*_URL
-# vars + the six E2E_MODAL_*_URL vars + MODAL_API_TOKEN) via the Vercel API so
-# the deployed app immediately talks to the fresh endpoints. See
-# src/lib/ai/modal.ts for the env-var contract.
+# vars + MODAL_API_TOKEN) via the Vercel API so the deployed app immediately
+# talks to the fresh endpoints. See src/lib/ai/modal.ts for the env-var
+# contract.
 #
-# Two endpoint sets, deployed from the same three source files with MODAL_E2E
-# controlling the app name + scaledown_window:
-#   - production (MODAL_E2E unset): binding-llm-small / binding-llm /
-#     binding-embeddings, scaledown 120s
-#   - e2e (MODAL_E2E=1): binding-llm-small-e2e / binding-llm-e2e /
-#     binding-embeddings-e2e, scaledown 3600s — kept warm across long CI runs.
-# The E2E URLs are stored as plain-text Vercel vars so CI workflows can READ
-# them back and point their warm-up curls / global-setup at the e2e apps.
+# Three production apps (all scaledown_window=120s). No separate E2E apps: the
+# E2E suite runs in parallel (~10 min), so the production apps' 120s scaledown
+# keeps containers warm naturally across the run. The MODAL_*_URL vars are
+# stored as PLAIN Vercel vars so CI workflows can READ them back and warm the
+# endpoints before a test run (the URLs are bearer-token-gated, not secret).
 
 on:
   workflow_dispatch:
@@ -49,17 +46,11 @@ jobs:
           modal app stop binding-embeddings -e main 2>/dev/null || true
           modal app stop binding-llm -e main 2>/dev/null || true
           modal app stop binding-llm-small -e main 2>/dev/null || true
-          modal app stop binding-embeddings-e2e -e main 2>/dev/null || true
-          modal app stop binding-llm-e2e -e main 2>/dev/null || true
-          modal app stop binding-llm-small-e2e -e main 2>/dev/null || true
           sleep 5
 
           modal deploy modal_app/llm-small.py -e main 2>&1 | tee llm-small.log
           modal deploy modal_app/llm.py -e main 2>&1 | tee llm.log
           modal deploy modal_app/embeddings.py -e main 2>&1 | tee embed.log
-          MODAL_E2E=1 modal deploy modal_app/llm-small.py -e main 2>&1 | tee llm-small-e2e.log
-          MODAL_E2E=1 modal deploy modal_app/llm.py -e main 2>&1 | tee llm-e2e.log
-          MODAL_E2E=1 modal deploy modal_app/embeddings.py -e main 2>&1 | tee embed-e2e.log
 
           # CI-side auth test: CI holds the same GH secret that baked the Modal
           # secret, so this MUST be 200 once propagated — proves the endpoint
@@ -100,16 +91,9 @@ jobs:
           map_url "fit-summary" MODAL_SUMMARY_URL      llm.log
           map_url "refine"      MODAL_REFINE_URL       llm.log
           map_url "embed"       MODAL_EMBED_URL        embed.log
-          map_url "redact"      E2E_MODAL_REDACT_URL       llm-e2e.log
-          map_url "refine"      E2E_MODAL_CREDENTIALS_URL  llm-small-e2e.log
-          map_url "extract"     E2E_MODAL_EXTRACT_URL      llm-e2e.log
-          map_url "fit-summary" E2E_MODAL_SUMMARY_URL      llm-e2e.log
-          map_url "refine"      E2E_MODAL_REFINE_URL       llm-e2e.log
-          map_url "embed"       E2E_MODAL_EMBED_URL        embed-e2e.log
 
           for name in \
-            MODAL_REDACT_URL MODAL_CREDENTIALS_URL MODAL_EXTRACT_URL MODAL_SUMMARY_URL MODAL_REFINE_URL MODAL_EMBED_URL \
-            E2E_MODAL_REDACT_URL E2E_MODAL_CREDENTIALS_URL E2E_MODAL_EXTRACT_URL E2E_MODAL_SUMMARY_URL E2E_MODAL_REFINE_URL E2E_MODAL_EMBED_URL; do
+            MODAL_REDACT_URL MODAL_CREDENTIALS_URL MODAL_EXTRACT_URL MODAL_SUMMARY_URL MODAL_REFINE_URL MODAL_EMBED_URL; do
             echo "$name=${!name}" >> "$GITHUB_STEP_SUMMARY"
           done
           echo '```' >> "$GITHUB_STEP_SUMMARY"
@@ -118,11 +102,11 @@ jobs:
         run: |
           set -euo pipefail
           # idempotent upsert per var: delete any existing value, then create.
-          # Production MODAL_*_URL vars are encrypted; the E2E_MODAL_*_URL vars
-          # are PLAIN so CI workflows can read them back to warm the e2e apps.
-          # MODAL_API_TOKEN stays encrypted and comes from the GH secret.
-          for name in AI_PROVIDER MODAL_EMBED_URL MODAL_REDACT_URL MODAL_CREDENTIALS_URL MODAL_SUMMARY_URL MODAL_REFINE_URL MODAL_EXTRACT_URL \
-            E2E_MODAL_EMBED_URL E2E_MODAL_REDACT_URL E2E_MODAL_CREDENTIALS_URL E2E_MODAL_SUMMARY_URL E2E_MODAL_REFINE_URL E2E_MODAL_EXTRACT_URL MODAL_API_TOKEN; do
+          # MODAL_*_URL vars are PLAIN so CI workflows can read them back to
+          # warm the endpoints before a test run (the URLs are bearer-token
+          # gated, not secret). MODAL_API_TOKEN stays encrypted (from the GH
+          # secret) and AI_PROVIDER is a fixed value.
+          for name in AI_PROVIDER MODAL_EMBED_URL MODAL_REDACT_URL MODAL_CREDENTIALS_URL MODAL_SUMMARY_URL MODAL_REFINE_URL MODAL_EXTRACT_URL MODAL_API_TOKEN; do
             case "$name" in
               AI_PROVIDER)        value="modal" ;;
               MODAL_API_TOKEN)    value="${{ secrets.MODAL_API_TOKEN }}" ;;
@@ -130,7 +114,7 @@ jobs:
             esac
             vtype="encrypted"
             case "$name" in
-              E2E_*) vtype="plain" ;;
+              MODAL_EMBED_URL|MODAL_REDACT_URL|MODAL_CREDENTIALS_URL|MODAL_SUMMARY_URL|MODAL_REFINE_URL|MODAL_EXTRACT_URL) vtype="plain" ;;
             esac
             echo "Upserting $name (len=${#value}, type=$vtype)"
 

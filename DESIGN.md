@@ -353,10 +353,9 @@ sections above remain the target architecture.
   **Qwen3-Embedding-0.6B** (1024-dim embeddings, the matching path). A
   deterministic **stub provider** is the dev/CI default (`AI_PROVIDER=stub`) —
   zero network, zero cost, fully testable slice; `modal` is live on staging
-  (2026-08-04). Each Modal source file deploys BOTH a production app
-  (`scaledown_window=120`) and an E2E app (`scaledown_window=3600`, CI-only)
-  via the `MODAL_E2E` env var; `modal.ts` routes CI traffic to the E2E apps via
-  the `e2e_modal=1` cookie. See `modal_app/README.md`.
+  (2026-08-04). Three production apps, all `scaledown_window=120s`; no separate
+  E2E apps — the E2E suite runs in parallel (~10 min), so the 120s scaledown
+  keeps containers warm naturally. See `modal_app/README.md`.
   - **Generation model was Qwen3-8B-AWQ** — downsized to 1.7B (2026-08-04):
     the 8B couldn't load within Modal's ~151s sync web-endpoint window on an
     L4 (every cold call 303'd), and its vllm V1 engine crashed on startup
@@ -372,11 +371,12 @@ sections above remain the target architecture.
     **redaction moved back to the 1.7B** while only credentials generalization
     (a short summarization with a deterministic floor fallback,
     `src/lib/credentials.ts`) stays on the 0.6B. Both generation apps run on
-    T4 (moved from L4). The CI keep-warm loops were retired: E2E apps' 3600s
-    scaledown keeps them warm across suites without burning GPU time keeping
-    production containers alive. vLLM is pinned `vllm==0.10.2` +
-    `transformers<5` (V0 engine only — see `modal_app/README.md` for why
-    looser pins break on T4).
+    T4 (moved from L4). The CI keep-warm ping loops were retired: the E2E suite
+    runs in parallel (~10 min), so the 120s scaledown keeps production
+    containers warm naturally across the run — CI no longer burns GPU time
+    keeping containers alive, and there are no E2E variant apps. vLLM is pinned
+    `vllm==0.10.2` + `transformers<5` (V0 engine only — see
+    `modal_app/README.md` for why looser pins break on T4).
   - **Endpoint auth** reads the `Authorization` header via FastAPI
     `Header(...)` — a bare `str = ""` param binds as a *query* parameter, so
     header-based Bearer auth silently 401s (fixed 2026-08-04). `modal_app/`

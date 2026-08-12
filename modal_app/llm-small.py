@@ -13,9 +13,6 @@ Endpoint (POST, JSON, Bearer auth via MODAL_API_TOKEN secret):
            kind != "credentials" -> 400 (this app only handles credentials)
 
 Deploy: modal deploy modal_app/llm-small.py
-Deploy E2E variant: MODAL_E2E=1 modal deploy modal_app/llm-small.py
-  - MODAL_E2E controls the app name (binding-llm-small-e2e) and scaledown
-    (3600s for CI, vs 120s for production) so long CI runs never re-cold-start.
 """
 
 import os
@@ -25,11 +22,7 @@ from fastapi import Header, HTTPException
 
 MODEL_ID = "Qwen/Qwen3-0.6B"
 
-IS_E2E = os.environ.get("MODAL_E2E", "0") == "1"
-APP_NAME = "binding-llm-small-e2e" if IS_E2E else "binding-llm-small"
-SCALEDOWN_WINDOW = 3600 if IS_E2E else 120
-
-app = modal.App(APP_NAME)
+app = modal.App("binding-llm-small")
 
 
 def _download_model():
@@ -74,7 +67,7 @@ cloud-certified · industry award winner" /no_think"""
 @app.cls(
     image=image,
     gpu="T4",
-    scaledown_window=SCALEDOWN_WINDOW,
+    scaledown_window=120,
     # APAC region pin (DESIGN.md §5/§12, 2026-07-28): raw resume text is
     # redacted here, so processing runs in-region rather than Modal's
     # implicit US default (~1.5x broad-region price multiplier accepted).
