@@ -22,14 +22,17 @@ import { aiCounterFile } from "./staging-helpers";
 // `fit_summary` reads `body["candidate"]`/`body["job"]` with no fallback —
 // sending it the generic shape throws an unhandled KeyError server-side
 // (HTTP 500) on every single warm-up attempt (see e2e-staging.yml).
-const TEXT_ENDPOINTS: Array<{ varName: string; body: Record<string, string> }> = [
+// One endpoint per app: redact/refine/extract/fit-summary all live on
+// binding-llm (same container + model load), so warming redact warms all four.
+// Warming all 6 would fire 4 concurrent requests at one cold app and risk
+// Modal scale-out. Credentials stays because it's the only place that endpoint
+// is exercised in CI (no test profile sets credentials).
+const WARM_ENDPOINTS: Array<{ varName: string; body: Record<string, string> }> = [
   { varName: "MODAL_EMBED_URL", body: { text: "warmup" } },
   { varName: "MODAL_REDACT_URL", body: { text: "warmup" } },
   // credentials endpoint requires kind:"credentials" — anything else is a 400
   // (its fail-loud guard). Include the kind so the warm-up is a clean 200.
   { varName: "MODAL_CREDENTIALS_URL", body: { text: "warmup", kind: "credentials" } },
-  { varName: "MODAL_REFINE_URL", body: { text: "warmup" } },
-  { varName: "MODAL_EXTRACT_URL", body: { text: "warmup" } },
 ];
 
 function endpointFor(varName: string, body: Record<string, string>): { url: string; body: Record<string, string> } {
@@ -71,11 +74,10 @@ export default async function globalSetup(): Promise<void> {
   fs.rmSync(file, { force: true });
 
   if (process.env.E2E_WARM_MODAL === "1") {
-    for (const { varName, body } of TEXT_ENDPOINTS) {
-      await warmEndpoint(endpointFor(varName, body).url, body);
-    }
-    // fit-summary needs the candidate/job shape.
-    const summary = endpointFor("MODAL_SUMMARY_URL", { candidate: "warmup", job: "warmup" });
-    await warmEndpoint(summary.url, summary.body);
+    // Warm all endpoints CONCURRENTLY: 3 cold starts in ~3 min instead of ~7
+    // serial, and no skew (the first-warmed container can't cool while the rest
+    // are still warming — that skew caused the smoke cold-start race).
+    const endpoints = WARM_ENDPOINTS.map(({ varName, body }) => endpointFor(varName, body));
+    await Promise.all(endpoints.map(({ url, body }) => warmEndpoint(url, body)));
   }
 }
