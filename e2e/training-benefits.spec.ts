@@ -29,7 +29,7 @@ import { ensureStagingUser, signIn, stagingAdminClient, stagingContext } from ".
  * `resumeText`, so `completeSeekerOnboarding` makes no AI call) and
  * `completeTrainingProgram` (src/app/(app)/training/actions.ts) makes no AI
  * call either — confirmed by reading that action. This spec doesn't need
- * `countAiCall`/`assertAiCallBudget`.
+ * `countAiCall`.
  */
 
 test("complete a training program, then see the Benefits signal move", async ({ browser }) => {
