@@ -274,6 +274,15 @@ export async function fetchFileText(
       headers: { authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) throw new Error(`Drive file download failed: ${res.status}`);
+    // Check Content-Length before buffering the body — without this, a
+    // large file gets fully read into memory in a serverless function
+    // before the size check below ever runs, which is exactly what the
+    // check is supposed to prevent. Falls back to the post-read check only
+    // if Google omits the header (uncommon, but not guaranteed).
+    const contentLength = res.headers.get("content-length");
+    if (contentLength && Number(contentLength) > MAX_DRIVE_FILE_BYTES) {
+      throw new Error("Drive PDF too large (max 5MB)");
+    }
     const buffer = new Uint8Array(await res.arrayBuffer());
     if (buffer.byteLength > MAX_DRIVE_FILE_BYTES) {
       throw new Error("Drive PDF too large (max 5MB)");

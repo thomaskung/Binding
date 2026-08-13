@@ -30,6 +30,19 @@ export async function POST(request: Request) {
   }
 
   const admin = createSupabaseAdminClient();
+  // Defense in depth — see the matching check in files/route.ts's comment:
+  // withdrawing consent deletes the connected_accounts row, but this checks
+  // the consent flag itself too so a stray row can't keep this endpoint
+  // extracting real Drive file text after consent was withdrawn.
+  const { data: consent } = await admin
+    .from("consent_flags")
+    .select("connected_accounts_opt_in_at")
+    .eq("profile_id", session.userId)
+    .maybeSingle();
+  if (!consent?.connected_accounts_opt_in_at) {
+    return NextResponse.json({ error: "Google Drive is not connected" }, { status: 404 });
+  }
+
   const { data: account } = await admin
     .from("connected_accounts")
     .select("access_token, refresh_token, expires_at")

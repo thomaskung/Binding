@@ -139,3 +139,83 @@ test("Drive connected: resume canvas lists recent files from a stubbed Drive API
 
   await ctx.close();
 });
+
+test("withdrawing consent actually revokes the connection, not just hides the UI", async ({
+  browser,
+}) => {
+  test.setTimeout(180_000);
+  const ctx = await stagingContext(browser);
+  const page = await ctx.newPage();
+
+  const seeker = await ensureStagingUser("seeker");
+  if (!seeker.id) {
+    throw new Error(`ensureStagingUser returned no id for ${seeker.email} — unexpected email collision`);
+  }
+  await signIn(page, seeker.email);
+  await completeSeekerOnboarding(page, { name: uniqueLabel("Quinn Quitter") });
+
+  const admin = stagingAdminClient();
+  await admin.from("connected_accounts").insert({
+    profile_id: seeker.id,
+    provider: "google_drive",
+    access_token: "e2e-fake-access-token",
+    refresh_token: "e2e-fake-refresh-token",
+    expires_at: new Date(Date.now() + 3600_000).toISOString(),
+    scope: "https://www.googleapis.com/auth/drive.readonly",
+  });
+  // Grant consent directly too (this test is about revocation, not the
+  // connect flow the first two tests already cover) — the toggle needs to
+  // start "on" for the toggle-off below to be a real state change.
+  const { error: consentSeedError } = await admin.from("consent_flags").upsert({
+    profile_id: seeker.id,
+    connected_accounts_opt_in_at: new Date().toISOString(),
+    connected_accounts_consent_version: "e2e-seed",
+  });
+  if (consentSeedError) throw new Error(`consent seed failed: ${consentSeedError.message}`);
+
+  await page.goto("/seeker/profile");
+  const toggle = page.getByTestId("connected-accounts-toggle");
+  await expect(toggle).toBeVisible({ timeout: 30_000 });
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
+
+  // Prove the server-side write actually happened (not just optimistic
+  // client state) the same way the first test proves a grant: reload and
+  // re-check a value that only a fresh server read can produce. A reload
+  // is a real navigation, so by the time it completes the earlier action
+  // request has necessarily already reached and been processed by the
+  // server (Next.js server actions run to completion server-side once
+  // received, independent of what the client does next).
+  await page.reload();
+  await expect(page.getByTestId("connected-accounts-toggle")).toHaveAttribute(
+    "aria-checked",
+    "false",
+    { timeout: 15_000 },
+  );
+
+  const { data: rowAfter } = await admin
+    .from("connected_accounts")
+    .select("id")
+    .eq("profile_id", seeker.id)
+    .eq("provider", "google_drive")
+    .maybeSingle();
+  expect(rowAfter).toBeNull();
+
+  await page.goto("/seeker/profile/resume");
+  await expect(page.getByTestId("drive-connect-hint")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("browse-google-drive")).toHaveCount(0);
+
+  // The real endpoint itself is blocked now, not just the UI — a real
+  // fetch (no page.route stub) against files/route.ts's actual consent+row
+  // checks, using the same browser context so the session cookie rides
+  // along. 404 because both the consent flag and the connected_accounts
+  // row are gone.
+  const filesResponse = await page.request.fetch(
+    new URL("/api/connected-accounts/google-drive/files", page.url()).toString(),
+  );
+  expect(filesResponse.status()).toBe(404);
+
+  await ctx.close();
+});

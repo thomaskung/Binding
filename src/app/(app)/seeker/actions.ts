@@ -441,7 +441,25 @@ export async function updateConnectedAccountsConsent(optIn: boolean) {
     connected_accounts_consent_version: optIn ? CONNECTED_ACCOUNTS_CONSENT_VERSION : null,
   });
   if (error) throw new Error(`connected-accounts consent update failed: ${error.message}`);
+
+  if (!optIn) {
+    // "Revocable any time" (the toggle's own copy) means actually
+    // disconnecting, not leaving a live token sitting unused — delete the
+    // connected_accounts row (admin client: that table has no authenticated
+    // RLS policy, migration 0026) so a re-connect requires going through
+    // OAuth again, the same as a first-time connection. This is also what
+    // stops /api/connected-accounts/google-drive/{files,import} from
+    // continuing to serve real Drive data after consent is withdrawn.
+    const admin = createSupabaseAdminClient();
+    await admin
+      .from("connected_accounts")
+      .delete()
+      .eq("profile_id", session.userId)
+      .eq("provider", "google_drive");
+  }
+
   revalidatePath("/seeker/profile");
+  revalidatePath("/seeker/profile/resume");
 }
 
 /** Candidate responds to a pending override reveal. Identity was already
