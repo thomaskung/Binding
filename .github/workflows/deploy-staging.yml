@@ -57,15 +57,42 @@ jobs:
 
   modal:
     runs-on: ubuntu-latest
-    if: contains(join(github.event.commits.*.modified, ','), 'modal_app/') || contains(join(github.event.commits.*.added, ','), 'modal_app/')
+    # No job-level `if:` on github.event.commits.*.modified — that payload is
+    # unreliable on MERGE commits (the merged files are often absent), so Modal
+    # changes silently skipped deploying. Detect the change with a real
+    # before..after git diff instead (needs fetch-depth: 0).
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect modal_app changes
+        id: changed
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # manual trigger always implies intent to deploy
+            changed="true"
+          elif [[ -n "${{ github.event.before }}" && "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
+            if git diff --name-only "${{ github.event.before }}" "${{ github.event.after }}" -- modal_app/ | grep -q .; then
+              changed="true"
+            else
+              changed="false"
+            fi
+          else
+            # first push / unknown ref — deploy to be safe
+            changed="true"
+          fi
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+          echo "modal_app changed: $changed"
 
       - uses: actions/setup-python@v5
+        if: steps.changed.outputs.changed == 'true'
         with:
           python-version: "3.12"
 
       - run: pip install modal
+        if: steps.changed.outputs.changed == 'true'
 
       # No working-directory: paths are repo-relative — combining
       # working-directory: modal_app with modal_app/… paths resolved to
@@ -74,6 +101,7 @@ jobs:
       # set -euo pipefail makes a failed deploy fail the job loudly instead of
       # silently promoting a broken app to staging.
       - name: Deploy Modal apps
+        if: steps.changed.outputs.changed == 'true'
         run: |
           set -euo pipefail
           modal token set --token-id "${{ secrets.MODAL_TOKEN_ID }}" --token-secret "${{ secrets.MODAL_TOKEN_SECRET }}"

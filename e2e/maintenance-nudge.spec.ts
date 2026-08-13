@@ -34,7 +34,7 @@ import {
  * `requestMaintenanceDraft`'s `ai.draftMaintenanceUpdate` (1, counted here),
  * and `acceptMaintenanceUpdate`'s republish, which calls `publishProfile` a
  * second time — `ai.redact` + `ai.embed` again (2, counted here). Report 5
- * to the orchestrator against AI_CALL_BUDGET.
+ * to the orchestrator against the CI-enforced budget.
  */
 
 test("stale profile nudges, and approving the draft clears staleness", async ({ browser }) => {

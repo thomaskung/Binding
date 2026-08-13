@@ -67,7 +67,7 @@ cloud-certified · industry award winner" /no_think"""
 @app.cls(
     image=image,
     gpu="T4",
-    scaledown_window=300,  # survive warm-up->first-call gap (see llm.py note)
+    scaledown_window=300,  # warm-up now parallel; 300s is sufficient (see llm.py note)
     # APAC region pin (DESIGN.md §5/§12, 2026-07-28): raw resume text is
     # redacted here, so processing runs in-region rather than Modal's
     # implicit US default (~1.5x broad-region price multiplier accepted).
