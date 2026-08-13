@@ -47,9 +47,22 @@ describe("get_my_access_log() migration — SQL-level security boundary", () => 
     // documented as an app-side concern. Two CASE blocks expected: one for
     // accessor_id, one for recruiter_display_name.
     const gateClause =
-      /case\s+when caller\.seeker_tier = 'pro' and not coalesce\(accessor\.hide_name_on_reveal, false\)/g;
+      /case\s+when coalesce\(caller\.seeker_tier, 'free'\) = 'pro' and not coalesce\(accessor\.hide_name_on_reveal, false\)/g;
     const matches = sql.match(gateClause) ?? [];
     expect(matches.length).toBe(2);
+  });
+
+  it("uses LEFT joins for accessor/caller — a join miss must never silently drop a real log row", () => {
+    expect(sql).toMatch(/left join profiles accessor on accessor\.id = log\.accessor_id/);
+    expect(sql).toMatch(/left join profiles caller on caller\.id = auth\.uid\(\)/);
+    // Every "join profiles accessor"/"join profiles caller" occurrence must be
+    // a LEFT join — an inner join anywhere here reintroduces the row-drop risk.
+    const joinAccessor = sql.match(/join profiles accessor/g) ?? [];
+    const leftJoinAccessor = sql.match(/left join profiles accessor/g) ?? [];
+    expect(joinAccessor.length).toBe(leftJoinAccessor.length);
+    const joinCaller = sql.match(/join profiles caller/g) ?? [];
+    const leftJoinCaller = sql.match(/left join profiles caller/g) ?? [];
+    expect(joinCaller.length).toBe(leftJoinCaller.length);
   });
 
   it("does not add a new table (only alters profiles + creates the function)", () => {

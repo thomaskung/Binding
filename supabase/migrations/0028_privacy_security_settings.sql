@@ -74,6 +74,14 @@ alter table profiles
 --   - `company_name` is always returned ungated: the company is already
 --     visible on the job posting pre-reveal, so this is not a new
 --     disclosure (§14j).
+--   - Both joins are LEFT, not INNER (defense in depth, per an advisor
+--     review catch): `pii_access_log.accessor_role` also allows "support"/
+--     "ta_service" (src/lib/pii-audit.ts) for a future break-glass path whose
+--     accessor_id might not always be a `profiles` row, and `caller` should
+--     never be able to make a real log row silently vanish just because its
+--     own profile lookup fails for some unforeseen reason. An accountability
+--     ledger that drops rows on a join miss is worse than one that shows them
+--     ungated-safe defaults — an inner join here would fail exactly that way.
 -- ---------------------------------------------------------------------------
 create or replace function get_my_access_log()
 returns table (
@@ -96,18 +104,18 @@ as $$
     log.action,
     accessor.company_name,
     case
-      when caller.seeker_tier = 'pro' and not coalesce(accessor.hide_name_on_reveal, false)
+      when coalesce(caller.seeker_tier, 'free') = 'pro' and not coalesce(accessor.hide_name_on_reveal, false)
         then accessor.id
       else null
     end as accessor_id,
     case
-      when caller.seeker_tier = 'pro' and not coalesce(accessor.hide_name_on_reveal, false)
+      when coalesce(caller.seeker_tier, 'free') = 'pro' and not coalesce(accessor.hide_name_on_reveal, false)
         then accessor.display_name
       else null
     end as recruiter_display_name
   from pii_access_log log
-  join profiles accessor on accessor.id = log.accessor_id
-  join profiles caller on caller.id = auth.uid()
+  left join profiles accessor on accessor.id = log.accessor_id
+  left join profiles caller on caller.id = auth.uid()
   where log.subject_id = auth.uid()
   order by log.created_at desc;
 $$;
