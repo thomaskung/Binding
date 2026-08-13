@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { parseCommaList, parseLineList, relativeDayLabel, salaryDisplay } from "@/lib/jobs";
+import {
+  coarseSalaryBounds,
+  parseCommaList,
+  parseLineList,
+  relativeDayLabel,
+  salaryDisplay,
+} from "@/lib/jobs";
 
 describe("parseCommaList", () => {
   it("splits, trims, and drops blanks", () => {
@@ -57,9 +63,24 @@ describe("salaryDisplay", () => {
       expect(salaryDisplay(500000, 650000, "band")).toBe("$500k – $660k");
     });
 
-    it("the 0024 (0, 0) null-backfill sentinel: still renders a valid two-sided band, never a bare $0", () => {
-      expect(salaryDisplay(0, 0, "band")).toBe("$0k – $20k");
+    it("the 0024 (0, 0) null-backfill sentinel: falls back to 'Salary on request' rather than a fake $0k-ish band", () => {
+      expect(salaryDisplay(0, 0, "band")).toBe("Salary on request");
     });
+  });
+});
+
+describe("coarseSalaryBounds", () => {
+  it("rounds off-boundary bounds out to the enclosing bucket", () => {
+    expect(coarseSalaryBounds(182000, 205000)).toEqual({ lo: 180000, hi: 220000 });
+  });
+
+  it("is idempotent: re-bucketing already-bucketed bounds returns them unchanged", () => {
+    const first = coarseSalaryBounds(182000, 205000)!;
+    expect(coarseSalaryBounds(first.lo, first.hi)).toEqual(first);
+  });
+
+  it("returns null for the 0024 (0, 0) null-backfill sentinel", () => {
+    expect(coarseSalaryBounds(0, 0)).toBeNull();
   });
 });
 

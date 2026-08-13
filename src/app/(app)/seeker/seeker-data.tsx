@@ -1,7 +1,7 @@
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { expireStaleOverride, getBalance, OVERRIDE_COMPENSATION } from "@/lib/points";
 import { matchBand, type SeekerTier } from "@/lib/matching";
-import type { SalaryVisibility } from "@/lib/jobs";
+import { coarseSalaryBounds, type SalaryVisibility } from "@/lib/jobs";
 import { getLifetimeEarnedPoints, listBenefitPartnerUnlocks } from "@/lib/benefits";
 import { getTrainingCreditBalance, getRecentTrainingLedger } from "@/lib/training";
 import { OverrideResponseButtons } from "./override-response";
@@ -117,21 +117,43 @@ export async function loadSeekerContext(userId: string) {
     const company = job
       ? (Array.isArray(job.profiles) ? job.profiles[0] : job.profiles)?.company_name
       : null;
-    // Salary is hidden by default: only a recruiter who opted into 'public'
-    // shares a figure. Fail closed — anything other than an explicit 'public'
-    // is treated as on_request, and the raw numbers are NEVER put on the card
-    // payload for on_request jobs (match-list is a client component, so leaving
-    // them in props would leak the range in devtools even if hidden visually).
+    // Salary is hidden by default: a recruiter must opt into either 'public'
+    // (exact figure) or 'band' (coarse range) to share anything. Fail closed —
+    // anything other than those two explicit values is treated as on_request,
+    // and no salary bounds are ever put on the card payload for on_request
+    // jobs (match-list/the dashboard card are client components, so leaving
+    // them in props would leak the range in devtools even if hidden
+    // visually). For 'band' this cuts both ways: the raw job.salary_min/max
+    // must NOT reach the client either, since that's exactly the disclosure
+    // the recruiter opted out of by choosing 'band' over 'public' — only the
+    // already-coarsened bucket bounds (coarseSalaryBounds) are exposed, so
+    // devtools/React props never carry more precision than the rendered
+    // "$180k – $220k" text does. salaryDisplay() re-bucketing those bounds is
+    // idempotent, so match-list's/the dashboard's salaryDisplay() call still
+    // renders the identical string.
     const salaryVisibility: SalaryVisibility =
-      job?.salary_visibility === "public" ? "public" : "on_request";
-    const salaryShared = salaryVisibility === "public";
+      job?.salary_visibility === "public"
+        ? "public"
+        : job?.salary_visibility === "band"
+          ? "band"
+          : "on_request";
+    let salaryMin: number | null = null;
+    let salaryMax: number | null = null;
+    if (salaryVisibility === "public") {
+      salaryMin = job?.salary_min ?? null;
+      salaryMax = job?.salary_max ?? null;
+    } else if (salaryVisibility === "band" && job?.salary_min != null && job?.salary_max != null) {
+      const bounds = coarseSalaryBounds(job.salary_min, job.salary_max);
+      salaryMin = bounds?.lo ?? null;
+      salaryMax = bounds?.hi ?? null;
+    }
     return {
       id: match.id,
       title: job?.title ?? "Role",
       company: company ?? null,
       location: job?.location ?? null,
-      salaryMin: salaryShared ? (job?.salary_min ?? null) : null,
-      salaryMax: salaryShared ? (job?.salary_max ?? null) : null,
+      salaryMin,
+      salaryMax,
       salaryVisibility,
       workSetups: job?.work_setups ?? [],
       status: match.status,

@@ -76,6 +76,10 @@ export function MatchList({ cards }: { cards: SeekerMatchCard[] }) {
     const filtered =
       statusFilter === "all" ? cards : cards.filter((c) => c.status === statusFilter);
     return [...filtered].sort((a, b) => {
+      // For 'band' cards, salaryMax is already the coarsened bucket ceiling
+      // (seeker-data.tsx), not the recruiter's exact figure — sorting on the
+      // exact number would itself be an inference channel back to the
+      // precise salary the recruiter chose not to disclose.
       if (sortBy === "salary") return (b.salaryMax ?? 0) - (a.salaryMax ?? 0);
       if (sortBy === "title") return a.title.localeCompare(b.title);
       return a.rank - b.rank;
