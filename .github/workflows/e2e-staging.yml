@@ -187,8 +187,8 @@ jobs:
       # the previous in-suite zz-ai-budget.spec.ts relied on "sorts last", which
       # under-counted under workers:4). Prints the per-spec breakdown + total
       # for visibility, then fails the job if the total exceeds BUDGET.
-      # BUDGET is a generous placeholder (40) until a clean run re-measures the
-      # true count; tune it down to measured + 2 afterwards.
+      # BUDGET = 32: measured total was 30 on 2026-08-13 (41/42 green, override
+      # failed short of its usual 5 calls, so a clean run is ~31) + 2 margin.
       - name: Report + enforce Modal AI call budget
         if: always()
         run: |
@@ -199,7 +199,7 @@ jobs:
           echo "=== Modal AI calls by spec ==="
           sort test-results/ai-calls.log | uniq -c | sort -rn
           TOTAL=$(wc -l < test-results/ai-calls.log | tr -d ' ')
-          BUDGET=40
+          BUDGET=32
           echo "=== Total: $TOTAL (budget: $BUDGET) ==="
           if [ "$TOTAL" -gt "$BUDGET" ]; then
             echo "::error::Modal AI call budget exceeded: $TOTAL > $BUDGET"
