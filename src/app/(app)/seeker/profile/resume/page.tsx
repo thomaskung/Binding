@@ -1,5 +1,5 @@
 import { requireRole } from "@/lib/auth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { ResumeCanvas } from "./resume-canvas";
 
 /** Resume editor canvas at its own route — the NavShell template's Profile
@@ -7,28 +7,40 @@ import { ResumeCanvas } from "./resume-canvas";
 export default async function ResumeCanvasPage() {
   const session = await requireRole("seeker");
   const supabase = await createSupabaseServerClient();
+  // connected_accounts is service-role-only RLS (migration 0026) — read via
+  // the admin client, same as the /seeker/profile page's status check.
+  // Folded into the Promise.all below so it doesn't add a serial round-trip.
+  const admin = createSupabaseAdminClient();
 
-  const [{ data: profile }, { data: vector }, { data: experience }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("display_name, draft_text, headline, skills, desired_roles, industries, seeker_tier")
-      .eq("id", session.userId)
-      .single(),
-    supabase
-      .from("skill_vectors")
-      .select("redacted_text")
-      .eq("profile_id", session.userId)
-      .maybeSingle(),
-    supabase
-      .from("seeker_experience")
-      .select("role, company, industry, start_date, end_date")
-      .eq("profile_id", session.userId),
-  ]);
+  const [{ data: profile }, { data: vector }, { data: experience }, { data: driveAccount }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("display_name, draft_text, headline, skills, desired_roles, industries, seeker_tier")
+        .eq("id", session.userId)
+        .single(),
+      supabase
+        .from("skill_vectors")
+        .select("redacted_text")
+        .eq("profile_id", session.userId)
+        .maybeSingle(),
+      supabase
+        .from("seeker_experience")
+        .select("role, company, industry, start_date, end_date")
+        .eq("profile_id", session.userId),
+      admin
+        .from("connected_accounts")
+        .select("id")
+        .eq("profile_id", session.userId)
+        .eq("provider", "google_drive")
+        .maybeSingle(),
+    ]);
 
   return (
     <ResumeCanvas
       draftText={profile?.draft_text ?? ""}
       redactedText={vector?.redacted_text ?? null}
+      driveConnected={driveAccount != null}
       seekerTier={profile?.seeker_tier === "pro" ? "pro" : "free"}
       displayName={profile?.display_name ?? ""}
       headline={profile?.headline ?? null}

@@ -38,7 +38,10 @@ export async function deleteAccount(): Promise<void> {
 
   // 4. Cascade delete auth.users → profiles → skill_vectors, resumes,
   //    consent_flags, seeker_experience, matches, reveal_requests,
-  //    messages, message_threads, notifications, pii_access_log
+  //    messages, message_threads, notifications, pii_access_log,
+  //    connected_accounts (migration 0026, `on delete cascade` — no plaintext
+  //    OAuth token survives account deletion, no separate revoke-at-Google
+  //    call needed for that guarantee)
   const { error } = await admin.auth.admin.deleteUser(session.userId);
   if (error) throw new Error(`Account deletion failed: ${error.message}`);
 

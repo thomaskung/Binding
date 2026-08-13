@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { extractText, getDocumentProxy } from "unpdf";
 import { getSessionProfile } from "@/lib/auth";
+import { extractPdfText } from "@/lib/pdf-extract";
 import { stripPdfMetadata } from "@/lib/pdf-metadata";
 import { stripPiiPatterns } from "@/lib/pii-patterns";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
@@ -32,9 +32,7 @@ export async function POST(request: Request) {
 
   let text: string;
   try {
-    const pdf = await getDocumentProxy(buffer);
-    const extracted = await extractText(pdf, { mergePages: true });
-    text = extracted.text.trim();
+    text = await extractPdfText(buffer);
   } catch {
     return NextResponse.json({ error: "could not extract text from PDF" }, { status: 422 });
   }

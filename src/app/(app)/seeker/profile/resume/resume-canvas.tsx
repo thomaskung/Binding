@@ -2,7 +2,17 @@
 
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
-import { AIDocumentCanvas, type AIDocumentSuggestion, Badge, Button } from "@binding/ui";
+import {
+  AIDocumentCanvas,
+  type AIDocumentSuggestion,
+  Badge,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@binding/ui";
+import type { DriveFile } from "@/lib/google-drive";
 import { PROFILE_QUICK_ACTIONS } from "@/lib/profile";
 import { publishProfile, refineProfileText, saveDraftText } from "../../actions";
 import { ResumeExportModal } from "./resume-export-modal";
@@ -10,6 +20,9 @@ import { ResumeExportModal } from "./resume-export-modal";
 interface Props {
   draftText: string;
   redactedText: string | null;
+  /** Whether a connected_accounts row already exists for this seeker
+   * (migration 0026) — gates the "Browse Google Drive" entry point below. */
+  driveConnected: boolean;
   seekerTier: "free" | "pro";
   displayName: string;
   headline: string | null;
@@ -47,6 +60,11 @@ export function ResumeCanvas(props: Props) {
   const [status, setStatus] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [driveDialogOpen, setDriveDialogOpen] = useState(false);
+  const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
+  const [driveLoading, setDriveLoading] = useState(false);
+  const [driveError, setDriveError] = useState<string | null>(null);
+  const [importingFileId, setImportingFileId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -71,6 +89,56 @@ export function ResumeCanvas(props: Props) {
     const { text } = (await res.json()) as { text: string };
     setDraft(text);
     setStatus("Resume text extracted — review below, then publish.");
+  }
+
+  /** Opens the Drive dialog and lists recent PDF/Doc files (plain
+   * list-and-pick — no Picker API, see src/lib/google-drive.ts). */
+  async function openDriveDialog() {
+    setDriveDialogOpen(true);
+    setDriveError(null);
+    setDriveLoading(true);
+    try {
+      const res = await fetch("/api/connected-accounts/google-drive/files");
+      const json = (await res.json().catch(() => null)) as
+        | { files: DriveFile[] }
+        | { error: string }
+        | null;
+      if (!res.ok || !json || "error" in json) {
+        setDriveError(json && "error" in json ? json.error : `Drive request failed (${res.status})`);
+        setDriveFiles([]);
+      } else {
+        setDriveFiles(json.files);
+      }
+    } catch {
+      setDriveError("Could not reach Google Drive.");
+      setDriveFiles([]);
+    } finally {
+      setDriveLoading(false);
+    }
+  }
+
+  async function importDriveFile(file: DriveFile) {
+    setImportingFileId(file.id);
+    setDriveError(null);
+    try {
+      const res = await fetch("/api/connected-accounts/google-drive/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ fileId: file.id, mimeType: file.mimeType }),
+      });
+      const json = (await res.json().catch(() => null)) as { text: string } | { error: string } | null;
+      if (!res.ok || !json || "error" in json) {
+        setDriveError(json && "error" in json ? json.error : `Import failed (${res.status})`);
+        return;
+      }
+      setDraft(json.text);
+      setDriveDialogOpen(false);
+      setStatus(`Imported "${file.name}" from Google Drive — review below, then publish.`);
+    } catch {
+      setDriveError("Could not reach Google Drive.");
+    } finally {
+      setImportingFileId(null);
+    }
   }
 
   function refine(instruction: string | undefined, title: string) {
@@ -149,6 +217,28 @@ export function ResumeCanvas(props: Props) {
         <Button variant="outline" size="sm" onClick={() => fileInput.current?.click()}>
           Upload resume PDF
         </Button>
+        {props.driveConnected ? (
+          <Button
+            variant="outline"
+            size="sm"
+            data-testid="browse-google-drive"
+            onClick={() => void openDriveDialog()}
+          >
+            Browse Google Drive
+          </Button>
+        ) : (
+          <span className="text-xs text-muted-foreground">
+            <Button
+              variant="ghost"
+              size="sm"
+              data-testid="drive-connect-hint"
+              render={<Link href="/seeker/profile" />}
+            >
+              Connect Google Drive
+            </Button>{" "}
+            to import from there
+          </span>
+        )}
         <div className="ml-auto flex gap-2">
           <Button
             variant="outline"
@@ -250,6 +340,47 @@ export function ResumeCanvas(props: Props) {
         industries={props.industries}
         experience={props.experience}
       />
+
+      {/* Plain list-and-pick from Google Drive — explicitly NOT the Picker
+          API (DESIGN.md §14a MVP cut, src/lib/google-drive.ts). Picking a
+          file replaces the draft the same way "Upload resume PDF" does. */}
+      <Dialog open={driveDialogOpen} onOpenChange={setDriveDialogOpen}>
+        <DialogContent data-testid="drive-file-picker">
+          <DialogHeader>
+            <DialogTitle>Import from Google Drive</DialogTitle>
+          </DialogHeader>
+          {driveLoading && <p className="text-sm text-muted-foreground">Loading recent files…</p>}
+          {driveError && (
+            <p className="text-sm text-destructive" data-testid="drive-error">
+              {driveError}
+            </p>
+          )}
+          {!driveLoading && !driveError && driveFiles.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              No PDF or Google Docs files found in your Drive.
+            </p>
+          )}
+          <ul className="flex flex-col gap-1.5">
+            {driveFiles.map((file) => (
+              <li
+                key={file.id}
+                data-testid="drive-file-row"
+                className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
+              >
+                <span className="truncate text-sm">{file.name}</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={importingFileId !== null}
+                  onClick={() => void importDriveFile(file)}
+                >
+                  {importingFileId === file.id ? "Importing…" : "Import"}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
