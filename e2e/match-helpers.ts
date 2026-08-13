@@ -77,7 +77,7 @@ export async function publishMatchingProfile(
   // 60s -> 90s after a real staging timeout; callers need
   // test.setTimeout(180_000) or higher to stay under playwright.config.ts's
   // 120s default test cap.)
-  await expect(page.getByTestId("redacted-preview")).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByTestId("redacted-preview")).toBeVisible({ timeout: 180_000 });
 }
 
 /**

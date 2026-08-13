@@ -69,7 +69,7 @@ test("full reveal slice", async ({ browser }) => {
   // createAndPublishJob, so this filter is unambiguous.
   await seeker.goto("/seeker/matches");
   const matchCard = seeker.getByTestId("seeker-match-card").filter({ hasText: jobTitle }).first();
-  await expect(matchCard).toBeVisible({ timeout: 60_000 });
+  await expect(matchCard).toBeVisible({ timeout: 120_000 });
   await matchCard.getByTestId("match-interested").click();
   // exact: true — the status BADGE ("interested"), not the "I'm interested"
   // button that substring-matching would hit instantly, before the server
@@ -89,9 +89,9 @@ test("full reveal slice", async ({ browser }) => {
   await recruiter.getByTestId("reveal-candidate").click();
   await recruiter.getByTestId("confirm-reveal").click();
   await expect(recruiter.getByTestId("revealed-name")).toHaveText(seekerName, {
-    timeout: 60_000,
+    timeout: 120_000,
   });
-  await expect(recruiter.getByTestId("fit-summary")).toBeVisible({ timeout: 60_000 });
+  await expect(recruiter.getByTestId("fit-summary")).toBeVisible({ timeout: 120_000 });
 
   // Reveal cost is dynamic (§4a): score ≥ 0.8 → 2× (20 pts), ≥ 0.65 → 1.5×
   // (15 pts), else flat (10 pts). Read the match score to compute the exact

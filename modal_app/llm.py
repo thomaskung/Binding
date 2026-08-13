@@ -113,7 +113,12 @@ personal contact details, or other identifying information. /no_think"""
 @app.cls(
     image=image,
     gpu="T4",
-    scaledown_window=120,  # scale to zero quickly — credit guardrail
+    # 300s (was 120s): the E2E smoke/nightly warm the endpoints once, then a
+    # test's first Modal call comes 2-3 min later after onboarding UI — a 120s
+    # window let the container cool and the ~100s T4 cold start blew the 90s
+    # test timeouts. 300s survives that gap while still scaling to zero; the
+    # parallel suite (~12 min) keeps containers warm between specs anyway.
+    scaledown_window=300,
     # APAC region pin (DESIGN.md §5/§12, 2026-07-28): raw resume text is
     # redacted here, so processing runs in-region rather than Modal's
     # implicit US default (~1.5x broad-region price multiplier accepted).
