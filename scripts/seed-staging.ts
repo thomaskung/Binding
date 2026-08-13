@@ -172,8 +172,17 @@ async function main() {
   // --- 20 jobs (real Modal embeddings), assigned to the staging recruiters ---
   const jobs = buildJobs(recruiters);
   const jobIds: string[] = [];
-  for (const j of jobs) {
+  for (let i = 0; i < jobs.length; i++) {
+    const j = jobs[i]!;
     const vec = await embed(`${j.title}\n\n${j.description}`);
+    // Salary stealth (DESIGN §13a): `buildJobs`/the shared test-data source
+    // doesn't carry a visibility field (job_postings.salary_visibility just
+    // defaults to 'on_request' per migration 0025), so every seeded job would
+    // otherwise be on_request-only and the 'band' coarse-range display would
+    // never actually appear in the demo. Give the first job an explicit
+    // 'band' so the feature has a reachable example without a recruiter
+    // manually creating one.
+    const salaryVisibility = i === 0 ? "band" : undefined;
     const { data, error } = await admin
       .from("job_postings")
       .insert({
@@ -186,6 +195,7 @@ async function main() {
         location: j.location,
         status: "active",
         embedding: JSON.stringify(vec),
+        ...(salaryVisibility ? { salary_visibility: salaryVisibility } : {}),
       })
       .select("id")
       .single();

@@ -46,7 +46,7 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
   const seekerTier: SeekerTier = profile?.seeker_tier === "pro" ? "pro" : "free";
   const band = matchBand(match.score, seekerTier);
   const employmentType = (job.employment_type ?? "fulltime") as EmploymentType;
-  const visibility = (job.salary_visibility ?? "public") as SalaryVisibility;
+  const visibility = (job.salary_visibility ?? "on_request") as SalaryVisibility;
 
   return (
     <main className="jb-fade mx-auto max-w-3xl space-y-8 p-8 pb-24">

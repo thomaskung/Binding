@@ -73,8 +73,15 @@ export function JobDetail({ job, matchCount }: { job: EditableJob; matchCount: n
             <span className="jb-serif text-lg font-semibold tracking-tight">
               {salaryDisplay(job.salary_min!, job.salary_max!, job.salary_visibility)}
             </span>
+            {/* Three-way label — job-editor.tsx's visibility <select> lets a
+                posting reach any of public/band/on_request (migration 0025,
+                DESIGN §13a), so this badge distinguishes all three. */}
             <Badge variant="outline">
-              {job.salary_visibility === "public" ? "Public" : "On request"}
+              {job.salary_visibility === "public"
+                ? "Public"
+                : job.salary_visibility === "band"
+                  ? "Range shown"
+                  : "On request"}
             </Badge>
           </CardContent>
         </Card>

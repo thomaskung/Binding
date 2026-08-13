@@ -77,7 +77,9 @@ export function requireFixture(value: string | null | undefined, name: string): 
 // Ceiling history: 27 on 2026-08-06 (whole suite moved to hosted staging),
 // +2 for recruiter-compare-bulk-reveal's fit-summaries on 2026-08-13, then
 // moved to a generous CI-side budget (40) until the true count is re-measured
-// from a clean run and tuned down.
+// from a clean run and tuned down. salary-stealth.spec.ts (Phase 1, added
+// 2026-08-13) never calls countAiCall() — admin-client inserts + wizard-skip
+// onboarding only, no publish/embed — so it doesn't move this number.
 export function aiCounterFile(): string {
   return process.env.E2E_AI_COUNTER_FILE ?? path.join(process.cwd(), "test-results", "ai-calls.log");
 }
