@@ -184,9 +184,20 @@ jobs:
       # seeker-invariants-fixture) will join this list once their rewrites
       # land in a later pass — do NOT add them yet, the files don't exist yet
       # and the job would fail on a missing spec path.
+      #
+      # recruiter-pipeline-dashboard.spec.ts joined 2026-08-13 (Phase 2
+      # dashboard-widgets build): it seeds all its state via the service-role
+      # admin client (see the spec's own doc comment) and never calls
+      # publish/reveal/extract/refine, so it's genuinely zero-Modal-cost like
+      # the other five. Flag: unlike the other five, this file has not yet
+      # had a real green run against staging/a preview (CLAUDE.md notes it was
+      # "written but not yet run against real staging" as of the 2026-08-10
+      # pipeline-dashboard feature) — promoting it straight to a REQUIRED
+      # check carries first-run flake risk. Watch its first few PR-gate runs;
+      # revert to nightly-only if it's flaky.
       - name: Run Modal-free e2e specs against the PR preview
         if: steps.gate.outputs.skip != 'true'
-        run: npx playwright test e2e/app-shell.spec.ts e2e/signup.spec.ts e2e/recruiter-onboarding-wizard.spec.ts e2e/training-benefits.spec.ts e2e/market-intel-dimensions.spec.ts
+        run: npx playwright test e2e/app-shell.spec.ts e2e/signup.spec.ts e2e/recruiter-onboarding-wizard.spec.ts e2e/training-benefits.spec.ts e2e/market-intel-dimensions.spec.ts e2e/recruiter-pipeline-dashboard.spec.ts
         env:
           E2E_BASE_URL: ${{ steps.preview.outputs.base_url }}
           E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}

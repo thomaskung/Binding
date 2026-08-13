@@ -3,6 +3,7 @@ import {
   BENEFIT_EARN_EVENTS,
   BENEFIT_SPEND_EVENTS,
   BENEFIT_TIER_THRESHOLDS,
+  benefitsSummary,
   benefitTier,
   benefitTierProgress,
   getLifetimeBenefitPoints,
@@ -215,5 +216,33 @@ describe("loyaltyLadderRows (dashboard widget, per-tier ungrouped unlock counts)
     const rows = loyaltyLadderRows(0, []);
     expect(rows[0]?.reached).toBe(true);
     expect(rows[0]?.current).toBe(true);
+  });
+});
+
+describe("benefitsSummary (dashboard Benefits widget, catalog-facing teaser)", () => {
+  it("counts everything as locked at zero points if all partners require a higher tier", () => {
+    const partners = [{ tier_required: 2 }, { tier_required: 3 }];
+    expect(benefitsSummary(0, partners)).toEqual({ tier: 1, unlockedCount: 0, lockedCount: 2 });
+  });
+
+  it("counts partners at or below the current tier as unlocked", () => {
+    const partners = [
+      { tier_required: 1 },
+      { tier_required: 1 },
+      { tier_required: 2 },
+      { tier_required: 3 },
+    ];
+    const t2 = BENEFIT_TIER_THRESHOLDS[1]!;
+    expect(benefitsSummary(t2, partners)).toEqual({ tier: 2, unlockedCount: 3, lockedCount: 1 });
+  });
+
+  it("unlocks every partner at the top tier", () => {
+    const partners = [{ tier_required: 1 }, { tier_required: 2 }, { tier_required: 3 }];
+    const top = BENEFIT_TIER_THRESHOLDS[BENEFIT_TIER_THRESHOLDS.length - 1]!;
+    expect(benefitsSummary(top + 1000, partners)).toEqual({ tier: 3, unlockedCount: 3, lockedCount: 0 });
+  });
+
+  it("returns zero/zero with no partners at all", () => {
+    expect(benefitsSummary(500, [])).toEqual({ tier: 3, unlockedCount: 0, lockedCount: 0 });
   });
 });
