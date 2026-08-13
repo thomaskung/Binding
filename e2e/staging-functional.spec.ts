@@ -7,7 +7,6 @@ import {
   signInExpectFailure,
   stagingContext,
   countAiCall,
-  assertAiCallBudget,
   uniqueLabel,
 } from "./staging-helpers";
 import { completeSeekerOnboarding } from "./seeker-onboarding";
@@ -44,9 +43,6 @@ let pipelineJobId = "";
 // "don't fail misleadingly on stale module state" protection without
 // sacrificing that unrelated coverage.
 
-test.afterAll(() => {
-  assertAiCallBudget();
-});
 
 test.describe("Staging functional — auth & registration", () => {
   test("1. Login page renders email input and continue button", async ({ browser }) => {

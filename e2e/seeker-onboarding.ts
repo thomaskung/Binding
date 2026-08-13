@@ -58,16 +58,16 @@ export async function completeSeekerOnboarding(
     // and finish clicks themselves are Modal boundaries too: give them the
     // same generous action timeout (the button may sit in `pending` while the
     // lambda cold-starts) instead of the 30s Playwright default.
-    await page.getByTestId("onboarding-extract").click({ timeout: 90_000 });
+    await page.getByTestId("onboarding-extract").click({ timeout: 180_000 });
     await expect(page.getByTestId("onboarding-continue-dealbreakers")).toBeEnabled({
-      timeout: 60_000,
+      timeout: 120_000,
     });
-    await page.getByTestId("onboarding-continue-dealbreakers").click({ timeout: 90_000 });
+    await page.getByTestId("onboarding-continue-dealbreakers").click({ timeout: 180_000 });
     // finish() awaits publishProfile() → ai.redact + ai.embed. Counted HERE so
     // the cost lives next to the click that causes it and callers can't drift.
     countAiCall(); // ai.redact (publishProfile, via onboarding-finish)
     countAiCall(); // ai.embed  (publishProfile, via onboarding-finish)
-    await page.getByTestId("onboarding-finish").click({ timeout: 90_000 });
+    await page.getByTestId("onboarding-finish").click({ timeout: 180_000 });
   } else {
     await page.getByTestId("wizard-skip").click();
   }

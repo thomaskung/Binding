@@ -24,7 +24,7 @@ import { completeRecruiterOnboarding } from "./recruiter-onboarding";
  * Modal AI cost: ZERO. Both onboarding walks use the free paths
  * (`completeSeekerOnboarding` with no `resumeText` = wizard-skip;
  * `completeRecruiterOnboarding` ends on `recruiter-onboarding-finish-skip`) —
- * no `countAiCall()`/`assertAiCallBudget()` plumbing needed in this file.
+ * no `countAiCall()` plumbing needed in this file.
  */
 
 async function expandRail(page: Page) {
