@@ -167,10 +167,19 @@ test("pipeline command-center funnel + alerts + posting health, and Candidates p
 
   // Job postings: built from the same `jobs` array the funnel/health sections
   // use, so this scenario's 2 postings are a real, spec-owned count.
+  //
+  // Role note (confirmed via a real CI run, not assumed): these cards' footer
+  // links use `<Button render={<Link .../>}>` (packages/ui's Button wrapper
+  // sets `nativeButton={props.render == null}`, and Base UI's useButton
+  // explicitly merges `role: 'button'` onto the rendered element whenever
+  // `nativeButton` is false — see @base-ui/react/internals/use-button). So
+  // the accessible role is "button", never "link", even though the DOM node
+  // is a real `<a href>`. getByRole("link", ...) will never match; query
+  // "button" instead, same as this codebase's other Button+render composites.
   const jobPostingsCard = recruiter.getByTestId("job-postings-card");
   await expect(jobPostingsCard).toBeVisible();
   await expect(jobPostingsCard.getByText("2 postings")).toBeVisible();
-  await expect(jobPostingsCard.getByRole("link", { name: /View job postings/ })).toHaveAttribute(
+  await expect(jobPostingsCard.getByRole("button", { name: /View job postings/ })).toHaveAttribute(
     "href",
     "/recruiter/jobs",
   );
@@ -181,7 +190,7 @@ test("pipeline command-center funnel + alerts + posting health, and Candidates p
   const revealCreditsCard = recruiter.getByTestId("reveal-credits-card");
   await expect(revealCreditsCard).toBeVisible();
   await expect(revealCreditsCard.getByText(/\d+ pts/)).toBeVisible();
-  await expect(revealCreditsCard.getByRole("link", { name: /Review candidates/ })).toHaveAttribute(
+  await expect(revealCreditsCard.getByRole("button", { name: /Review candidates/ })).toHaveAttribute(
     "href",
     "/recruiter/candidates",
   );
@@ -192,7 +201,7 @@ test("pipeline command-center funnel + alerts + posting health, and Candidates p
   // specific skill or count.
   const marketIntelCard = recruiter.getByTestId("market-intel-card");
   await expect(marketIntelCard).toBeVisible();
-  await expect(marketIntelCard.getByRole("link", { name: /View market intelligence/ })).toHaveAttribute(
+  await expect(marketIntelCard.getByRole("button", { name: /View market intelligence/ })).toHaveAttribute(
     "href",
     "/recruiter/market-intelligence",
   );
