@@ -1,62 +1,36 @@
 import { requireRole } from "@/lib/auth";
 import type { FieldVisibilityMap } from "@/lib/field-visibility";
 import { getBalance } from "@/lib/points";
-import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ProfileFields } from "./profile-fields";
 
 export default async function SeekerProfilePage() {
   const session = await requireRole("seeker");
   const supabase = await createSupabaseServerClient();
-  // connected_accounts is service-role-only RLS (migration 0026, no
-  // authenticated policy) — the regular session-bound client can't read it,
-  // so this status check goes through the admin client, same as any other
-  // service-role-only table. Folded into the same Promise.all as everything
-  // else below so it doesn't add a serial round-trip to the page.
-  const admin = createSupabaseAdminClient();
 
-  const [
-    { data: profile },
-    { data: consent },
-    { data: experience },
-    balance,
-    { data: ledger },
-    { data: auth },
-    { data: driveAccount },
-  ] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select(
-        "display_name, draft_text, published_text, visibility, dealbreaker_matrix, headline, phone, location, skills, desired_roles, industries, references_available, share_salary, credentials, credentials_summary, field_visibility, seeker_tier",
-      )
-      .eq("id", session.userId)
-      .single(),
-    supabase
-      .from("consent_flags")
-      .select(
-        "reveal_override_enabled, market_signals_opt_in_at, maintenance_consent_at, connected_accounts_opt_in_at",
-      )
-      .eq("profile_id", session.userId)
-      .maybeSingle(),
-    supabase
-      .from("seeker_experience")
-      .select("id, role, company, industry, start_date, end_date")
-      .eq("profile_id", session.userId)
-      .order("start_date", { ascending: false }),
-    getBalance(supabase, session.userId),
-    supabase
-      .from("points_ledger")
-      .select("event, amount, note, created_at")
-      .eq("profile_id", session.userId)
-      .order("created_at", { ascending: false })
-      .limit(3),
-    supabase.auth.getUser(),
-    admin
-      .from("connected_accounts")
-      .select("id")
-      .eq("profile_id", session.userId)
-      .eq("provider", "google_drive")
-      .maybeSingle(),
-  ]);
+  const [{ data: profile }, { data: experience }, balance, { data: ledger }, { data: auth }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select(
+          "display_name, draft_text, published_text, visibility, dealbreaker_matrix, headline, phone, location, skills, desired_roles, industries, references_available, share_salary, credentials, credentials_summary, field_visibility, seeker_tier",
+        )
+        .eq("id", session.userId)
+        .single(),
+      supabase
+        .from("seeker_experience")
+        .select("id, role, company, industry, start_date, end_date")
+        .eq("profile_id", session.userId)
+        .order("start_date", { ascending: false }),
+      getBalance(supabase, session.userId),
+      supabase
+        .from("points_ledger")
+        .select("event, amount, note, created_at")
+        .eq("profile_id", session.userId)
+        .order("created_at", { ascending: false })
+        .limit(3),
+      supabase.auth.getUser(),
+    ]);
 
   const dealbreakers = (profile?.dealbreaker_matrix ?? {}) as {
     min_salary?: number | null;
@@ -72,11 +46,6 @@ export default async function SeekerProfilePage() {
       draftText={profile?.draft_text ?? ""}
       publishedText={profile?.published_text ?? null}
       visibility={(profile?.visibility ?? "active") as "active" | "paused"}
-      overrideEnabled={consent?.reveal_override_enabled ?? false}
-      marketSignalsOptedIn={consent?.market_signals_opt_in_at != null}
-      maintenanceConsented={consent?.maintenance_consent_at != null}
-      connectedAccountsOptedIn={consent?.connected_accounts_opt_in_at != null}
-      driveConnected={driveAccount != null}
       minSalary={dealbreakers.min_salary ?? null}
       workSetups={dealbreakers.work_setups ?? []}
       equityRequired={dealbreakers.equity_required ?? false}

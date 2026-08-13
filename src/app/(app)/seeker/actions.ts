@@ -9,6 +9,7 @@ import {
   MAINTENANCE_CONSENT_VERSION,
   MARKET_SIGNALS_CONSENT_VERSION,
 } from "@/lib/consent";
+import { dsarExportGuard, DSAR_EXPORT_COOLDOWN_DAYS } from "@/lib/dsar";
 import {
   computeExperienceStats,
   experienceFactsSentence,
@@ -367,25 +368,192 @@ export async function updateFieldVisibility(map: FieldVisibilityMap) {
   revalidatePath("/seeker/profile");
 }
 
-export async function updateSettings(formData: FormData) {
+/** "Pause profile" toggle (DESIGN.md §14j) — reuses the ALREADY-EXISTING
+ * `profiles.visibility` enum (migration 0001; 'active'/'paused') rather than
+ * adding a new column. Paused: no new matches surface (match_candidates /
+ * match_jobs_for_candidate both filter on `visibility = 'active'`) and no new
+ * reveal can target this profile — a softer, temporary option than full
+ * account deletion. */
+export async function updateProfileVisibility(paused: boolean) {
   const session = await requireRole("seeker");
   const supabase = await createSupabaseServerClient();
 
-  const visibility = formData.get("visibility") === "paused" ? "paused" : "active";
-  const overrideEnabled = formData.get("reveal_override_enabled") === "on";
-
-  const { error: pErr } = await supabase
+  const { error } = await supabase
     .from("profiles")
-    .update({ visibility })
+    .update({ visibility: paused ? "paused" : "active" })
     .eq("id", session.userId);
-  if (pErr) throw new Error(pErr.message);
+  if (error) throw new Error(`profile visibility update failed: ${error.message}`);
 
-  const { error: cErr } = await supabase
-    .from("consent_flags")
-    .upsert({ profile_id: session.userId, reveal_override_enabled: overrideEnabled });
-  if (cErr) throw new Error(cErr.message);
-
+  revalidatePath("/seeker/settings/privacy");
   revalidatePath("/seeker/profile");
+}
+
+/** Reveal-override opt-in toggle. Split out of the old combined
+ * updateSettings() (DESIGN.md §13e/§14j: the settings page renders this as
+ * one of the consent-center's two un-versioned toggle rows — reveal_override_
+ * enabled has no version column, unlike the 4 entries in CONSENT_REGISTRY,
+ * so it's rendered explicitly rather than folded into the registry's shape). */
+export async function updateOverrideEnabled(enabled: boolean) {
+  const session = await requireRole("seeker");
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase
+    .from("consent_flags")
+    .upsert({ profile_id: session.userId, reveal_override_enabled: enabled });
+  if (error) throw new Error(`reveal-override update failed: ${error.message}`);
+
+  revalidatePath("/seeker/settings/privacy");
+}
+
+/** `consent_flags.contact_sharing_consent` (migration 0001) has existed since
+ * the very first schema but had no reader/writer anywhere in the app until
+ * now — same un-versioned-toggle treatment as reveal_override_enabled above,
+ * per the settings-page consent-center gap the founder flagged explicitly. */
+export async function updateContactSharingConsent(enabled: boolean) {
+  const session = await requireRole("seeker");
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase
+    .from("consent_flags")
+    .upsert({ profile_id: session.userId, contact_sharing_consent: enabled });
+  if (error) throw new Error(`contact-sharing consent update failed: ${error.message}`);
+
+  revalidatePath("/seeker/settings/privacy");
+}
+
+/** Notification preferences (migration 0028) — transactional (new matches,
+ * reveal activity) kept separate from the marketing-style toggle, so opting
+ * out of product updates can never silence match/reveal notifications
+ * (DESIGN.md §14j). No delivery mechanism exists yet anywhere in this
+ * codebase; these columns are the preference store a future notifier would
+ * read, not a claim that anything is emailed today. */
+const NOTIFICATION_PREFERENCE_COLUMNS = {
+  notifyNewMatches: "notify_new_matches",
+  notifyRevealActivity: "notify_reveal_activity",
+  notifyProductUpdates: "notify_product_updates",
+} as const;
+export type NotificationPreferenceKey = keyof typeof NOTIFICATION_PREFERENCE_COLUMNS;
+
+/** Updates exactly ONE notification-preference column. Deliberately not a
+ * "send all three" call taking the other two from closure-captured client
+ * state — three independent toggles sharing one write shape means two quick
+ * clicks (toggle A, then B before A's response lands) can have B's request
+ * silently revert A's change back to its stale captured value. Single-field
+ * writes make that class of bug structurally impossible rather than
+ * incidentally prevented by today's shared useTransition serializing clicks. */
+export async function updateNotificationPreference(
+  key: NotificationPreferenceKey,
+  value: boolean,
+) {
+  const session = await requireRole("seeker");
+  const supabase = await createSupabaseServerClient();
+
+  const column = NOTIFICATION_PREFERENCE_COLUMNS[key];
+  const { error } = await supabase
+    .from("profiles")
+    .update({ [column]: value })
+    .eq("id", session.userId);
+  if (error) throw new Error(`notification preference update failed: ${error.message}`);
+
+  revalidatePath("/seeker/settings/privacy");
+}
+
+/** "Delete my original resume now" (DESIGN.md §14j) — a REAL delete of the
+ * seeker's own resume row(s) + Storage object(s), distinct from full account
+ * deletion. Explicitly NOT crypto-shredding (that's a later phase per the
+ * founder's brief) — this removes the row and the stored file outright, same
+ * mechanics as the resume-deletion step of account deletion
+ * (src/app/(app)/account/actions.ts), just scoped to resumes only. */
+export async function deleteOriginalResume() {
+  const session = await requireRole("seeker");
+  const admin = createSupabaseAdminClient();
+
+  const { data: resumes, error: fetchError } = await admin
+    .from("resumes")
+    .select("id, storage_path")
+    .eq("profile_id", session.userId);
+  if (fetchError) throw new Error(`resume lookup failed: ${fetchError.message}`);
+
+  const paths = (resumes ?? []).map((r) => r.storage_path).filter((p): p is string => Boolean(p));
+  if (paths.length > 0) {
+    const { error: storageError } = await admin.storage.from("resumes").remove(paths);
+    if (storageError) throw new Error(`resume file delete failed: ${storageError.message}`);
+  }
+
+  const { error: deleteError } = await admin
+    .from("resumes")
+    .delete()
+    .eq("profile_id", session.userId);
+  if (deleteError) throw new Error(`resume row delete failed: ${deleteError.message}`);
+
+  revalidatePath("/seeker/settings/privacy");
+  revalidatePath("/seeker/profile/resume");
+}
+
+/** Self-service data export (DSAR, DESIGN.md §14j) — rate-limited via
+ * src/lib/dsar.ts's pure guard, checked BEFORE anything else runs (same
+ * cap-first discipline as revealSpendGuard). Returns a JSON string of the
+ * seeker's own profile/resume/match data for the client to download as a
+ * file; deliberately minimal — no async job queue, no email delivery, just a
+ * synchronous read of the caller's own rows via the admin client (some of
+ * this data — raw_text, consent_flags — has no authenticated-client RLS
+ * policy at all, so the admin client is required here regardless).
+ *
+ * Includes `resumes.raw_text` directly — §14j says an export containing the
+ * ORIGINAL résumé should trigger the §2g live-passkey decrypt ceremony, which
+ * doesn't exist yet (no encryption-at-rest/passkey infra is built this
+ * phase). This is judged safe without it: raw_text is already owner-only data
+ * the seeker can read any time via their own résumé page
+ * (/seeker/profile/resume), so exporting it to themselves discloses nothing
+ * new — the decrypt ceremony's purpose is authorizing a THIRD PARTY's access,
+ * not gating a user's access to their own data. Revisit this call when §2g's
+ * encryption/passkey work actually lands. */
+export async function exportMyData(): Promise<string> {
+  const session = await requireRole("seeker");
+  const admin = createSupabaseAdminClient();
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("dsar_last_exported_at")
+    .eq("id", session.userId)
+    .single();
+
+  const guardError = dsarExportGuard({
+    lastExportedAt: profile?.dsar_last_exported_at ? new Date(profile.dsar_last_exported_at) : null,
+    now: new Date(),
+    cooldownDays: DSAR_EXPORT_COOLDOWN_DAYS,
+  });
+  if (guardError) throw new Error(guardError);
+
+  const [{ data: fullProfile }, { data: resumes }, { data: matches }, { data: consent }, { data: ledger }] =
+    await Promise.all([
+      admin.from("profiles").select("*").eq("id", session.userId).single(),
+      admin.from("resumes").select("id, raw_text, storage_path, created_at").eq("profile_id", session.userId),
+      admin.from("matches").select("id, job_posting_id, status, score, created_at").eq("profile_id", session.userId),
+      admin.from("consent_flags").select("*").eq("profile_id", session.userId).maybeSingle(),
+      admin.from("points_ledger").select("event, amount, note, created_at").eq("profile_id", session.userId),
+    ]);
+
+  const { error: stampError } = await admin
+    .from("profiles")
+    .update({ dsar_last_exported_at: new Date().toISOString() })
+    .eq("id", session.userId);
+  if (stampError) throw new Error(`dsar export timestamp update failed: ${stampError.message}`);
+
+  revalidatePath("/seeker/settings/privacy");
+
+  return JSON.stringify(
+    {
+      exportedAt: new Date().toISOString(),
+      profile: fullProfile,
+      resumes: resumes ?? [],
+      matches: matches ?? [],
+      consent: consent ?? null,
+      pointsLedger: ledger ?? [],
+    },
+    null,
+    2,
+  );
 }
 
 /** Aggregate market-signals opt-in (DESIGN.md §2e) — a SEPARATE, independently

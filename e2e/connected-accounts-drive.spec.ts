@@ -25,6 +25,13 @@ import { ensureStagingUser, signIn, stagingAdminClient, stagingContext, uniqueLa
  *
  * Modal AI cost: ZERO. Both tests onboard via the free wizard-skip path (no
  * `resumeText`), and nothing else in this spec calls an AI provider.
+ *
+ * Phase 6 (Security + Privacy settings): the connected-accounts consent
+ * toggle + Connect-Drive link moved from /seeker/profile's inline "Privacy"
+ * card to /seeker/settings/privacy's consent center (DESIGN.md §13e) — same
+ * `connected-accounts-toggle`/`connect-google-drive`/`drive-connected-badge`
+ * testids, just a different URL. The resume-canvas assertions below are
+ * unaffected — that page does its own independent `driveConnected` fetch.
  */
 
 test("Drive not connected: consent toggle reveals a Connect-Drive link, resume page shows the hint", async ({
@@ -38,7 +45,7 @@ test("Drive not connected: consent toggle reveals a Connect-Drive link, resume p
   await signIn(page, seeker.email);
   await completeSeekerOnboarding(page, { name: uniqueLabel("Dana Drive") });
 
-  await page.goto("/seeker/profile");
+  await page.goto("/seeker/settings/privacy");
   const toggle = page.getByTestId("connected-accounts-toggle");
   await expect(toggle).toBeVisible({ timeout: 30_000 });
   await expect(toggle).toHaveAttribute("aria-checked", "false");
@@ -173,7 +180,7 @@ test("withdrawing consent actually revokes the connection, not just hides the UI
   });
   if (consentSeedError) throw new Error(`consent seed failed: ${consentSeedError.message}`);
 
-  await page.goto("/seeker/profile");
+  await page.goto("/seeker/settings/privacy");
   const toggle = page.getByTestId("connected-accounts-toggle");
   await expect(toggle).toBeVisible({ timeout: 30_000 });
   await expect(toggle).toHaveAttribute("aria-checked", "true");

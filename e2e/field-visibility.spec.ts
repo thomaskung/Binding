@@ -17,6 +17,14 @@ import { ensureStagingUser, signIn, stagingContext, uniqueLabel } from "./stagin
  * seeker's own session is a direct test of the recruiter-facing output, no
  * separate recruiter account required.
  *
+ * Phase 6 (Security + Privacy settings): the per-field visibility pills
+ * moved from /seeker/profile's inline "Privacy" card to the dedicated
+ * /seeker/settings/privacy page (src/app/(app)/seeker/settings/privacy-card.tsx)
+ * — DESIGN.md §13e "the profile page keeps a link, not the controls". This
+ * spec still edits the raw field text on /seeker/profile (unchanged), then
+ * navigates to the settings page to cycle visibility, same aria-label/
+ * settle-signal contract as before.
+ *
  * Runs against hosted staging: opens through `stagingContext(browser)` for
  * the auth-gate headers, creates a fresh seeker via `ensureStagingUser`
  * (no seeded demo account), and reuses the free `wizard-skip` onboarding
@@ -45,12 +53,14 @@ test("hidden and matching_only fields are excluded from what recruiters see; vis
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByText("Profile fields saved.")).toBeVisible({ timeout: 30_000 });
 
-  // Per-field visibility lives in the Privacy card (always active, not
-  // gated behind edit mode). Each control is a cycling pill button
-  // (profile-fields.tsx VisibilityControl) — click it until its aria-label
-  // reports the target mode. Each change persists via a server action —
-  // wait for the committed-write signal after each one, or navigating away
-  // can cancel the in-flight save.
+  // Per-field visibility lives on the dedicated /seeker/settings/privacy
+  // page (Phase 6, moved out of the profile page's inline "Privacy" card).
+  // Each control is a cycling pill button (settings/privacy-card.tsx
+  // VisibilityControl) — click it until its aria-label reports the target
+  // mode. Each change persists via a server action — wait for the
+  // committed-write signal after each one, or navigating away can cancel
+  // the in-flight save.
+  await page.goto("/seeker/settings/privacy");
   async function cycleVisibilityTo(label: string, target: string) {
     const button = page.getByLabel(label);
     for (let i = 0; i < 4; i++) {
@@ -66,10 +76,10 @@ test("hidden and matching_only fields are excluded from what recruiters see; vis
   // Belt-and-suspenders settle check before publishing: the "Visibility
   // updated." toast is a shared status string reused by both pills (it's
   // cleared to null synchronously on each change, then re-set post-commit —
-  // see profile-fields.tsx), so a reload-and-assert-persisted-value round
-  // trip removes any doubt that BOTH writes actually committed server-side
-  // before we navigate away and publish (an in-flight save can be cancelled
-  // by navigation, per the comment above).
+  // see settings/privacy-card.tsx), so a reload-and-assert-persisted-value
+  // round trip removes any doubt that BOTH writes actually committed
+  // server-side before we navigate away and publish (an in-flight save can
+  // be cancelled by navigation, per the comment above).
   await page.reload();
   await expect(page.getByLabel("Skills visibility")).toHaveAttribute("aria-label", /Hidden/);
   await expect(page.getByLabel("Target industries visibility")).toHaveAttribute(
