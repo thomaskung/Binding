@@ -87,13 +87,14 @@ export function requireFixture(value: string | null | undefined, name: string): 
 //                                   pipeline's existing profile+job)
 //   staging-uat .............. 3   (scenario 1 only: publish 2 + job embed 1;
 //                                   scenarios 3/5/7 reuse that fixture free)
+//   recruiter-compare-bulk-reveal .. 2   (2 fit-summary on bulk reveal)
 //   app-shell, signup, recruiter-onboarding-wizard, training-benefits,
-//   market-intel-dimensions .. 0   (wizard-skip onboarding / SQL-only RPCs)
+//   market-intel-dimensions, recruiter-pipeline-dashboard .. 0
 //   ------------------------------
-//   TOTAL .................... 27
+//   TOTAL .................... 29
 // Keep it a tight ceiling: if a change pushes the real total up, re-measure and
 // justify the new number here rather than bumping it to make a run go green.
-export const AI_CALL_BUDGET = 27;
+export const AI_CALL_BUDGET = 29;
 
 /** Resolves the on-disk counter file path. Exported so `global-setup.ts` can
  * delete the same file at the start of a run without duplicating the literal. */
