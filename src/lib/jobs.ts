@@ -27,10 +27,13 @@ const SALARY_BAND_BUCKET = 20_000;
  * whole point of `band` is to never show one exact number.
  *
  * Returns `null` for the 0024 backfill's `(0, 0)` sentinel for legacy
- * null-salary rows: those rows have no real salary data at all, so bucketing
- * them would produce a fake-looking "$0k – $20k" band that reads as a real
- * (if tiny) salary rather than "no data" — callers fall back to the same
- * "Salary on request" copy the `on_request` visibility case uses.
+ * null-salary rows, and for any non-finite/nullish input (a caller passing
+ * `null`/`undefined` through — e.g. a card whose bounds were already nulled
+ * out upstream for a non-band visibility — would otherwise coerce to `0` in
+ * the arithmetic below and silently produce the same fake "$0k – $20k" band
+ * this guard exists to prevent): those inputs carry no real salary data, so
+ * callers fall back to the same "Salary on request" copy the `on_request`
+ * visibility case uses.
  *
  * Exported (not just used by `coarseSalaryBand` below) so callers that must
  * pass a `band`-visibility job's bounds to a client component can expose
@@ -42,9 +45,11 @@ const SALARY_BAND_BUCKET = 20_000;
  * returns them unchanged, so a server-side pre-bucketing step composes
  * safely with `salaryDisplay`/`coarseSalaryBand` downstream. */
 export function coarseSalaryBounds(
-  salaryMin: number,
-  salaryMax: number,
+  salaryMin: number | null | undefined,
+  salaryMax: number | null | undefined,
 ): { lo: number; hi: number } | null {
+  if (typeof salaryMin !== "number" || typeof salaryMax !== "number") return null;
+  if (!Number.isFinite(salaryMin) || !Number.isFinite(salaryMax)) return null;
   if (salaryMin === 0 && salaryMax === 0) return null;
   const lo = Math.floor(salaryMin / SALARY_BAND_BUCKET) * SALARY_BAND_BUCKET;
   let hi = Math.ceil(salaryMax / SALARY_BAND_BUCKET) * SALARY_BAND_BUCKET;

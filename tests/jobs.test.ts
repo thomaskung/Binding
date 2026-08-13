@@ -82,6 +82,13 @@ describe("coarseSalaryBounds", () => {
   it("returns null for the 0024 (0, 0) null-backfill sentinel", () => {
     expect(coarseSalaryBounds(0, 0)).toBeNull();
   });
+
+  it("returns null for nullish/non-finite input instead of coercing to a fake $0k-$20k band", () => {
+    expect(coarseSalaryBounds(null, null)).toBeNull();
+    expect(coarseSalaryBounds(undefined, undefined)).toBeNull();
+    expect(coarseSalaryBounds(null, 200000)).toBeNull();
+    expect(coarseSalaryBounds(NaN, NaN)).toBeNull();
+  });
 });
 
 describe("relativeDayLabel", () => {
