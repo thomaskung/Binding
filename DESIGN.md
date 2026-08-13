@@ -1,6 +1,6 @@
 # DESIGN.md — Binding (formerly JumpOnBoard) Technical Architecture
 
-**Version 2.11** · Last updated 2026-08-10 · Revision history at the end of this document.
+**Version 2.12** · Last updated 2026-08-12 · Revision history at the end of this document.
 
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [VISION.md](./VISION.md) (goals/metrics). This document describes how the product is actually built. Status: walking-skeleton MVP implemented (see §12 for what's built vs. deferred and where the MVP diverges from the target architecture below).
 
@@ -114,12 +114,31 @@ The data Binding collects (fresh, structured, continuously-maintained career dat
 
 **Per-layer controls matrix** (low-cost discipline: every control is either built now or deferred **with a named trigger**):
 
-- **Layer 0 — client-side (built 2026-07-28)**: PDF metadata strip at ingest before storage (Info dict + XMP — `src/lib/pdf-metadata.ts`); deterministic contact-identifier pattern redaction (`src/lib/pii-patterns.ts` — emails, HK/SG phones, NRIC/FIN incl. M-series, HKID incl. A-check-digit) — **in-browser on the paste-text path** (identifiers never leave the device), reused server-side at ingest on the PDF path's returned draft (`resumes.raw_text` stays the faithful owner-only DSAR copy, never pattern-stripped); PII preview notice with path-honest copy; consent-gate-before-file-picker ordering (§2a); zero-third-party-resources assertion on resume pages (`e2e/no-third-party.spec.ts`). Rejected as theater: client-side NER redaction (LLM-quality work — that's Layer 1's job), browser E2EE with server-held keys. Deferred with trigger: full nonce-CSP via edge middleware (before public launch).
+- **Layer 0 — client-side (built 2026-07-28)**: PDF metadata strip at ingest before storage (Info dict + XMP — `src/lib/pdf-metadata.ts`); deterministic contact-identifier pattern redaction (`src/lib/pii-patterns.ts` — emails, HK/SG phones, NRIC/FIN incl. M-series, HKID incl. A-check-digit) — **in-browser on the paste-text path** (identifiers never leave the device), reused server-side at ingest on the PDF path's returned draft (`resumes.raw_text` stays the faithful owner-only DSAR copy, never pattern-stripped); PII preview notice with path-honest copy; consent-gate-before-file-picker ordering (§2a); zero-third-party-resources assertion on resume pages (`e2e/no-third-party.spec.ts`). Rejected as theater: client-side NER redaction (LLM-quality work — that's Layer 1's job), browser E2EE with **server-held** keys (genuinely client-held key custody is a different, un-rejected design — see §2g). Deferred with trigger: full nonce-CSP via edge middleware (before public launch).
 - **Layer 1 — edge / raw PII (`resumes`, `seeker_experience`, name/contact, `consent_flags`)**: now — Supabase at-rest AES-256 + TLS (platform default), owner-only RLS, consent-before-processing, append-only `pii_access_log` (migration 0017, cross-party access only — owner self-access deliberately unlogged to keep the signal), bounded-retention commitment, service-key hygiene, manual DSAR runbook (`docs/DSAR_RUNBOOK.md`). Deferred with triggers: column-level encryption of contact fields (enterprise-VPC phase), pgaudit/log shipping (post-revenue), in-jurisdiction redaction GPU (edge physicalization; interim: Modal `region="ap"` pin, §12). (Account-deletion self-service is now **built** — `/account`, `deleteAccount` with anonymize-not-delete ledger sanitization; §11/§12.)
 - **Layer 2 — core (vectors, redacted text, `matches`, `points_ledger`, aggregates)**: now — no-vector-egress invariant (only `profile_id, score, redacted_text` leave `match_candidates`; embeddings never reach any client), seeker band-only scores (`matchBand` cap, §2d), **standard-reveal daily cap** (`REVEAL_DAILY_CAP`, env-tunable, 10/day placeholder — closes the gap where §5 claimed "rate-limited reveals" but only overrides were capped; cap checked before balance for deterministic errors; it binds at the affordable burst under seed economics and becomes fully load-bearing when top-ups ship) + existing override guardrails (§4), k≥20 aggregate threshold (§2e), `JDTextOnly` frontier guardrail, append-only ledger, guard-invariant unit tests (`tests/reveal-invariants.test.ts` — the CI tripwire for the accepted admin-client pattern). Deferred with triggers: DP noise on embeddings (§5 — after matching-quality cost is measured), DP noise on published aggregates (§2e), definer-RPC migration of ledger writes (if invariant tests prove insufficient), reveal-velocity anomaly detection (post-revenue).
 - **Layer 3 — internal access (ops panel is roadmap; controls designed now, schema ready)**: masked-by-default PII views (initials, redacted contact) — support workflows designed masked-first; break-glass unmask requires a reason, is time-boxed, and writes to `pii_access_log` (`accessor_role`/`reason` columns shipped in 0017); **outsourced-TA-service firewall** — TA staff operate as *internal recruiters* (same pseudonymized surface, same reveal economics/caps/audit; existing recruiter-matching consent covers it) and the TA role NEVER combines with ops-admin (no privileged raw-profile search — LEGAL_REVIEW.md Q18); key custody/rotation policy at first hire; no-bulk-export rule in any internal tooling; NDA/policy paperwork.
 
 **Layer-0 ↔ reveal reconciliation** (easy to blur when editing): pattern redaction applies to **free-text resume content only**. Canonical identity is structured, owner-controlled data — reveal identity is `profiles.display_name`, disclosed only via the `reveal_requests` join. *Recruiter-visible free text is redacted of identifiers — deterministic for contact patterns AND for structured identifiers we hold (name/employers/address, via `src/lib/redact-known.ts`), with the LLM as best-effort on top for the rest (hardened 2026-08-04, §5); identity flows only through the consent-gated, paid, audited reveal channel.* Recruiters verify identity and arrange interviews from that structured path, never from resume text. Contact sharing (`consent_flags.contact_sharing_consent`) is **designed-not-built**: the flag exists with zero reads and no seeker contact-disclosure field yet.
+
+## 2g. Client-Held Key Custody / Envelope Encryption (founder directive 2026-08-12, roadmap — not yet built)
+
+**One-line shape**: the original raw resume upload is stored as ciphertext in the edge layer; a per-user data key is wrapped by a device-bound passkey credential; the server never holds a standing unwrapped key. This is **not** a rebrand of the "browser E2EE with server-held keys" pattern §2f rejected as theater above — that rejection was specifically of a server holding the key (an oxymoron for "end-to-end"), which is a different, weaker design than genuine client-held custody. The real problem client-held custody has to solve is that Layer 1's redaction/embedding pipeline needs plaintext to do its job — solved below via envelope encryption, not by weakening custody.
+
+**The load-bearing reframe (state this up front, not as an afterthought)**: this mechanism is not "extra encryption for extra safety." Its real purpose is an **AI-processing consent/audit gate** — a guarantee that the redaction/embedding LLM cannot touch raw PII *incidentally or accidentally*, even for data already inside a protected boundary, without an explicit, per-operation authorized decrypt event. That framing is what makes this apply differently to B2C vs. enterprise:
+- **B2C seekers**: the user's own live passkey ceremony is both the decrypt authorization *and* the AI-processing authorization — one act.
+- **Enterprise (customer-VPC, §2f)**: the VPC boundary already keeps raw employee data from leaving the client's environment, but does NOT by itself stop the in-VPC redaction/embedding model from processing that data without a specific authorization event. §2g closes that gap: a designated enterprise-side role (HR admin / DPO-approver) holds the decrypt-authorization — most employees have no Binding account under the HR-ingested path, so authorization is enterprise-side, not per-employee. Supports either per-batch manual authorization or a pre-approved policy (e.g. "auto-authorize redaction/embedding, require explicit approval for anything beyond that"). Where an employee is *also* a dual-role Binding user with their own passkey, they authorize like a B2C seeker instead.
+
+**Mechanics**:
+- **Flow**: passkey ceremony (WebAuthn) on a live user session → unwraps the data key → transient plaintext decrypt for that operation only → plaintext purged from memory, never persisted, never logged. **Exactly three triggers require this ceremony**: initial upload processing, an explicit user-initiated full reprocess-from-original (e.g. "regenerate my profile from scratch from the original document"), and a DSAR export that includes the original. **Routine suggest-and-approve maintenance edits are NOT a trigger** — per the background-loop bullet below, those read and write only the derived/redacted working copy, never the original, so the low-friction nudge loop in §2c is unaffected by this design.
+- **Scope**: applies to the **original raw upload only** (`resumes` raw file/text) — not a whole-edge-DB encryption change. Structured fields (`seeker_experience`, `profiles`) keep today's owner-only RLS posture, unchanged.
+- **Recovery mechanic**: the underlying per-user data key has **N wrapped copies** — one wrapped by each enrolled passkey credential, one wrapped by a hash-derived key from each downloaded one-time recovery code (same UX pattern as TOTP 2FA backup codes). The server stores only these wrapped blobs, never an unwrapped key. Unwrapping *any one* valid copy (a passkey ceremony OR a recovery code) yields the same underlying data key — this is what lets a new device recover access without any other device present, while the server still never persists a standing plaintext key.
+- **Fallback for unsupported devices**: browsers/devices without WebAuthn support wrap the data key with a password-derived key instead, with an explicit UI warning that this is weaker than a hardware-backed passkey — avoids excluding users on legacy or IT-locked-down devices.
+- **Total key-loss = permanent, disclosed loss, deliberately not solved away**: if a user loses their device AND their recovery codes, the encrypted original is permanently unrecoverable — by design. No ops-mediated escrow path exists (see "no break-glass exception" below); an escrow capability would be a materially weaker security claim than genuine client-held custody. State this risk plainly in the setup UI (part of why recovery codes are offered) and in `docs/DSAR_RUNBOOK.md` as a named, accepted limitation — the derived/working profile copy is unaffected regardless, only the original upload is at risk.
+- **Background/periodic-nudge loop (§2c) reads the derived copy, not the ciphertext**: the continuous-maintenance nudge loop operates on the derived/redacted working copy (unchanged, RLS-only protected, not envelope-encrypted) — never on the encrypted original. This is what makes an unattended nudge possible at all without contradicting live-auth-only decrypt: the agent's suggestion comes from data it can already read under existing RLS, not from cracking the ciphertext. An agent (§14e) can therefore only ever queue a suggested edit; the actual decrypt+commit of anything touching the original requires the user's live passkey ceremony.
+- **No break-glass exception, deliberately**: this gate stays categorically separate from the existing Layer-3 human break-glass (masked-data *viewing*, time-boxed + logged, above). An absolute "no LLM touches raw PII without an authorized decrypt event, ever — not even for Binding ops" is the actual claim being sold to enterprise procurement; a break-glass path here would quietly undermine it.
+- **AI-processing audit export (enterprise-facing)**: every decrypt-for-AI-processing event is logged, extending the Layer-3 `pii_access_log` pattern, and made **exportable** as a compliance report an enterprise admin can pull on a new **Enterprise Admin Console** (§14i) — a concrete, demoable artifact proving no LLM touched raw PII without an authorized decrypt event. This is the sellable governance feature the ZK-FL-rejection paragraph above already anticipated ("what Singapore enterprise procurement actually asks for... AI Verify participation as a governance signal") — cross-reference BUSINESS.md §7.3.
+- **Existing-data migration**: today's plaintext `resumes.raw_text` predates this design. On ship, existing users get **backfill-encrypted on next login** — a one-time migration ceremony, same "existing rows migrated" discipline §13a used for the salary-visibility default flip. **Passkey/fallback enrollment at this moment is mandatory, not skippable** — closes the gap for real rather than leaving an indefinite population of users on the old plaintext model with no forcing function to ever migrate. **Build-time note**: gating login behind this ceremony touches the e2e login path (`e2e/seeker-onboarding.ts`, the Modal-free PR-gate specs, `smoke.spec.ts`) and every per-run user the staging helpers create — the build needs an e2e-compatible route through this ceremony (e.g. a test-mode auto-enroll), or the suite breaks as a surprise rather than a known requirement.
 
 ## 2. Data Model (sketch)
 
@@ -611,6 +630,249 @@ UI project's own `ds-patterns/`, which its README asks to push back into the DS)
 template re-theme, and the mockup-only screens (export/PDF, pipeline-health, external ledger) are
 **pending**.
 
+## 14. 2026-08-12 Design Pass (designed, not yet built)
+
+This section records a second founder-directed design pass, following the same discipline as §13:
+**nothing here is coded yet**. Eleven grill rounds (~40 questions) plus two adversarial reviews
+resolved this pass — several items as originally phrased directly conflicted with load-bearing
+invariants already documented above (the Accuracy-Obligation suggest-and-approve posture, the §2f
+"browser E2EE rejected as theater" note, the single-cosine-score/band-cap invariant, `JDTextOnly`).
+**§14g grew heavier than a typical §13-style entry** — it carries three sub-capabilities, tier-gating,
+pricing, and a timed dispute-window state machine — and should be read as needing its own schema
+sketch at build time, not just a paragraph, mirroring how §13d and §4a got theirs.
+
+### 14a. RAG-driven profile autofill (extends §2c/§13c)
+
+Onboarding/maintenance autofill sources = uploaded documents (resume, LinkedIn PDF export,
+portfolio) + connected OAuth accounts (LinkedIn/Google Drive/GitHub — new consent surface, extend
+`src/lib/consent.ts`). Explicitly **not** open public-web lookup for profile data (that's §14g/§14k's
+separate, differently-consented use). Still suggest-and-approve — this is an input-method change
+(less manual typing), not a change to the approval gate.
+
+### 14b. Skill assessment — open-ended AI-graded Q&A supersedes MCQ (replaces §13d's grading mechanism)
+
+Candidate answers free-text/scenario questions; an LLM grades against a rubric. This is now the
+**default target design**, replacing §13d's auto-scored MCQ — not an addendum alongside it. Two
+consequences that must be stated, not inherited silently from §13d:
+- **Human-review shape changes.** §13d's "grading is deterministic (MCQ auto-score), so there is no
+  per-attempt human-in-the-loop" no longer holds — grading is now per-attempt AI, not deterministic.
+  Resolution: a **founder-reviewed rubric bank** (mirrors §13d's reviewed-question-bank pattern —
+  review the rubric once before publish, not every attempt) plus periodic sampled audits of
+  AI-graded attempts to catch grading drift. Per-attempt human review of individual answers is NOT
+  introduced.
+- **Anti-farming needs restating, not inheriting.** A free-text answer graded by an LLM is
+  materially more gameable than a deterministic MCQ (prompt-injection, copy-pasted external-LLM
+  answers, near-duplicate submissions). Mitigations: keep the score effect a small capped cosine
+  bonus (§14c's pattern — low payoff for gaming), a strict rubric pass-bar, rate-limited attempts
+  (reuse the existing `verified_action` rate-limiting shape), and duplicate/near-duplicate-answer
+  detection before a pass is recorded.
+- Work-sample/portfolio analysis stays "nice to have," parked further out — bigger build (artifact
+  ingestion + analysis pipeline), not the default.
+
+### 14c. AI-generated screening questions per job posting (extends §3 matching, `JDTextOnly`)
+
+Recruiter-opt-in toggle on `job_postings`; AI generates candidate-facing questions from the JD
+(`JDTextOnly`-safe, recruiter-authored input); candidate answers are candidate-derived data → Modal
+path only, same as resume text. Mirrors §13d exactly: the recruiter marks each question as either a
+**required filter** (dealbreaker) or a **weighted advantage** (capped score bonus only) — one
+consistent mental model across both features. The advantage path applies a small capped bonus to
+the raw cosine score (same mechanism as §13d's verified-skill bonus) — folds into the ONE score,
+preserves the band-cap invariant; add to the same invariant-test surface
+(`tests/reveal-invariants.test.ts` or a matching test).
+
+### 14d. Career graph — future roadmap + edge/core placement (extends §2f, §5)
+
+Named far-roadmap idea (like ZK-FL's "far-future-watch" treatment, §2f) for a graph-database
+representation of a candidate's full career (employers, roles, transitions) to strengthen matching.
+Edge/core placement decided now even though build is far off: raw graph nodes/edges are PII-bearing
+→ edge, per-jurisdiction, same schema-discipline rule as §2f ("no raw-PII tables joined into
+core-side query paths"); only derived embeddings/graph-signal summaries reach core. Must not leak an
+implicit employer-prestige signal into matching — consistency with `src/lib/experience.ts`'s
+tenure-not-prestige fairness stance. **Dual-use consent split**: the graph can feed both seeker-side
+matching (candidate-facing) and the Enterprise Performance & Relations module (BUSINESS §3a cluster
+4, employer-facing) — these are **two separate, purpose-specific opt-ins**, not one shared consent
+(same pattern as the existing market-signals-vs-processing split), both independently
+manageable/revocable in §14j.
+
+### 14e. Agent/MCP integration + rule-based reply authorization + webhook/websocket notify layer
+
+Two integration directions, both designed, no build-priority order: (1) **personal seeker-agent MCP
+access** — read/help-maintain the user's own profile under their own authorization, extends the
+existing AI-Credit Marketplace agent-framework compatibility (Hermes Agent/OpenClaw, §7); (2)
+**enterprise CLI + MCP** — connect enterprise clients' internal agents/ATS to Binding's recruiter-side
+data (postings, pipeline), fits the Phase-3 enterprise suite (BUSINESS §3a).
+
+- **Agent-initiated replies are rule-based pre-authorized actions only**: the user defines narrow
+  deterministic conditions once (e.g. "auto-decline below my minimum salary"); the agent executes
+  only those exact conditions unattended — no open-ended agent judgment, no per-message human review
+  either.
+- **All agent actions route through the same audit/guardrail infrastructure as human actions** —
+  access-log-style logging (extend the `pii_access_log` pattern), same daily caps as the equivalent
+  human-initiated action. No separate, less-audited path for automation.
+- **Rule governance**: an account-level kill switch instantly disables all agent auto-actions (falls
+  back to draft-only), separate from revoking individual rules one at a time. Conflicting rules
+  (e.g. "auto-decline below $X" vs. "auto-accept for company Y" both matching one event) resolve
+  **most-restrictive-wins** — the declining/blocking rule outranks the permissive one, the safer
+  default failure mode.
+- **New dedicated consent**: third-party agent/MCP access to a profile is its own off-by-default
+  consent category (extend `CONSENT_VERSION`), distinct from existing processing/profiling/
+  maintenance consents — granting an external agent access is a materially different risk than
+  Binding's own internal AI processing.
+- **Webhook/websocket notify layer is new infrastructure** — today only in-app UI notification
+  exists (alerts strip, sparkle chip), nothing external-facing to extend. **New invariant**:
+  webhook/websocket payloads are **pointer/notification-only** (event type + resource id — "a new
+  match is ready, come fetch it authenticated") — never candidate-derived content, redacted résumé
+  text, or scores/bands in the payload body. `JDTextOnly` governs the frontier-API boundary; it says
+  nothing about outbound delivery to a user-designated external endpoint, which is a distinct new
+  PII-egress path this design closes explicitly rather than leaving ungoverned.
+- **Enterprise auto-publish exception to §13b**: default keeps the human-approval gate even for
+  API/CLI-originated postings. **Enterprise tier only** may explicitly enable a bypass; even with
+  bypass on, an automated safety-scan floor still runs (legal/compliance/profanity check, §13a
+  salary-stealth defaults still enforced) before anything goes live — "no human review" does not
+  mean "no safeguards."
+
+### 14f. Mobile — open roadmap question, not resolved (extends §1/§8)
+
+Founder framing: mobile as a distinct approval/authorization surface, not just a responsive view.
+Open question, deliberately not resolved here: does mobile become required for high-stakes approvals
+(reveal-override response, account deletion, the §2g passkey ceremony) with web view-only for those,
+or does it stay preferred-with-full-web-fallback? **Named revisit trigger** (mirrors §2f's "promotion
+triggers" pattern): revisit once §2g's passkey ceremony ships (a platform authenticator's biometric
+UX is mobile's natural home, which may resolve this question implicitly) or at Phase 2 GTM
+(BUSINESS §9), whichever comes first.
+
+### 14g. Enterprise verification module (extends BUSINESS §3a cluster 2 "Learn & Verify")
+
+Three distinct new capabilities, all AI-researched not certified-vendor:
+1. **Internal candidate-scoring** — a reliability/credentialing signal computed from Binding's own
+   `verified_actions` data (skill checks, work-history verification), no external credit bureau.
+2. **Employer/education verification** — AI cross-references public sources (LinkedIn, company
+   registries, published records) against specific resume claims, produces a confidence-scored
+   summary.
+3. **Candidate public-footprint summary** — a broader AI-researched summary of the candidate's public
+   professional presence (published work, talks, open-source activity), distinct from (2)'s targeted
+   claim-checking. Shares the same trigger/pricing/dispute mechanism as (2), not a separate flow.
+
+Must be labeled honestly as **AI-researched, not a certified/legal background check** in all UI copy
+— avoids FCRA-adjacent certification liability. Flagged for LEGAL_REVIEW.md Part 7.
+
+- **Necessarily post-reveal (structural, not a policy add-on)**: (2) and (3) both require the
+  candidate's real identity to search public sources — which only exists after a completed Reveal.
+  Pre-reveal, there is no name to look up.
+- **Explicit earn-eligibility decision**: none of this is wired to the point-earning
+  `verified_actions` path — a confidence-scored web-lookup summary is not independently verifiable
+  the same way a skill-assessment pass is (same AI-verified-vs-not distinction BUSINESS.md already
+  draws for freshness-confirmation, §6). The existing named-but-mechanism-less
+  `work_history_verification` earn category remains a separate, still-undesigned future mechanism —
+  this pass does not design it.
+- **Trigger, pricing, and dispute flow** (applies to both 2 and 3): recruiter-triggered (not
+  automatic/proactive), a **paid action priced like a reveal-tier cost**, gated to the
+  **Advanced/Enterprise tier** (consistent with Market Intelligence/ranking-boost tier-gating).
+  Findings route to the **candidate first**, with a **timed veto/dispute window** (same shape as the
+  existing 7-day override-expiry pattern, §4) — while pending, the recruiter sees "disputed, pending"
+  instead of the raw finding; if the candidate doesn't respond within the window, it proceeds as-is.
+  This is the accuracy-obligation-consistent mitigation for the defamation/misrepresentation risk
+  flagged in LEGAL_REVIEW.md Part 7 — a real named person gets a correction opportunity before a
+  claim about them reaches a third party.
+
+### 14h. Enterprise Performance & Relations — lighter-touch AI synthesis (extends BUSINESS §3a cluster 4)
+
+Replaces a traditional peer-review scorecard with AI synthesis from **employee-submitted** project
+summaries/links only — not passive monitoring of git/Slack/Jira/OKR tools — avoiding
+employee-surveillance/monitoring-notice exposure. Human sign-off retained on any committed review
+output (consistent with suggest-and-approve elsewhere in this document).
+
+### 14i. Client-held key custody — cross-reference to §2g
+
+Full design lives in §2g since it's architecture-tier, not a screen/feature design. **New named
+surface**: an **Enterprise Admin Console** (org-wide configuration, distinct from the personal
+Security/Privacy pages, §14j) hosts the §2g decrypt-authorization role/policy config (who's the HR
+admin/DPO-approver, per-batch vs. pre-approved authorization policy) and the AI-processing
+audit-log export (§2g) — fits the Phase-3 Enterprise Module Suite (BUSINESS §3a) as a roadmap item,
+no build priority set here.
+
+### 14j. Security + Privacy settings — deepened (extends §13e), full "regulated business" design pass
+
+Founder asked to design and consider *all* potential settings that both enhance UX and protect data
+to a regulated-business standard. Both pages keep §13e's existing content as their base and add the
+following.
+
+**Privacy page — new "Privacy Health Panel" at the top** (AI-driven, proactive; deterministic list
+below unchanged in kind, just larger — still §2d adaptive-not-generative, not model-emitted UI):
+surfaces 2-3 AI-flagged items, e.g. "you haven't reviewed your data-sharing consents in 6 months," "a
+new career-graph-for-enterprise-performance consent request is pending," "your continuous-maintenance
+consent is off — profile may go stale."
+- **Consent center**: every consent category in one place, each showing status + version accepted +
+  date + withdraw/re-consent control — processing, automated-profiling, continuous-maintenance
+  (existing), market-signals opt-in (existing), partner-data-sharing (§7d, far roadmap),
+  **career-graph-for-matching** and **career-graph-for-enterprise-performance-context** (two separate
+  toggles, §14d), **background-check-research consent** (§14g), **agent/MCP-access consent** (§14e).
+- Field-level visibility controls + salary-visibility + reveal-override toggle (existing, per §13e).
+- **Connected-account/OAuth management** (§14a): list of connected accounts
+  (LinkedIn/Google Drive/GitHub), scope granted, last-synced time, per-account revoke.
+- **"Who accessed my data" ledger**: consolidated view of cross-party accesses (recruiter reveals,
+  AI-processing decrypt events where applicable) — reveals show company name always (already visible
+  pre-reveal on the job posting itself, not new disclosure) + recruiter personal name tiered by
+  seeker plan (free: anonymized "a recruiter from [Company]"; Pro: name + date; recruiter-side
+  opt-out on personal-name disclosure). **Label honestly**: the recruiter name is the on-file
+  identity, documented above as "deliberately readable, unverified for now" — UI copy must say
+  "recruiter-provided name, not independently verified," not imply a verified identity.
+- **Self-service data export (DSAR)**: "download my data" button, rate-limited (once/30 days,
+  matching `REVEAL_DAILY_CAP`/freshness-confirmation's existing rate-limit discipline). If the export
+  includes the original resume, pulling it triggers the same live-passkey decrypt ceremony as §2g's
+  other authorized-decrypt reasons.
+- **Data retention & manual delete-now**: show the bounded-retention commitment (BUSINESS §11) in
+  plain language, plus a "delete my original resume now" control distinct from full account
+  deletion — triggers crypto-shredding (destroying the wrapped key copies, §2g) rather than waiting
+  for the retention window.
+- **AI-processing transparency panel**: plain-language explainer of what AI does with the user's data
+  (redaction → embedding → matching, private in-house model only, `JDTextOnly`-style boundary
+  explained in consumer terms) — a trust-building read, not a toggle.
+- **Notification preferences**: separate transactional (match alerts, freshness nudges) from
+  marketing communications, so a marketing opt-out doesn't accidentally silence account-security or
+  match notifications.
+- **Pause profile**: temporarily stop new matching/reveals without deleting data — a softer option
+  than full account deletion for someone pausing a job search.
+- Consent-version history view (existing, extends `consent.ts`/`CONSENT_VERSION`).
+
+**Security page — new "Security Command Centre" at the top** (AI-driven, same proactive-panel
+pattern): surfaces e.g. "you have no recovery codes downloaded," "an agent rule hasn't triggered in
+90 days — review it?," "new sign-in from an unrecognized device."
+- **Passkey + recovery-code management** (§2g): enrolled devices (add/remove), recovery-code count
+  remaining + regenerate, password-derived-fallback status for unsupported devices.
+- **Active session/device list**: device type, approximate location, last-active time, per-device or
+  sign-out-everywhere.
+- **Auth methods**: magic-link (default), OAuth providers (§13h, connect/disconnect), password
+  (env-gated demo only).
+- **Login/security activity log**: recent sign-in events, new-device email alerts (toggle).
+- **Agent-authorization rule management** (§14e): list of active rule-based auto-reply rules with
+  edit/delete, an **account-level kill switch** as its own prominent control (separate from per-rule
+  revoke), and a per-rule mini-audit trail (created date, last-triggered date, trigger count).
+- **API keys / personal-agent tokens** (§14e, MCP personal-access direction): view/create/revoke
+  tokens, scoped-permission display, last-used timestamp.
+- Account deletion (existing, unchanged).
+
+**Explicitly NOT on these pages**: the §2g enterprise decrypt-authorization role/policy config and
+the AI-processing audit-log export — those live on the separate **Enterprise Admin Console** (§14i),
+an org-wide configuration surface distinct from personal account settings.
+
+### 14k. AI Company Research (candidate-facing, standalone feature — explicitly NOT part of §7's pillar 5)
+
+An AI-generated public-source summary of an employer (culture, news, reviews) surfaced to a
+candidate evaluating a specific posting. Materially lower legal risk than §14g's capabilities: the
+subject is a company, not a named individual, so no defamation-of-a-person exposure and no
+dispute-window mechanism needed (label as "AI-researched, aggregated public information, not
+official" and move on). **This must NOT be folded into the existing AI-Credit-Marketplace/
+career-assistant allowance (§7)** — that allowance's classifier-gated scope is narrow *by design* and
+its narrowness is what BUSINESS §11 relies on for its confirmation-only (not hard-blocker) legal
+status. Adding live public-web retrieval to what the redeemable key can invoke would widen that
+scope from "generate career-task text" to "fetch and summarize arbitrary external web content" — a
+different, larger surface than the one LEGAL_REVIEW.md's downgrade was premised on. Instead: a
+standalone first-party `AiProvider` capability (e.g. `researchCompany(jobPostingId)`), server-side,
+not exposed through or funded by the redeemable AI-Credit key. §7's scope stays exactly as narrow as
+before. Distinct from the B2B aggregate Market Intelligence product (§2e/BUSINESS §7 item 4a) — this
+is single-company research for one candidate's own decision, not a cross-market signal product.
+
 ---
 
 ## Revision History
@@ -640,3 +902,4 @@ template re-theme, and the mockup-only screens (export/PDF, pipeline-health, ext
 | 2.9 | 2026-08-05 | **2026-08-05 design pass (docs+design-sync cycle, no app code)** — new §13 records founder-directed feature designs with code touch-points for a later build: 13a salary stealth deepened (default `public`→`on_request`, new `band` mode, existing-row migration, seeker `share_salary`→false + drop recruiter-visible salary-expectation, close the seeker-dashboard `match-list.tsx` leak — reconciles the standing §5 "withhold even post-reveal" contradiction); 13b AI job-post authoring 3 modes (`extractJobFields`/`generateJob`, recruiter parity with the seeker resume flow); 13c fewer-fields AI-first + progressive-disclosure principle (bounded by suggest-and-approve / never-silently-maintain); 13d skill assessment (auto-scored MCQ, founder-reviewed bank, `verified_actions` write) with recruiter-configurable per-job verified-skill filter/advantage folded into the single cosine score + a new band-cap invariant test; 13e Security+Privacy as two pages (toggles move out of the profile card); 13f adaptive-dashboard + feature-widget grid both roles; 13g referral/invite acquisition loop (closes the BUSINESS §6a flywheel gap — no acquisition loop exists today); 13h OAuth Google-first; 13i UI gap analysis (namespace drift now real — config moved to `BindingUI`; recruiter template salary-expectation leak; new-job-post public-salary default; missing templates). Companion to BUSINESS.md 2.2 + new COMPETITORS.md 1.0. |
 | 2.10 | 2026-08-06 | **Brand theme reversed: monochrome → purple + Newsreader serif** (founder directive; new §13j). The authoritative UIUX mockup moved to **`Binding.dc.html` in the "Binding UI" project `b7e905dd`** (the founder's final-product design); Binding DS `dc871eb6` is demoted to the component/template library that gets synced *to* match it. §1.9's monochrome reversion is reversed — and §13j records *why* monochrome existed (it mirrored the then-authoritative mockup, not an independent judgment), so the governing principle ("follow the authoritative mockup") stays stable even as the palette changes. Implemented in `packages/ui/src/theme.css`: purple `--primary` **AA-darkened** to `oklch(0.45 0.17 264)` (~7.7:1 white-on-primary), mode-aware soft-purple `--accent` (dark mode deviates from the literal near-white tint so hover/`::selection` stay visible), **opaque** `--ring` (the mockup's `/.22` would composite to ~`.11` under `ring-ring/50` → invisible focus, WCAG 2.4.7), Newsreader `--font-heading` restored on page h1/h2 + Card/Dialog titles, Geist `--font-sans`, `jb-lift`/`jb-fade` gated on `prefers-reduced-motion`, sidebar tokens on-brand. Fonts **self-hosted** via `next/font` (a CDN link would break `e2e/no-third-party.spec.ts`). Seeker/recruiter dashboards restyled as the validation slice, including a real privacy fix: `on_request` salaries are now nulled **at the source** in `seeker-data.tsx` (previously only visually hidden, so the figures still shipped in client props) and all seeker salary rendering routes through `salaryDisplay()`. Remaining routes, the 3 new `@binding/ui` composites, DS-template re-theme, and mockup-only screens (export/PDF, pipeline-health, external ledger) are pending on branch `feat/binding-ui-restyle`. |
 | 2.11 | 2026-08-10 | **§4a same-role volume discount — BUILT** for both reveal paths (was roadmap): `SAME_ROLE_DISCOUNT_MULTIPLIER = 0.6`/`revealCostForRank()` in `points.ts`, rank counted globally per (recruiter, job posting) across `revealCandidate`/`overrideRevealCandidate`/the new `bulkRevealCandidates`. Companion mockup-alignment build, 13 founder-approved features: recruiter Compare view + bulk reveal (Pipeline/Candidates home split replacing the old flat dashboard), Market Intelligence real `recruiter_tier` gating (`hasMarketIntelFullAccess`, Advanced/Pro SaaS only — Solo excluded), a `/settings` route (dev tier toggles relocated out of the app-shell header), a simple unmetered AI career-assistant dock (`AiProvider.careerAssist` — explicitly NOT the metered/classifier-gated Pillar 5 system BUSINESS.md still roadmaps; its Modal endpoint (`modal_app/llm.py`'s new `career_assist` kind) is written but **not yet deployed**), seeker Focus Review swipe-through match deck, profile share-ledger redesign (cycling visibility pills + live recruiter-view mirror, replacing Internal/External tabs), résumé self-export (PDF/text, free/Pro-gated), a minimal career-path concept on the training-credits widget (migration `0023_career_path.sql`, **not yet applied to hosted staging**), and a more prominent reveal-request sheet (additive to the existing inline accept/decline banner). Nav relabeled (seeker: Job matches/Benefits; recruiter: Pipeline/Candidates split). Landing hero headline enlarged to 2-line wrap for visual dominance (kept the centered layout). |
+| 2.12 | 2026-08-12 | **Strategy/design expansion pass (docs cycle; companion to BUSINESS.md 2.3 + LEGAL_REVIEW.md 1.8), founder-grilled across 11 rounds (~40 questions) + two advisor reviews.** New §2g: client-held key custody / envelope encryption for the original resume upload, reframed (the load-bearing insight) as an AI-processing consent/audit gate rather than "extra encryption" — applies to B2C seekers (live passkey ceremony) and, differently, to enterprise customer-VPC data (a designated HR admin/DPO-approver role authorizes, since most employees have no Binding account under the HR-ingested path); recovery via device-bound passkey + optional one-time recovery codes (N wrapped copies of one data key, server never holds an unwrapped key); password-derived fallback for unsupported devices; deliberately no break-glass exception; existing plaintext `resumes.raw_text` gets a mandatory backfill-encrypt-and-enroll ceremony on next login; total key-loss (device + codes both lost) is accepted as permanent, disclosed data loss, not solved via escrow; new enterprise-facing AI-processing audit-log export. New §14 (2026-08-12 design pass, mirrors §13's shape but §14g is heavier — flagged as needing its own schema sketch at build time): 14a RAG-driven profile autofill (uploaded docs + connected OAuth accounts only, not open public lookup); 14b open-ended AI-graded Q&A supersedes §13d's MCQ as the default skill-assessment design (founder-picked, not a roadmap-only alternative) — restates the anti-farming case and the human-review shape change per-attempt AI grading reopens; 14c AI-generated per-posting screening questions folded into the single cosine score via §13d's required-filter/weighted-advantage pattern; 14d career graph (far-roadmap) with edge/core placement decided now and a dual-purpose consent split (matching vs. enterprise-performance-context); 14e agent/MCP integration (personal + enterprise CLI directions) with rule-based-only auto-replies, most-restrictive-wins conflict resolution, an account-level kill switch, a dedicated agent-access consent, a pointer-only webhook/websocket notify layer (new PII-egress invariant stated explicitly), and an enterprise-only auto-publish bypass with a mandatory automated safety-scan floor; 14f mobile left as an explicit open question with a named revisit trigger; 14g enterprise verification module (internal candidate-scoring + AI-researched employer/education verification + candidate public-footprint summary, all explicitly NOT wired to point-earning, necessarily post-reveal, paid/Advanced-Enterprise-tier, candidate-sees-first with a timed dispute window); 14h Performance & Relations lighter-touch AI synthesis from employee-submitted data only (not passive work-tool monitoring); 14i Enterprise Admin Console named as a new surface for §2g's admin config + audit export; 14j Security+Privacy settings deepened into a full "regulated business" design (AI-driven Privacy Health Panel / Security Command Centre, consent center, OAuth/agent/passkey/session management, tiered "who accessed my data" ledger, rate-limited DSAR export, crypto-shred delete-now, pause-profile); 14k AI Company Research as a standalone feature explicitly kept OUT of §7's AI-Credit-Marketplace scope (an earlier draft of this pass had folded it in — corrected on advisor review, since widening that classifier-gated key's scope would undermine the narrow-scoping its confirmation-only legal status depends on). |
