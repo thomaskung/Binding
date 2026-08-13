@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { friendlyOAuthError } from "@/lib/auth-errors";
 import { Button, Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Input, Label } from "@binding/ui";
 import type { SignupIntent } from "@/lib/signup-intent";
 
@@ -16,13 +17,19 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 type Step = "email" | "auth" | "sent";
 
-export function LoginForm({ intent }: { intent: SignupIntent | null }) {
+export function LoginForm({
+  intent,
+  initialError = null,
+}: {
+  intent: SignupIntent | null;
+  initialError?: string | null;
+}) {
   const router = useRouter();
   const destination = intent ? `/onboarding?intent=${intent}` : "/";
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [busy, setBusy] = useState(false);
 
   const validEmail = EMAIL_RE.test(email);
@@ -68,13 +75,56 @@ export function LoginForm({ intent }: { intent: SignupIntent | null }) {
     }
   }
 
-  // No OAuth provider is wired up yet (config.toml has every auth.external
-  // provider disabled) — tracked as backlog. Buttons are visible but inert
-  // rather than silently doing nothing.
+  // Google is wired up (DESIGN.md §13h) — LinkedIn is still backlog, so its
+  // button stays the inert stub until that provider is configured too.
   function onSocial() {
     toast("Social sign-in is coming soon", {
       description: "Continue with email for now.",
     });
+  }
+
+  async function onGoogle() {
+    setBusy(true);
+    setError(null);
+    const supabase = createSupabaseBrowserClient();
+
+    // supabase-js's signInWithOAuth builds the /authorize URL client-side
+    // and always resolves with error: null (see auth-errors.ts) — GoTrue
+    // only discovers "provider not enabled" once the browser actually hits
+    // /authorize, and by then it's a bare JSON error page instead of a
+    // redirect back to this app. So we check GoTrue's public, side-effect-
+    // free /auth/v1/settings first (this is the *only* extra request the
+    // happy path avoids) and only start the real OAuth redirect when Google
+    // is actually enabled — no new failure modes for a real sign-in.
+    try {
+      const settingsUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/settings`;
+      const res = await fetch(settingsUrl, {
+        headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "" },
+      });
+      const settings = res.ok ? await res.json().catch(() => null) : null;
+      if (!settings?.external?.google) {
+        setBusy(false);
+        setError(friendlyOAuthError(new Error("provider is not enabled")));
+        return;
+      }
+    } catch (checkError) {
+      setBusy(false);
+      setError(friendlyOAuthError(checkError));
+      return;
+    }
+
+    const { error: authError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(destination)}`,
+      },
+    });
+    if (authError) {
+      setBusy(false);
+      setError(friendlyOAuthError(authError));
+      return;
+    }
+    // On success the browser is already navigating to Google — nothing else to do.
   }
 
   return (
@@ -87,10 +137,21 @@ export function LoginForm({ intent }: { intent: SignupIntent | null }) {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-col gap-2">
-              <Button variant="outline" className="w-full" onClick={onSocial}>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={onGoogle}
+                disabled={busy}
+                data-testid="oauth-google"
+              >
                 Continue with Google
               </Button>
-              <Button variant="outline" className="w-full" onClick={onSocial}>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={onSocial}
+                data-testid="oauth-linkedin"
+              >
                 Continue with LinkedIn
               </Button>
             </div>

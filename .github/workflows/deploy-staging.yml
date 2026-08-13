@@ -204,12 +204,14 @@ jobs:
           # raise for the test run so the smoke match always surfaces.
           MATCH_TOP_N: '500'
 
-      # The 5 Modal-free specs from the PR gate (ci.yml, job `e2e`), run
+      # The 7 Modal-free specs from the PR gate (ci.yml, job `e2e`), run
       # separately and without E2E_WARM_MODAL — they never touch Modal, so
       # there's nothing to warm and no reason to pay for another globalSetup
-      # warm-up pass.
+      # warm-up pass. recruiter-pipeline-dashboard.spec.ts was missing from
+      # this list until now — Phase 2's PR added it to ci.yml's PR gate but
+      # not here, a real drift caught while rebasing Phase 3 on top.
       - name: Run Modal-free specs against staging
-        run: npx playwright test e2e/app-shell.spec.ts e2e/signup.spec.ts e2e/recruiter-onboarding-wizard.spec.ts e2e/training-benefits.spec.ts e2e/market-intel-dimensions.spec.ts
+        run: npx playwright test e2e/app-shell.spec.ts e2e/signup.spec.ts e2e/recruiter-onboarding-wizard.spec.ts e2e/training-benefits.spec.ts e2e/market-intel-dimensions.spec.ts e2e/recruiter-pipeline-dashboard.spec.ts e2e/login-oauth.spec.ts
         env:
           E2E_BASE_URL: https://binding-staging.vercel.app
           E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
