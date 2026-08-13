@@ -113,13 +113,18 @@ personal contact details, or other identifying information. /no_think"""
 @app.cls(
     image=image,
     gpu="T4",
-    # 600s (was 300s): the E2E warm-up cold-starts the 6 endpoints SEQUENTIALLY
-    # (~2-3 min each on T4), so the first-warmed endpoint cools while later ones
-    # are still warming — the smoke's first real call (embed) landed 8 min after
-    # its warm-up and blew the 300s window, cold-starting again. 600s (10 min)
-    # covers the warm-up skew + a test's onboarding-UI gap. Still scales to zero;
-    # at demo/sparse volume containers idle between requests anyway.
-    scaledown_window=600,
+    # scaledown_window=300: keep a container alive 5 min after its last request
+    # so it survives the E2E warm-up -> first-real-call gap without paying a long
+    # production tail. History: 120s let the container cool during a test's
+    # onboarding-UI lead-in and the ~100s T4 cold start blew the 90s waits
+    # (2026-08-12); 300s fixed that. Then 600s was added (2026-08-13) as a
+    # stopgap for a warm-up SKEW — the 3 containers were cold-started serially,
+    # so the first-warmed one cooled while the rest were still warming. That skew
+    # is fixed at the source by parallel warm-up (e2e/global-setup.ts Promise.all
+    # + the CI curl `wait`), so 600s is unnecessary and 300s is restored as the
+    # tight, correct value. The parallel suite (~12 min) keeps containers warm
+    # between specs; sparse demo traffic scales to zero regardless.
+    scaledown_window=300,
     # APAC region pin (DESIGN.md §5/§12, 2026-07-28): raw resume text is
     # redacted here, so processing runs in-region rather than Modal's
     # implicit US default (~1.5x broad-region price multiplier accepted).
