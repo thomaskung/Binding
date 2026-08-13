@@ -20,7 +20,7 @@ import { fieldMode, filterFieldsForSurface, type FieldVisibilityMap } from "@/li
 import { redactKnownIdentifiers } from "@/lib/redact-known";
 import { parseCommaList } from "@/lib/jobs";
 import { isQuickActionInstruction } from "@/lib/profile";
-import { refreshMatchesForProfile } from "@/lib/matching";
+import { matchBand, refreshMatchesForProfile, type SeekerTier } from "@/lib/matching";
 import {
   appendLedger,
   earnFreshnessConfirmation,
@@ -542,12 +542,22 @@ export async function exportMyData(): Promise<string> {
 
   revalidatePath("/seeker/settings/privacy");
 
+  // Raw cosine `score` never reaches seeker-facing code (CLAUDE.md invariant,
+  // tests/reveal-invariants.test.ts) — that holds for a self-export too, so
+  // each match is downgraded to the same qualitative band the seeker already
+  // sees in the product, never the underlying number.
+  const tier: SeekerTier = fullProfile?.seeker_tier === "pro" ? "pro" : "free";
+  const bandedMatches = (matches ?? []).map(({ score, ...rest }) => ({
+    ...rest,
+    band: matchBand(score, tier),
+  }));
+
   return JSON.stringify(
     {
       exportedAt: new Date().toISOString(),
       profile: fullProfile,
       resumes: resumes ?? [],
-      matches: matches ?? [],
+      matches: bandedMatches,
       consent: consent ?? null,
       pointsLedger: ledger ?? [],
     },
