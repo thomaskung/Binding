@@ -25,7 +25,7 @@ image = (
 @app.cls(
     image=image,
     gpu="T4",
-    scaledown_window=300,  # survive warm-up->first-call gap (see llm.py note)
+    scaledown_window=600,  # survive warm-up skew + test gap (see llm.py note)
     # APAC region pin — same rationale as llm.py's Qwen class (embedding
     # input is redacted-but-candidate-derived text; keep it in-region).
     region="ap",
