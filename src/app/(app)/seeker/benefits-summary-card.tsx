@@ -1,37 +1,21 @@
 import Link from "next/link";
 import { Badge, Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@binding/ui";
-import { benefitsSummary, getLifetimeEarnedPoints, listBenefitPartnerUnlocks } from "@/lib/benefits";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { benefitsSummary } from "@/lib/benefits";
 
 interface Props {
-  lifetimePoints?: number;
-  userId?: string;
-  partnerUnlocks?: { tier_required: number }[];
+  lifetimePoints: number;
+  partnerUnlocks: { tier_required: number }[];
 }
 
 /**
  * Benefits dashboard widget (DESIGN.md §13f) — a catalog-facing teaser,
  * distinct from `LoyaltyLadderCard` (which shows tier progression): this one
  * answers "what can I redeem right now." Pure derivation via
- * `benefitsSummary` from the same lifetime-points + partner-tier data the
- * ladder widget already has — no new query when the caller (loadSeekerContext)
- * supplies both. Self-fetches anything omitted, for standalone/future use.
+ * `benefitsSummary` from the same lifetime-points + partner-tier data
+ * `loadSeekerContext` already fetches for the ladder widget — no new query.
  */
-export async function BenefitsSummaryCard({ lifetimePoints, userId, partnerUnlocks: partnerUnlocksProp }: Props) {
-  let points = lifetimePoints;
-  let partnerUnlocks = partnerUnlocksProp;
-
-  if (points === undefined || partnerUnlocks === undefined) {
-    const supabase = await createSupabaseServerClient();
-    if (points === undefined) {
-      points = userId ? await getLifetimeEarnedPoints(supabase, userId) : 0;
-    }
-    if (partnerUnlocks === undefined) {
-      partnerUnlocks = await listBenefitPartnerUnlocks(supabase);
-    }
-  }
-
-  const { tier, unlockedCount, lockedCount } = benefitsSummary(points, partnerUnlocks);
+export function BenefitsSummaryCard({ lifetimePoints, partnerUnlocks }: Props) {
+  const { tier, unlockedCount, lockedCount } = benefitsSummary(lifetimePoints, partnerUnlocks);
 
   return (
     <Card className="jb-lift" data-testid="benefits-summary-card">
