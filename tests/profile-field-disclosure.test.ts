@@ -43,27 +43,31 @@ describe("PROFILE_FIELD_GROUPS", () => {
     expect(new Set([...essential, ...advanced])).toEqual(new Set(EXPECTED_KEYS));
   });
 
-  it("marks AI-prefilled fields, core identity, and work setup as essential", () => {
+  it("marks AI-prefilled fields, core identity, and dealbreaker-matrix fields as essential", () => {
+    // work_setups/min_salary/equity_required all feed dealbreaker_matrix and
+    // gate matching directly — collapsing any of them risks a seeker never
+    // setting a real matching constraint, so the whole group stays essential
+    // together rather than split by AI-prefilled-vs-manual provenance.
     expect(essentialFields().sort()).toEqual(
       [
         "desired_roles",
         "display_name",
+        "equity_required",
         "experience",
         "industries",
+        "min_salary",
         "skills",
         "work_setups",
       ].sort(),
     );
   });
 
-  it("collapses always-manual fields as advanced", () => {
+  it("collapses always-manual, non-dealbreaker fields as advanced", () => {
     expect(advancedFields().sort()).toEqual(
       [
         "credentials",
-        "equity_required",
         "headline",
         "location",
-        "min_salary",
         "phone",
         "references_available",
         "share_salary",

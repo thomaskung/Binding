@@ -137,12 +137,11 @@ test.describe("UAT: Dealbreaker matrix (§3 pillar 2)", () => {
 
     // The dealbreaker fields (min salary, equity required, work setup) only
     // render in the profile's editing mode. As of Phase 7 progressive
-    // disclosure (DESIGN.md §13c, src/lib/profile-field-disclosure.ts),
-    // min salary/equity are also always-manual "advanced" fields collapsed
-    // behind the "Show more fields" toggle — expand it before asserting.
+    // disclosure (DESIGN.md §13c, src/lib/profile-field-disclosure.ts), they
+    // stay in the "essential" tier alongside work_setups (all three feed
+    // dealbreaker_matrix and gate matching directly) — no toggle needed.
     await page.goto("/seeker/profile");
     await page.getByRole("button", { name: "Edit profile" }).click();
-    await page.getByTestId("advanced-fields-toggle").click();
     await expect(page.getByTestId("dealbreaker-equity")).toBeVisible({ timeout: 15_000 });
     await page.screenshot({ path: `e2e-results/${RUN_ID}/2_dealbreaker_matrix.png`, fullPage: true });
     await captureDomState(page, "2_dealbreaker_matrix");

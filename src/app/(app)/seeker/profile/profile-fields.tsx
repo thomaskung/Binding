@@ -343,7 +343,6 @@ export function ProfileFields(props: ProfileFieldsProps) {
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1fr_320px]">
           {/* Main content */}
           <div className="flex flex-col gap-4">
-          {(!editing || showAdvanced) && (
           <Card className="jb-lift">
             <CardHeader>
               <CardTitle className="text-sm">Salary &amp; availability</CardTitle>
@@ -394,7 +393,6 @@ export function ProfileFields(props: ProfileFieldsProps) {
               )}
             </CardContent>
           </Card>
-          )}
 
           <Card className="jb-lift">
             <CardHeader>

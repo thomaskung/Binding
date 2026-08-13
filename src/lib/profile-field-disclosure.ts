@@ -6,10 +6,18 @@
  * industries, experience) or the maintenance-draft nudge already populate
  * show up FIRST/always ("essential") — low friction, "we already did this".
  * Fields that always require manual typing collapse behind a "Show more
- * fields" disclosure ("advanced"). `display_name` (core identity) and
- * `work_setups` (a compact checkbox row, already unconditionally rendered
- * pre-Phase-7) are essential too even though neither is AI-extracted — moving
- * either behind the toggle would be a regression, not a simplification.
+ * fields" disclosure ("advanced"). `display_name` (core identity) is
+ * essential too even though it isn't AI-extracted — hiding it would be a
+ * regression, not a simplification.
+ *
+ * `work_setups`, `min_salary`, and `equity_required` are also essential
+ * despite being manual-entry: all three feed `dealbreaker_matrix`
+ * (saveDraft/actions.ts) and directly gate which matches a seeker is shown.
+ * Collapsing a hard matching dealbreaker behind an opt-in disclosure risks a
+ * seeker never setting it (e.g. no salary floor) and silently matching
+ * against jobs they'd have excluded — a friction-reduction goal cannot
+ * override a matching-correctness one, so the whole dealbreaker group stays
+ * essential together, not split by provenance.
  */
 
 export type ProfileFieldKey =
@@ -31,20 +39,20 @@ export type ProfileFieldKey =
 export type DisclosureTier = "essential" | "advanced";
 
 export const PROFILE_FIELD_GROUPS: Record<ProfileFieldKey, DisclosureTier> = {
-  // Essential: AI-prefilled, or core identity / already-always-visible.
+  // Essential: AI-prefilled, core identity, or a matching dealbreaker.
   display_name: "essential",
   skills: "essential",
   desired_roles: "essential",
   industries: "essential",
   experience: "essential",
   work_setups: "essential",
+  min_salary: "essential",
+  equity_required: "essential",
 
-  // Advanced: always manual entry, collapsed behind "Show more fields".
+  // Advanced: always manual entry, non-dealbreaker, collapsed behind "Show more fields".
   headline: "advanced",
   location: "advanced",
   phone: "advanced",
-  min_salary: "advanced",
-  equity_required: "advanced",
   references_available: "advanced",
   share_salary: "advanced",
   credentials: "advanced",
