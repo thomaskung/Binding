@@ -89,6 +89,8 @@ export function requireFixture(value: string | null | undefined, name: string): 
 //                                   scenarios 3/5/7 reuse that fixture free)
 //   app-shell, signup, recruiter-onboarding-wizard, training-benefits,
 //   market-intel-dimensions .. 0   (wizard-skip onboarding / SQL-only RPCs)
+//   salary-stealth ........... 0   (admin-client inserts + wizard-skip
+//                                   onboarding only, no publish/embed)
 //   ------------------------------
 //   TOTAL .................... 27
 // Keep it a tight ceiling: if a change pushes the real total up, re-measure and

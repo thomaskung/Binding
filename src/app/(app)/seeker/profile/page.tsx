@@ -64,7 +64,7 @@ export default async function SeekerProfilePage() {
       desiredRoles={profile?.desired_roles ?? []}
       industries={profile?.industries ?? []}
       referencesAvailable={profile?.references_available ?? false}
-      shareSalary={profile?.share_salary ?? true}
+      shareSalary={profile?.share_salary ?? false}
       credentials={profile?.credentials ?? ""}
       credentialsSummary={profile?.credentials_summary ?? null}
       fieldVisibility={(profile?.field_visibility ?? {}) as FieldVisibilityMap}

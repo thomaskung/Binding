@@ -73,6 +73,13 @@ export function JobDetail({ job, matchCount }: { job: EditableJob; matchCount: n
             <span className="jb-serif text-lg font-semibold tracking-tight">
               {salaryDisplay(job.salary_min!, job.salary_max!, job.salary_visibility)}
             </span>
+            {/* Binary label — 'band' (migration 0025, DESIGN §13a) reads as
+                "On request" here rather than its own label. Left as a known
+                follow-up for the phase that wires a `band` option into the
+                job-editor visibility toggle (job-editor.tsx's toggle is
+                still public/on_request-only, so no posting can reach this
+                page with salary_visibility='band' yet — not a live bug,
+                just an incomplete label ahead of that UI work). */}
             <Badge variant="outline">
               {job.salary_visibility === "public" ? "Public" : "On request"}
             </Badge>

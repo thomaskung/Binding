@@ -11,7 +11,28 @@ export const EMPLOYMENT_TYPE_LABEL: Record<EmploymentType, string> = {
   intern: "Internship",
 };
 
-export type SalaryVisibility = "public" | "on_request";
+export type SalaryVisibility = "public" | "band" | "on_request";
+
+/** Bucket width for the coarse `band` display (migration 0025, DESIGN §13a) —
+ * a "$180k+"-style stealth range that's coarser than the exact figure but
+ * still gives candidates a usable signal. $20k is the round-number pick the
+ * task's own precedent range suggests; boundary cases are covered in
+ * tests/jobs.test.ts. */
+const SALARY_BAND_BUCKET = 20_000;
+
+/** Round `salaryMin`/`salaryMax` out to the enclosing `SALARY_BAND_BUCKET`
+ * multiples ("coarsening" — never narrows the true range) and format as
+ * "$160k – $220k". If both bounds round into the same bucket (e.g. a tight
+ * range, or the 0024 backfill's (0, 0) sentinel for legacy null rows), the
+ * upper bound is bumped one bucket up so the display never degenerates to a
+ * single figure — the whole point of `band` is to never show one exact
+ * number. */
+function coarseSalaryBand(salaryMin: number, salaryMax: number): string {
+  const lo = Math.floor(salaryMin / SALARY_BAND_BUCKET) * SALARY_BAND_BUCKET;
+  let hi = Math.ceil(salaryMax / SALARY_BAND_BUCKET) * SALARY_BAND_BUCKET;
+  if (hi <= lo) hi = lo + SALARY_BAND_BUCKET;
+  return `$${lo / 1000}k – $${hi / 1000}k`;
+}
 
 /** "Node.js, PostgreSQL, AWS" -> ["Node.js", "PostgreSQL", "AWS"] */
 export function parseCommaList(text: string): string[] {
@@ -35,9 +56,10 @@ export function salaryDisplay(
   visibility: SalaryVisibility,
 ): string {
   if (visibility === "on_request") return "Salary on request";
+  if (visibility === "band") return coarseSalaryBand(salaryMin, salaryMax);
   // Both bounds are NOT NULL at the DB level since migration 0024 — salary is
   // mandatory at posting time (DESIGN §4a); the stealth path is handled by the
-  // visibility branch above, never by null bounds.
+  // visibility branches above, never by null bounds.
   return `$${salaryMin.toLocaleString()} – $${salaryMax.toLocaleString()}`;
 }
 

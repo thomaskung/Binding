@@ -62,7 +62,7 @@ export async function saveJob(formData: FormData) {
     department: String(formData.get("department") ?? "").trim() || null,
     location: String(formData.get("location") ?? "").trim() || null,
     employment_type: String(formData.get("employment_type") ?? "fulltime"),
-    salary_visibility: String(formData.get("salary_visibility") ?? "public"),
+    salary_visibility: String(formData.get("salary_visibility") ?? "on_request"),
     offers_equity: formData.get("offers_equity") === "on",
     skills: parseCommaList(String(formData.get("skills") ?? "")),
     responsibilities: parseLineList(String(formData.get("responsibilities") ?? "")),

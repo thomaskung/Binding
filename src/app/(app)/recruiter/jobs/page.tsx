@@ -60,7 +60,7 @@ export default async function RecruiterJobsPage() {
         <div className="flex flex-col gap-4">
           {(jobs ?? []).map((job) => {
             const employmentType = (job.employment_type ?? "fulltime") as EmploymentType;
-            const visibility = (job.salary_visibility ?? "public") as SalaryVisibility;
+            const visibility = (job.salary_visibility ?? "on_request") as SalaryVisibility;
             const metaLine = [job.department, job.location, EMPLOYMENT_TYPE_LABEL[employmentType]]
               .filter(Boolean)
               .join(" · ");
