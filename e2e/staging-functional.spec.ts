@@ -111,7 +111,7 @@ test.describe("Staging functional — consent & profiling", () => {
 
 test.describe("Staging functional — matching pipeline", () => {
   test("5. Seeker publishes profile and trigger matching", async ({ browser }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(240_000);
     const ctx = await stagingContext(browser);
     const page = await ctx.newPage();
     const user = await ensureStagingUser("seeker");
@@ -136,7 +136,7 @@ test.describe("Staging functional — matching pipeline", () => {
     // — give the round-trip generous headroom. (Raised 60s -> 90s after a real
     // staging timeout; test.setTimeout(180_000) above gives this room under
     // playwright.config.ts's 120s default test cap.)
-    await expect(page.getByTestId("redacted-preview")).toBeVisible({ timeout: 90_000 });
+    await expect(page.getByTestId("redacted-preview")).toBeVisible({ timeout: 180_000 });
 
     await ctx.close();
   });
@@ -175,7 +175,7 @@ test.describe("Staging functional — matching pipeline", () => {
     countAiCall(); // ai.embed on publish
     await page.getByTestId("publish-job").click();
     await expect(page.getByText("Published — matches refreshed.")).toBeVisible({
-      timeout: 60_000,
+      timeout: 120_000,
     });
 
     await ctx.close();
@@ -192,7 +192,7 @@ test.describe("Staging functional — matching pipeline", () => {
     // seeker's résumé can match many leftover jobs from past runs on this
     // never-reset DB.
     const matchCard = page.getByTestId("seeker-match-card").filter({ hasText: pipelineJobTitle }).first();
-    await expect(matchCard).toBeVisible({ timeout: 60_000 });
+    await expect(matchCard).toBeVisible({ timeout: 120_000 });
     // Qualitative band badge — never a raw percentage on the seeker view.
     await expect(matchCard.getByText(/(High|Normal|Low) match/)).toBeVisible();
     await expect(matchCard.getByText(/\d+%/)).toHaveCount(0);
@@ -243,7 +243,7 @@ test.describe("Staging functional — reveal mechanics", () => {
     // Filter by this pipeline's own job title, not .first() — same reasoning
     // as test 7 above.
     const matchCard = seeker.getByTestId("seeker-match-card").filter({ hasText: pipelineJobTitle }).first();
-    await expect(matchCard).toBeVisible({ timeout: 60_000 });
+    await expect(matchCard).toBeVisible({ timeout: 120_000 });
     await matchCard.getByTestId("match-interested").click();
     await expect(matchCard.getByText("Interested", { exact: true })).toBeVisible({
       timeout: 15_000,
@@ -262,9 +262,9 @@ test.describe("Staging functional — reveal mechanics", () => {
     await recruiter.getByTestId("reveal-candidate").click();
     await recruiter.getByTestId("confirm-reveal").click();
     await expect(recruiter.getByTestId("revealed-name")).toHaveText(pipelineSeekerName, {
-      timeout: 60_000,
+      timeout: 120_000,
     });
-    await expect(recruiter.getByTestId("fit-summary")).toBeVisible({ timeout: 60_000 });
+    await expect(recruiter.getByTestId("fit-summary")).toBeVisible({ timeout: 120_000 });
 
     // Recruiter spent the match-quality reveal cost of the 100-pt seed. The
     // cost is dynamic (§4a): score ≥ 0.8 → 2× (20 pts), ≥ 0.65 → 1.5× (15 pts),

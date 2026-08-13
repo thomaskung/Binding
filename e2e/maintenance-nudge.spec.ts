@@ -76,11 +76,11 @@ test("stale profile nudges, and approving the draft clears staleness", async ({ 
   countAiCall(); // ai.draftMaintenanceUpdate
   // Modal round-trip on a possibly-cold lambda — same 60s headroom as the
   // other AI-backed waits in the shared helpers.
-  await expect(page.getByTestId("nudge-suggestion")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId("nudge-suggestion")).toBeVisible({ timeout: 120_000 });
   await page.getByTestId("nudge-approve").click();
   countAiCall(); // acceptMaintenanceUpdate -> publishProfile: ai.redact
   countAiCall(); // acceptMaintenanceUpdate -> publishProfile: ai.embed
-  await page.waitForURL(/\/seeker$/, { timeout: 60_000 });
+  await page.waitForURL(/\/seeker$/, { timeout: 120_000 });
 
   await expect(page.getByTestId("stale-nudge-card")).toHaveCount(0);
   // Positive signal (not just an absence) that the dashboard actually

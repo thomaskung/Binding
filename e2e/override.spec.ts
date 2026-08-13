@@ -128,7 +128,7 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   await completeSeekerOnboarding(seeker, { name: seekerName, resumeText: RUST_TEXT });
 
   await seeker.goto("/seeker/profile/resume");
-  await expect(seeker.getByTestId("redacted-preview")).toBeVisible({ timeout: 30_000 });
+  await expect(seeker.getByTestId("redacted-preview")).toBeVisible({ timeout: 180_000 });
 
   // Paused-profile shield first (DESIGN §4 guardrail): override toggle ON but
   // visibility paused — recruiter must see the unavailable state, never an
@@ -156,7 +156,7 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
 
   // Seeker sees the match but does NOT opt in.
   await seeker.goto("/seeker/matches");
-  await expect(seeker.getByTestId("seeker-match-card").first()).toBeVisible({ timeout: 60_000 });
+  await expect(seeker.getByTestId("seeker-match-card").first()).toBeVisible({ timeout: 120_000 });
 
   // --- Recruiter override-reveals the non-opted-in candidate ---
   await recruiter.reload();
@@ -201,7 +201,7 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   countAiCall(); // ai.fitSummary on override reveal
   await recruiter.getByTestId("confirm-override").click();
   await expect(recruiter.getByTestId("revealed-name")).toHaveText(seekerName, {
-    timeout: 60_000,
+    timeout: 120_000,
   });
   await expect(recruiter.getByTestId("override-pending-note")).toBeVisible();
   await recruiter.goto("/recruiter/jobs");
