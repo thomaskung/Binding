@@ -40,6 +40,118 @@ export interface SeekerConsentInput {
   profiling: boolean;
 }
 
+/** Generic shape for one entry of CONSENT_REGISTRY below — enough metadata
+ * for a future settings page (Phase 6) to render a list of consent toggles
+ * without hand-wiring each one. Field choices map directly to how
+ * src/app/onboarding/actions.ts and src/app/(app)/seeker/actions.ts actually
+ * read/write consent_flags today — see CONSENT_REGISTRY doc comment. */
+export interface ConsentRegistryEntry {
+  /** Stable machine-readable identifier for this consent. Not itself
+   * persisted anywhere — used for keying UI list items / tests. */
+  key: "core" | "market_signals" | "maintenance" | "connected_accounts";
+  /** Human-readable name for a settings-page toggle/list item. */
+  label: string;
+  /** One- or two-sentence human-readable explanation of what this consent
+   * covers, suitable for display next to the toggle. */
+  description: string;
+  /** The live version string for this consent — MUST equal the
+   * corresponding exported *_CONSENT_VERSION constant above (asserted by
+   * tests/consent.test.ts so the registry can never silently drift). */
+  version: string;
+  /** True only for the base ToS/processing/profiling bundle: accepted once
+   * at seeker onboarding (validateSeekerConsent) and not independently
+   * revocable from a settings page. All other consents are optional and
+   * granted/withdrawn independently of this one and each other. */
+  required: boolean;
+  /** Whether this consent can be withdrawn at any time after being granted
+   * (a settings-page toggle flips it off — see each *_CONSENT_VERSION
+   * constant's own doc comment above). The required bundle is accepted once
+   * and is not independently withdrawable — there is no "un-accept ToS and
+   * keep using the account" path. */
+  withdrawable: boolean;
+  /** consent_flags column(s) (timestamptz, null = not currently granted)
+   * that record when this consent was granted. Multiple columns for the
+   * required bundle because tos/processing/profiling are stamped together
+   * but remain semantically distinct fields in the table. */
+  timestampColumns: readonly string[];
+  /** consent_flags column (text, null = not currently granted) that stores
+   * which version string was accepted for this consent. */
+  versionColumn: string;
+  /** Which account role(s) this consent applies to. `core` is written for
+   * BOTH roles at onboarding, but asymmetrically: activateSeeker() stamps
+   * tos_accepted_at + processing_consent_at + profiling_consent_at,
+   * while activateRecruiter() only ever stamps tos_accepted_at (+
+   * consent_version) — a recruiter-only profile has a non-null
+   * consent_version with the other two timestamp columns left null. A
+   * generic renderer must not treat "versionColumn is non-null" alone as
+   * "fully granted" for a recruiter account; the other 3 consents are
+   * seeker-only (gated by requireRole("seeker") in
+   * src/app/(app)/seeker/actions.ts) and should not be rendered/toggled on
+   * a recruiter-only settings view at all. */
+  roles: readonly ("seeker" | "recruiter")[];
+}
+
+/** Registry wrapping the 4 independently-versioned consent constants above,
+ * purely additive metadata for a future settings page (Phase 6) to render a
+ * generic list of consent toggles from — no renames or behavior changes to
+ * the constants/actions that already read and write consent_flags directly.
+ *
+ * Each entry's `version` must equal the constant it names; the
+ * `timestampColumns`/`versionColumn` must equal the columns actually
+ * upserted in src/app/onboarding/actions.ts (activateSeeker) and
+ * src/app/(app)/seeker/actions.ts (updateMarketSignalsConsent /
+ * updateMaintenanceConsent / updateConnectedAccountsConsent). */
+export const CONSENT_REGISTRY: readonly ConsentRegistryEntry[] = [
+  {
+    key: "core",
+    label: "AI processing & automated matching",
+    description:
+      "Redacting your resume for AI processing and running automated profile-to-job matching — required to use Binding as a seeker.",
+    version: CONSENT_VERSION,
+    required: true,
+    withdrawable: false,
+    timestampColumns: ["tos_accepted_at", "processing_consent_at", "profiling_consent_at"],
+    versionColumn: "consent_version",
+    roles: ["seeker", "recruiter"],
+  },
+  {
+    key: "market_signals",
+    label: "Aggregate market intelligence",
+    description:
+      "Contribute your profile signals to the aggregate market-wide skill-demand and salary-trend intelligence product.",
+    version: MARKET_SIGNALS_CONSENT_VERSION,
+    required: false,
+    withdrawable: true,
+    timestampColumns: ["market_signals_opt_in_at"],
+    versionColumn: "market_signals_consent_version",
+    roles: ["seeker"],
+  },
+  {
+    key: "maintenance",
+    label: "Continuous AI profile maintenance",
+    description:
+      "Let Binding proactively draft profile updates as your work history or skills change, subject to your review before anything is applied.",
+    version: MAINTENANCE_CONSENT_VERSION,
+    required: false,
+    withdrawable: true,
+    timestampColumns: ["maintenance_consent_at"],
+    versionColumn: "maintenance_consent_version",
+    roles: ["seeker"],
+  },
+  {
+    key: "connected_accounts",
+    label: "Connected accounts (Google Drive import)",
+    description:
+      "Allow importing resume or profile content from a connected Google Drive account.",
+    version: CONNECTED_ACCOUNTS_CONSENT_VERSION,
+    required: false,
+    withdrawable: true,
+    timestampColumns: ["connected_accounts_opt_in_at"],
+    versionColumn: "connected_accounts_consent_version",
+    roles: ["seeker"],
+  },
+];
+
 /** Pure validator for the seeker onboarding consent gate — the required set
  * is ToS + processing + profiling; maintenance is deliberately NOT here
  * (optional, LEGAL_REVIEW.md Q14). Returns an error message or null. */

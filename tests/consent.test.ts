@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CONNECTED_ACCOUNTS_CONSENT_VERSION,
+  CONSENT_REGISTRY,
   CONSENT_VERSION,
   MAINTENANCE_CONSENT_VERSION,
   MARKET_SIGNALS_CONSENT_VERSION,
@@ -46,5 +47,75 @@ describe("consent versions", () => {
       CONNECTED_ACCOUNTS_CONSENT_VERSION,
     ];
     for (const v of versions) expect(v).toMatch(/^\d{4}-\d{2}-\d{2}/);
+  });
+});
+
+function findEntry(key: (typeof CONSENT_REGISTRY)[number]["key"]) {
+  const entry = CONSENT_REGISTRY.find((e) => e.key === key);
+  expect(entry).toBeDefined();
+  if (!entry) throw new Error(`missing registry entry for ${key}`);
+  return entry;
+}
+
+describe("CONSENT_REGISTRY", () => {
+  it("has exactly 4 entries, one per exported consent constant", () => {
+    expect(CONSENT_REGISTRY).toHaveLength(4);
+    const keys = CONSENT_REGISTRY.map((e) => e.key).sort();
+    expect(keys).toEqual(["connected_accounts", "core", "maintenance", "market_signals"]);
+  });
+
+  it("each entry's version matches the real exported constant it claims to wrap — so the registry can never silently drift", () => {
+    expect(findEntry("core").version).toBe(CONSENT_VERSION);
+    expect(findEntry("market_signals").version).toBe(MARKET_SIGNALS_CONSENT_VERSION);
+    expect(findEntry("maintenance").version).toBe(MAINTENANCE_CONSENT_VERSION);
+    expect(findEntry("connected_accounts").version).toBe(CONNECTED_ACCOUNTS_CONSENT_VERSION);
+  });
+
+  it("roles reflect who each consent is actually gated for (core is both roles; the rest are seeker-only)", () => {
+    expect(findEntry("core").roles).toEqual(["seeker", "recruiter"]);
+    expect(findEntry("market_signals").roles).toEqual(["seeker"]);
+    expect(findEntry("maintenance").roles).toEqual(["seeker"]);
+    expect(findEntry("connected_accounts").roles).toEqual(["seeker"]);
+  });
+
+  it("the base bundle (tos/processing/profiling) is required and not independently withdrawable", () => {
+    const core = CONSENT_REGISTRY.find((e) => e.key === "core");
+    expect(core?.required).toBe(true);
+    expect(core?.withdrawable).toBe(false);
+  });
+
+  it("the other 3 consents are optional and independently withdrawable", () => {
+    const rest = CONSENT_REGISTRY.filter((e) => e.key !== "core");
+    expect(rest).toHaveLength(3);
+    for (const entry of rest) {
+      expect(entry.required).toBe(false);
+      expect(entry.withdrawable).toBe(true);
+    }
+  });
+
+  it("timestampColumns/versionColumn line up with the columns actually upserted by the actions", () => {
+    // src/app/onboarding/actions.ts activateSeeker()
+    expect(findEntry("core").timestampColumns).toEqual([
+      "tos_accepted_at",
+      "processing_consent_at",
+      "profiling_consent_at",
+    ]);
+    expect(findEntry("core").versionColumn).toBe("consent_version");
+
+    // src/app/(app)/seeker/actions.ts updateMarketSignalsConsent()
+    expect(findEntry("market_signals").timestampColumns).toEqual(["market_signals_opt_in_at"]);
+    expect(findEntry("market_signals").versionColumn).toBe("market_signals_consent_version");
+
+    // updateMaintenanceConsent()
+    expect(findEntry("maintenance").timestampColumns).toEqual(["maintenance_consent_at"]);
+    expect(findEntry("maintenance").versionColumn).toBe("maintenance_consent_version");
+
+    // updateConnectedAccountsConsent()
+    expect(findEntry("connected_accounts").timestampColumns).toEqual([
+      "connected_accounts_opt_in_at",
+    ]);
+    expect(findEntry("connected_accounts").versionColumn).toBe(
+      "connected_accounts_consent_version",
+    );
   });
 });
