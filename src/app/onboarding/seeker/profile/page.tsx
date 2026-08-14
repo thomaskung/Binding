@@ -23,11 +23,6 @@ export default async function SeekerOnboardingProfilePage() {
       .order("start_date", { ascending: false }),
   ]);
 
-  const dealbreakers = (profile?.dealbreaker_matrix ?? {}) as {
-    min_salary?: number | null;
-    work_setups?: string[];
-  };
-
   return (
     <OnboardingWizard
       draftText={profile?.draft_text ?? ""}
@@ -41,8 +36,6 @@ export default async function SeekerOnboardingProfilePage() {
         startDate: e.start_date,
         endDate: e.end_date,
       }))}
-      minSalary={dealbreakers.min_salary ?? null}
-      workSetups={dealbreakers.work_setups ?? []}
     />
   );
 }

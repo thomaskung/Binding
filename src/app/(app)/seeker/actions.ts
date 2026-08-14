@@ -129,6 +129,33 @@ export async function saveExperience(rows: ExperienceRowInput[], opts: { revalid
   if (revalidate) revalidatePath("/seeker/profile");
 }
 
+/** Save ONLY the dealbreaker matrix (min salary + work setups) — used by the
+ * dealbreakers onboarding page (a separate route) after the resume wizard
+ * already persisted the rest. Never calls revalidatePath: the onboarding
+ * flow's route transitions are explicit router.push navigations, and the
+ * auto-refresh after a server action is what resets the wizard's client step
+ * state on Vercel (override E2E, 2026-08-14 — see saveDraft()'s note). */
+export async function saveDealbreakers(input: {
+  minSalary: number | null;
+  workSetups: string[];
+  equityRequired: boolean;
+}) {
+  const session = await requireRole("seeker");
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      dealbreaker_matrix: {
+        min_salary: input.minSalary,
+        currency: "USD",
+        equity_required: input.equityRequired,
+        work_setups: input.workSetups,
+      },
+    })
+    .eq("id", session.userId);
+  if (error) throw new Error(`dealbreakers save failed: ${error.message}`);
+}
+
 /** Publish: redact -> embed -> replace live skill vector. One AI round-trip
  * per explicit publish (never per keystroke — Modal credit guardrail). */
 export async function publishProfile() {

@@ -20,14 +20,11 @@ import {
 } from "@binding/ui";
 import {
   extractOnboardingFields,
-  publishProfile,
   saveDraft,
   saveExperience,
 } from "@/app/(app)/seeker/actions";
 import { describePiiCategories, stripPiiPatterns, type PiiCategory } from "@/lib/pii-patterns";
 import { OnboardingChrome } from "../onboarding-chrome";
-
-const WORK_SETUPS = ["onsite", "hybrid", "remote"] as const;
 
 export interface OnboardingExperienceRow {
   role: string;
@@ -67,8 +64,6 @@ interface Props {
   desiredRoles: string[];
   industries: string[];
   experience: OnboardingExperienceRow[];
-  minSalary: number | null;
-  workSetups: string[];
 }
 
 function ItemCard({
@@ -168,7 +163,6 @@ function experienceLabel(row: OnboardingExperienceRow): string {
  * signals) — the template's free-text line is only the display form. */
 export function OnboardingWizard(props: Props) {
   const router = useRouter();
-  const [step, setStep] = useState<"resume" | "dealbreakers">("resume");
   const [rawText, setRawText] = useState(props.draftText);
   const [sourceName, setSourceName] = useState<string | null>(
     props.draftText.trim() ? "Saved draft" : null,
@@ -206,8 +200,6 @@ export function OnboardingWizard(props: Props) {
   const [extracted, setExtracted] = useState(props.draftText.trim().length > 0);
   const [newCategory, setNewCategory] = useState<Category | "Experience">("Skills");
   const [newText, setNewText] = useState("");
-  const [minSalary, setMinSalary] = useState(props.minSalary?.toString() ?? "");
-  const [workSetups, setWorkSetups] = useState<string[]>(props.workSetups);
   const [status, setStatus] = useState<string | null>(null);
   const [piiNote, setPiiNote] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -336,8 +328,6 @@ export function OnboardingWizard(props: Props) {
     fd.set("skills", itemsOf("Skills").map((i) => i.text).join(", "));
     fd.set("desired_roles", itemsOf("Roles").map((i) => i.text).join(", "));
     fd.set("industries", itemsOf("Industries").map((i) => i.text).join(", "));
-    if (minSalary) fd.set("min_salary", minSalary);
-    workSetups.forEach((s) => fd.append("work_setups", s));
     return fd;
   }
 
@@ -356,7 +346,12 @@ export function OnboardingWizard(props: Props) {
     startTransition(async () => {
       try {
         await persist();
-        setStep("dealbreakers");
+        // Dealbreakers is its OWN route, reached by navigation (not a client
+        // `step` state): the RSC refresh that follows any server action
+        // resets client step state on Vercel, which is why the wizard used to
+        // bounce back to the resume step after a successful persist (override
+        // E2E, 2026-08-14). A router.push navigation survives refreshes.
+        router.push("/onboarding/seeker/dealbreakers");
       } catch (err) {
         // persist() runs two server actions (saveDraft + saveExperience) that
         // can hit a transient 500 (hosted Supabase under load). Previously the
@@ -368,83 +363,6 @@ export function OnboardingWizard(props: Props) {
         setStatus("Couldn't save your progress. Check your connection and try again.");
       }
     });
-  }
-
-  function finish() {
-    startTransition(async () => {
-      try {
-        await persist();
-        await publishProfile();
-        router.push("/seeker");
-      } catch (err) {
-        console.error("onboarding publish failed", err);
-        setStatus("Couldn't publish your profile. Check your connection and try again.");
-      }
-    });
-  }
-
-  if (step === "dealbreakers") {
-    return (
-      <OnboardingChrome
-        current={3}
-        skipHref="/seeker"
-        title="Your dealbreakers"
-        description="We'll only surface roles that clear these bars."
-      >
-        <Card>
-          <CardContent className="space-y-4 pt-6">
-            <div className="space-y-1.5">
-              <Label htmlFor="min_salary">Minimum base salary (USD)</Label>
-              <Input
-                id="min_salary"
-                data-testid="onboarding-min-salary"
-                type="number"
-                value={minSalary}
-                onChange={(e) => setMinSalary(e.target.value)}
-                placeholder="e.g. 90000"
-              />
-              <p className="text-xs text-muted-foreground">
-                Shared with recruiters only if you opt in — never shown publicly.
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Work setup</Label>
-              <div className="flex gap-4">
-                {WORK_SETUPS.map((setup) => (
-                  <label key={setup} className="flex items-center gap-1.5 text-sm capitalize">
-                    <input
-                      type="checkbox"
-                      className="size-4 accent-primary"
-                      checked={workSetups.includes(setup)}
-                      onChange={(e) =>
-                        setWorkSetups((prev) =>
-                          e.target.checked ? [...prev, setup] : prev.filter((s) => s !== setup),
-                        )
-                      }
-                    />
-                    {setup}
-                  </label>
-                ))}
-              </div>
-            </div>
-            {status && <p className="text-sm text-muted-foreground">{status}</p>}
-          </CardContent>
-          <CardFooter className="flex gap-2.5">
-            <Button variant="outline" disabled={pending} onClick={() => setStep("resume")}>
-              Back
-            </Button>
-            <Button
-              className="flex-1"
-              data-testid="onboarding-finish"
-              disabled={pending || !rawText.trim()}
-              onClick={finish}
-            >
-              Finish &amp; publish profile
-            </Button>
-          </CardFooter>
-        </Card>
-      </OnboardingChrome>
-    );
   }
 
   return (
