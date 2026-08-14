@@ -3,22 +3,29 @@ import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle } from
 import { requireRole } from "@/lib/auth";
 import { computeSecurityHealthFlags } from "@/lib/security-health";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { listAgentTokens } from "../../agent-token-actions";
 import { isResumeEncryptionEnabled } from "../../key-custody-actions";
+import { AgentTokenCard } from "../agent-token-card";
 import { PasskeyKeyCustodyCard } from "../passkey-key-custody-card";
 
 /** /seeker/settings/security (DESIGN.md §13e base + §14j deepening, Phase 6;
  * §2g Phase 10 fills the passkey/recovery-code placeholder with a real
- * enrollment flow — see PasskeyKeyCustodyCard). Agent/API-token management
- * stays an explicitly-labeled "Coming soon" placeholder (Phase 11). Account
- * deletion stays at /account (unchanged, tested nightly as functional test
- * #15) — this page links to it rather than relocating the flow. */
+ * enrollment flow — see PasskeyKeyCustodyCard; §14e Phase 11 fills the
+ * agent/API-token placeholder — see AgentTokenCard). Account deletion stays
+ * at /account (unchanged, tested nightly as functional test #15) — this
+ * page links to it rather than relocating the flow. */
 export default async function SeekerSecuritySettingsPage() {
   const session = await requireRole("seeker");
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const encryptionEnabled = await isResumeEncryptionEnabled();
+  const [encryptionEnabled, agentTokens, { data: consent }] = await Promise.all([
+    isResumeEncryptionEnabled(),
+    listAgentTokens(),
+    supabase.from("consent_flags").select("agent_access_opt_in_at").eq("profile_id", session.userId).maybeSingle(),
+  ]);
+  const agentAccessOptedIn = consent?.agent_access_opt_in_at != null;
 
   const linkedProviders = (user?.identities ?? []).map((i) => i.provider);
   const flags = computeSecurityHealthFlags({
@@ -79,14 +86,7 @@ export default async function SeekerSecuritySettingsPage() {
 
       <PasskeyKeyCustodyCard displayName={session.displayName} initiallyEnrolled={encryptionEnabled} />
 
-      <Card className="jb-lift" data-testid="agent-token-placeholder-card">
-        <CardHeader>
-          <CardTitle className="text-sm">Agent &amp; API tokens</CardTitle>
-          <CardDescription>
-            Coming soon — personal-agent/MCP access tokens with scoped permissions (DESIGN.md §14e).
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <AgentTokenCard agentAccessOptedIn={agentAccessOptedIn} initialTokens={agentTokens} />
 
       <Card className="jb-lift">
         <CardHeader>

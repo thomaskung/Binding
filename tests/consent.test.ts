@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_ACCESS_CONSENT_VERSION,
   CONNECTED_ACCOUNTS_CONSENT_VERSION,
   CONSENT_REGISTRY,
   CONSENT_VERSION,
@@ -33,18 +34,19 @@ describe("validateSeekerConsent", () => {
 });
 
 describe("consent versions", () => {
-  it("are four independent consents with their own version strings", () => {
+  it("are five independent consents with their own version strings", () => {
     // Bumping one must never imply re-consent to another (src/lib/consent.ts
     // doc contract) — this asserts they at least exist as distinct exports,
-    // so a refactor collapsing them fails loudly. (Two of the four happen to
-    // share the same date string today because they were drafted the same
-    // day — that's a coincidence of value, not shared identity: each is
-    // still its own export, bumped independently.)
+    // so a refactor collapsing them fails loudly. (Some happen to share the
+    // same date string because they were drafted the same day — that's a
+    // coincidence of value, not shared identity: each is still its own
+    // export, bumped independently.)
     const versions = [
       CONSENT_VERSION,
       MARKET_SIGNALS_CONSENT_VERSION,
       MAINTENANCE_CONSENT_VERSION,
       CONNECTED_ACCOUNTS_CONSENT_VERSION,
+      AGENT_ACCESS_CONSENT_VERSION,
     ];
     for (const v of versions) expect(v).toMatch(/^\d{4}-\d{2}-\d{2}/);
   });
@@ -58,10 +60,16 @@ function findEntry(key: (typeof CONSENT_REGISTRY)[number]["key"]) {
 }
 
 describe("CONSENT_REGISTRY", () => {
-  it("has exactly 4 entries, one per exported consent constant", () => {
-    expect(CONSENT_REGISTRY).toHaveLength(4);
+  it("has exactly 5 entries, one per exported consent constant", () => {
+    expect(CONSENT_REGISTRY).toHaveLength(5);
     const keys = CONSENT_REGISTRY.map((e) => e.key).sort();
-    expect(keys).toEqual(["connected_accounts", "core", "maintenance", "market_signals"]);
+    expect(keys).toEqual([
+      "agent_access",
+      "connected_accounts",
+      "core",
+      "maintenance",
+      "market_signals",
+    ]);
   });
 
   it("each entry's version matches the real exported constant it claims to wrap — so the registry can never silently drift", () => {
@@ -69,6 +77,7 @@ describe("CONSENT_REGISTRY", () => {
     expect(findEntry("market_signals").version).toBe(MARKET_SIGNALS_CONSENT_VERSION);
     expect(findEntry("maintenance").version).toBe(MAINTENANCE_CONSENT_VERSION);
     expect(findEntry("connected_accounts").version).toBe(CONNECTED_ACCOUNTS_CONSENT_VERSION);
+    expect(findEntry("agent_access").version).toBe(AGENT_ACCESS_CONSENT_VERSION);
   });
 
   it("roles reflect who each consent is actually gated for (core is both roles; the rest are seeker-only)", () => {
@@ -76,6 +85,7 @@ describe("CONSENT_REGISTRY", () => {
     expect(findEntry("market_signals").roles).toEqual(["seeker"]);
     expect(findEntry("maintenance").roles).toEqual(["seeker"]);
     expect(findEntry("connected_accounts").roles).toEqual(["seeker"]);
+    expect(findEntry("agent_access").roles).toEqual(["seeker"]);
   });
 
   it("the base bundle (tos/processing/profiling) is required and not independently withdrawable", () => {
@@ -84,9 +94,9 @@ describe("CONSENT_REGISTRY", () => {
     expect(core?.withdrawable).toBe(false);
   });
 
-  it("the other 3 consents are optional and independently withdrawable", () => {
+  it("the other 4 consents are optional and independently withdrawable", () => {
     const rest = CONSENT_REGISTRY.filter((e) => e.key !== "core");
-    expect(rest).toHaveLength(3);
+    expect(rest).toHaveLength(4);
     for (const entry of rest) {
       expect(entry.required).toBe(false);
       expect(entry.withdrawable).toBe(true);

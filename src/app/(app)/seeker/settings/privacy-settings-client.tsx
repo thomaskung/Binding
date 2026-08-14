@@ -6,6 +6,7 @@ import { CONSENT_REGISTRY } from "@/lib/consent";
 import {
   deleteOriginalResume,
   exportMyData,
+  updateAgentAccessConsent,
   updateConnectedAccountsConsent,
   updateContactSharingConsent,
   updateMaintenanceConsent,
@@ -82,6 +83,8 @@ export interface PrivacySettingsClientProps {
   connectedAccountsOptedIn: boolean;
   connectedAccountsAcceptedAt: string | null;
   driveConnected: boolean;
+  agentAccessOptedIn: boolean;
+  agentAccessAcceptedAt: string | null;
   coreConsentAcceptedAt: string | null;
   profilePaused: boolean;
   notifyNewMatches: boolean;
@@ -109,6 +112,7 @@ export function PrivacySettingsClient(props: PrivacySettingsClientProps) {
   const [connectedAccountsOptedIn, setConnectedAccountsOptedIn] = useState(
     props.connectedAccountsOptedIn,
   );
+  const [agentAccessOptedIn, setAgentAccessOptedIn] = useState(props.agentAccessOptedIn);
   const [profilePaused, setProfilePaused] = useState(props.profilePaused);
   const [notifyNewMatches, setNotifyNewMatches] = useState(props.notifyNewMatches);
   const [notifyRevealActivity, setNotifyRevealActivity] = useState(props.notifyRevealActivity);
@@ -123,6 +127,7 @@ export function PrivacySettingsClient(props: PrivacySettingsClientProps) {
   const marketSignals = CONSENT_REGISTRY.find((e) => e.key === "market_signals")!;
   const maintenance = CONSENT_REGISTRY.find((e) => e.key === "maintenance")!;
   const connectedAccounts = CONSENT_REGISTRY.find((e) => e.key === "connected_accounts")!;
+  const agentAccess = CONSENT_REGISTRY.find((e) => e.key === "agent_access")!;
 
   async function downloadExport() {
     setExportError(null);
@@ -213,6 +218,41 @@ export function PrivacySettingsClient(props: PrivacySettingsClientProps) {
                 Version {marketSignals.version} — accepted {formatDate(props.marketSignalsAcceptedAt)}
               </span>
             </div>
+          </div>
+
+          <Separator />
+
+          <div data-testid="agent-access-consent-card" className="space-y-2">
+            <ToggleRow
+              testId="agent-access"
+              label={agentAccess.label}
+              description={agentAccess.description}
+              checked={agentAccessOptedIn}
+              disabled={pending}
+              onToggle={() => {
+                const next = !agentAccessOptedIn;
+                setAgentAccessOptedIn(next);
+                startTransition(() => updateAgentAccessConsent(next));
+              }}
+            />
+            <div className="flex items-center gap-2.5">
+              <Badge variant={agentAccessOptedIn ? "default" : "secondary"}>
+                {agentAccessOptedIn ? "On" : "Off"}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                Version {agentAccess.version} — accepted {formatDate(props.agentAccessAcceptedAt)}
+              </span>
+            </div>
+            {!agentAccessOptedIn && (
+              <p className="text-xs text-muted-foreground">
+                Turning this off immediately disables every agent token you&apos;ve already issued —
+                manage tokens from{" "}
+                <a href="/seeker/settings/security" className="underline">
+                  Security settings
+                </a>
+                .
+              </p>
+            )}
           </div>
 
           <Separator />

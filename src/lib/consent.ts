@@ -34,6 +34,18 @@ export const MAINTENANCE_CONSENT_VERSION = "2026-07-28-draft";
  * pending legal review (LEGAL_REVIEW.md scope). */
 export const CONNECTED_ACCOUNTS_CONSENT_VERSION = "2026-08-13-draft";
 
+/** Personal-agent/MCP access consent (DESIGN.md §14e, Phase 11) — a FIFTH
+ * independent consent, same shape as CONNECTED_ACCOUNTS_CONSENT_VERSION:
+ * optional, independently withdrawable, never implying/implied-by any other
+ * consent here. Required before a seeker can issue an agent bearer token
+ * (createAgentToken) — withdrawing it doesn't just stop future token
+ * issuance, the MCP route re-checks it on every call, so withdrawal is a de
+ * facto kill switch for every already-issued token too (this phase builds
+ * no separate dedicated kill-switch mechanism — DESIGN.md §14e names one as
+ * roadmap; this consent toggle already gives an equivalent, simpler lever).
+ * Placeholder text pending legal review (LEGAL_REVIEW.md scope). */
+export const AGENT_ACCESS_CONSENT_VERSION = "2026-08-14-draft";
+
 export interface SeekerConsentInput {
   tos: boolean;
   processing: boolean;
@@ -48,7 +60,7 @@ export interface SeekerConsentInput {
 export interface ConsentRegistryEntry {
   /** Stable machine-readable identifier for this consent. Not itself
    * persisted anywhere — used for keying UI list items / tests. */
-  key: "core" | "market_signals" | "maintenance" | "connected_accounts";
+  key: "core" | "market_signals" | "maintenance" | "connected_accounts" | "agent_access";
   /** Human-readable name for a settings-page toggle/list item. */
   label: string;
   /** One- or two-sentence human-readable explanation of what this consent
@@ -148,6 +160,18 @@ export const CONSENT_REGISTRY: readonly ConsentRegistryEntry[] = [
     withdrawable: true,
     timestampColumns: ["connected_accounts_opt_in_at"],
     versionColumn: "connected_accounts_consent_version",
+    roles: ["seeker"],
+  },
+  {
+    key: "agent_access",
+    label: "Personal agent / MCP access",
+    description:
+      "Let a personal AI agent you control read your match status, profile summary, and points balance through a scoped access token.",
+    version: AGENT_ACCESS_CONSENT_VERSION,
+    required: false,
+    withdrawable: true,
+    timestampColumns: ["agent_access_opt_in_at"],
+    versionColumn: "agent_access_consent_version",
     roles: ["seeker"],
   },
 ];
