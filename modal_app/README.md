@@ -31,6 +31,14 @@ parallel test calls keep them up.
 Model choices re-verified against mid-2026 leaderboards (MEMORY.md entry);
 re-check before major version bumps, not just at design time.
 
+### Model testing suite (spike)
+
+Adversarial re-validation of the generation model lives in `SPIKE.md` + the
+`spike.py` harness (2026-08-13). Verdict: **keep Qwen3-1.7B** — Qwen3-4B and
+Qwen3.5-2B (latest vLLM/V1) were both slower and worse at founder-résumé
+redaction. `enforce_eager=False` (CUDA graphs) gave no throughput win; vLLM
+request batching under concurrency is the real lever (~3.5× on 4 redacts).
+
 ## vLLM version pins (do not loosen)
 
 - `vllm==0.10.2` — the V0 engine. Newer releases (`>=0.11`) dropped V0 and
