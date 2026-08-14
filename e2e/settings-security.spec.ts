@@ -3,19 +3,27 @@ import { completeSeekerOnboarding } from "./seeker-onboarding";
 import { ensureStagingUser, signIn, stagingContext, uniqueLabel } from "./staging-helpers";
 
 /**
- * /seeker/settings/security (DESIGN.md §13e base + §14j deepening, Phase 6)
- * against hosted staging. Kept deliberately light per the founder's brief:
- * the Security Command Centre flag panel is real and deterministic
- * (src/lib/security-health.ts), but passkey/recovery-code and agent/API-token
- * management are explicitly-labeled "Coming soon" placeholders (Phase 10/11)
- * — this spec only asserts the placeholders render as placeholders, it does
- * not exercise functionality that doesn't exist yet.
+ * /seeker/settings/security (DESIGN.md §13e base + §14j deepening, Phase 6;
+ * §2g Phase 10 fills the passkey/recovery-code placeholder with a real
+ * enrollment flow) against hosted staging. The Security Command Centre flag
+ * panel is real and deterministic (src/lib/security-health.ts). Agent/API-
+ * token management stays an explicitly-labeled "Coming soon" placeholder
+ * (Phase 11).
+ *
+ * This spec does NOT click through the real passkey enrollment ceremony —
+ * Playwright's Chromium virtual authenticator support for the WebAuthn
+ * `prf` extension specifically is unconfirmed (see Chromium issue
+ * 430804950), a named gap per the Phase 10 spike note in the build plan.
+ * It only asserts the real "Enable resume encryption" control renders (not
+ * a placeholder) — the crypto plumbing itself is covered without a live
+ * ceremony in tests/crypto-envelope.test.ts and e2e/resume-encryption.spec.ts
+ * (admin-seeded key).
  *
  * Modal AI cost: ZERO. Onboards via the free wizard-skip path; nothing here
  * calls an AI provider.
  */
 
-test("Security settings page: flag panel, sign-in methods, and Coming-soon placeholders render", async ({
+test("Security settings page: flag panel, sign-in methods, passkey control, and Coming-soon placeholder render", async ({
   browser,
 }) => {
   test.setTimeout(180_000);
@@ -37,12 +45,14 @@ test("Security settings page: flag panel, sign-in methods, and Coming-soon place
 
   await expect(page.getByText(/Signed in via:/)).toBeVisible();
 
-  // Explicitly-labeled placeholders for later phases — real "Coming soon"
-  // cards, not functional controls.
+  // Passkey encryption is now a real control (Phase 10) — a fresh seeker
+  // hasn't enrolled, so this renders the enable button, not a placeholder.
+  // Not clicked here — see the spec's doc comment for why.
   const passkeyCard = page.getByTestId("passkey-placeholder-card");
   await expect(passkeyCard).toBeVisible();
-  await expect(passkeyCard.getByText("Coming soon", { exact: false })).toBeVisible();
+  await expect(passkeyCard.getByTestId("enable-resume-encryption")).toBeVisible();
 
+  // Agent/API-token management stays a placeholder (Phase 11, not built).
   const agentTokenCard = page.getByTestId("agent-token-placeholder-card");
   await expect(agentTokenCard).toBeVisible();
   await expect(agentTokenCard.getByText("Coming soon", { exact: false })).toBeVisible();

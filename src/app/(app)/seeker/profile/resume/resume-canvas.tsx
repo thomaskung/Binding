@@ -12,8 +12,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@binding/ui";
+import { encryptBytes, encryptText } from "@/lib/crypto/envelope";
+import { getSessionDataKey } from "@/lib/crypto/session-key";
 import type { DriveFile } from "@/lib/google-drive";
 import { PROFILE_QUICK_ACTIONS } from "@/lib/profile";
+import { getWrappedDataKey, storeEncryptedResume } from "../../key-custody-actions";
 import { publishProfile, refineProfileText, saveDraftText } from "../../actions";
 import { ResumeExportModal } from "./resume-export-modal";
 
@@ -23,6 +26,10 @@ interface Props {
   /** Whether a connected_accounts row already exists for this seeker
    * (migration 0026) — gates the "Browse Google Drive" entry point below. */
   driveConnected: boolean;
+  /** Whether this seeker has enrolled passkey-based resume encryption
+   * (DESIGN.md §2g Phase 10, `user_data_keys` row exists). Opt-in — a
+   * seeker who hasn't enrolled gets the unchanged plaintext upload flow. */
+  encryptionEnabled: boolean;
   seekerTier: "free" | "pro";
   displayName: string;
   headline: string | null;
@@ -77,8 +84,9 @@ export function ResumeCanvas(props: Props) {
     savedTimer.current = setTimeout(() => setSaved(false), 2000);
   }
 
-  async function uploadResume(file: File) {
-    setStatus("Extracting text…");
+  /** Plaintext path (unchanged from before Phase 10) — the default for any
+   * seeker who hasn't enrolled passkey encryption. */
+  async function uploadResumePlaintext(file: File) {
     const body = new FormData();
     body.append("file", file);
     const res = await fetch("/api/ingest", { method: "POST", body });
@@ -89,6 +97,60 @@ export function ResumeCanvas(props: Props) {
     const { text } = (await res.json()) as { text: string };
     setDraft(text);
     setStatus("Resume text extracted — review below, then publish.");
+  }
+
+  /** Encrypted path (DESIGN.md §2g Phase 10): the server does the same
+   * transient text extraction as the plaintext path but persists nothing —
+   * it hands the extraction back for this browser to encrypt with its own
+   * unwrapped DEK before the SECOND call persists only ciphertext.
+   *
+   * NOTE this only protects `resumes` (the raw original artifact) — `draft`
+   * below still gets saved to `profiles.draft_text` in plaintext via the
+   * normal Save button (`saveDraftText`), same as the unencrypted path,
+   * because `publishProfile` reads `draft_text` for redaction/embedding and
+   * that pipeline is out of scope for this phase (founder-confirmed, see
+   * DESIGN.md §2g's built-note). */
+  async function uploadResumeEncrypted(file: File) {
+    const dek = await getSessionDataKey(getWrappedDataKey);
+    if (!dek) {
+      setStatus(
+        "Couldn't unlock your resume encryption key (passkey ceremony declined or unsupported here) — try again or use a device with your enrolled passkey.",
+      );
+      return;
+    }
+
+    const body = new FormData();
+    body.append("file", file);
+    body.append("encrypt", "true");
+    const res = await fetch("/api/ingest", { method: "POST", body });
+    if (!res.ok) {
+      setStatus(`Upload failed: ${(await res.json().catch(() => null))?.error ?? res.status}`);
+      return;
+    }
+    const { text, rawText, strippedPdfBase64 } = (await res.json()) as {
+      text: string;
+      rawText: string;
+      strippedPdfBase64: string;
+    };
+
+    const pdfBytes = Uint8Array.from(atob(strippedPdfBase64), (c) => c.charCodeAt(0));
+    const [encryptedRawTextB64, encryptedPdfB64] = await Promise.all([
+      encryptText(dek, rawText),
+      encryptBytes(dek, pdfBytes),
+    ]);
+    await storeEncryptedResume({ encryptedRawTextB64, encryptedPdfB64 });
+
+    setDraft(text);
+    setStatus("Resume text extracted and encrypted — review below, then publish.");
+  }
+
+  async function uploadResume(file: File) {
+    setStatus("Extracting text…");
+    if (props.encryptionEnabled) {
+      await uploadResumeEncrypted(file);
+    } else {
+      await uploadResumePlaintext(file);
+    }
   }
 
   /** Opens the Drive dialog and lists recent PDF/Doc files (plain

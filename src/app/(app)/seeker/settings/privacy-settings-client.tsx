@@ -412,10 +412,12 @@ export function PrivacySettingsClient(props: PrivacySettingsClientProps) {
         <CardContent className="space-y-2.5">
           <p className="text-xs text-muted-foreground">
             Permanently deletes your uploaded original résumé file and its stored text — distinct
-            from full account deletion. This is a real, immediate delete (not crypto-shredding —
-            that&apos;s a later phase); it cannot be undone. It does NOT remove your already-published
-            redacted profile or existing matches — recruiters can still see and match against those.
-            Use Pause profile above to stop new matching, or account deletion for a full removal.
+            from full account deletion. This is a real, immediate delete, and if you&apos;ve enabled
+            resume encryption it also destroys your encryption key (crypto-shredding), so even a
+            leftover backup copy could never be decrypted; it cannot be undone. It does NOT remove
+            your already-published redacted profile or existing matches — recruiters can still see
+            and match against those. Use Pause profile above to stop new matching, or account
+            deletion for a full removal.
           </p>
           {resumeDeleted || !props.hasOriginalResume ? (
             <Badge variant="secondary" data-testid="resume-deleted-badge">
