@@ -499,10 +499,20 @@ export async function updateNotificationPreference(
 
 /** "Delete my original resume now" (DESIGN.md §14j) — a REAL delete of the
  * seeker's own resume row(s) + Storage object(s), distinct from full account
- * deletion. Explicitly NOT crypto-shredding (that's a later phase per the
- * founder's brief) — this removes the row and the stored file outright, same
- * mechanics as the resume-deletion step of account deletion
- * (src/app/(app)/account/actions.ts), just scoped to resumes only. */
+ * deletion, same mechanics as the resume-deletion step of account deletion
+ * (src/app/(app)/account/actions.ts), just scoped to resumes only.
+ *
+ * Now ALSO real crypto-shredding (§2g Phase 10 upgraded this, same button,
+ * no new UI, per the founder's brief): deletes the profile's `user_data_keys`
+ * row alongside the resume rows/files, so even a copy of the ciphertext that
+ * survives outside this app's direct control (a storage soft-delete window,
+ * a backup) is permanently unrecoverable — there's no wrapped DEK left to
+ * unwrap it with. Coherent specifically because this action already deletes
+ * EVERY resume row for the profile in one call; a per-resume crypto-shred
+ * would need per-resume DEKs, which this MVP slice doesn't build (one DEK
+ * per user, not per file). Recovery-code rows are deleted too — leaving them
+ * would let a stale code "recover" a key whose data no longer exists to
+ * protect. Re-uploading afterward lazily re-enrolls a fresh DEK. */
 export async function deleteOriginalResume() {
   const session = await requireRole("seeker");
   const admin = createSupabaseAdminClient();
@@ -525,7 +535,20 @@ export async function deleteOriginalResume() {
     .eq("profile_id", session.userId);
   if (deleteError) throw new Error(`resume row delete failed: ${deleteError.message}`);
 
+  const { error: keyDeleteError } = await admin
+    .from("user_data_keys")
+    .delete()
+    .eq("profile_id", session.userId);
+  if (keyDeleteError) throw new Error(`data key shred failed: ${keyDeleteError.message}`);
+
+  const { error: recoveryDeleteError } = await admin
+    .from("user_data_key_recovery")
+    .delete()
+    .eq("profile_id", session.userId);
+  if (recoveryDeleteError) throw new Error(`recovery code cleanup failed: ${recoveryDeleteError.message}`);
+
   revalidatePath("/seeker/settings/privacy");
+  revalidatePath("/seeker/settings/security");
   revalidatePath("/seeker/profile/resume");
 }
 
@@ -538,15 +561,16 @@ export async function deleteOriginalResume() {
  * this data — raw_text, consent_flags — has no authenticated-client RLS
  * policy at all, so the admin client is required here regardless).
  *
- * Includes `resumes.raw_text` directly — §14j says an export containing the
- * ORIGINAL résumé should trigger the §2g live-passkey decrypt ceremony, which
- * doesn't exist yet (no encryption-at-rest/passkey infra is built this
- * phase). This is judged safe without it: raw_text is already owner-only data
- * the seeker can read any time via their own résumé page
- * (/seeker/profile/resume), so exporting it to themselves discloses nothing
- * new — the decrypt ceremony's purpose is authorizing a THIRD PARTY's access,
- * not gating a user's access to their own data. Revisit this call when §2g's
- * encryption/passkey work actually lands. */
+ * Includes `resumes.raw_text` for PLAINTEXT (unencrypted) resume rows
+ * directly — it's already owner-only data the seeker can read any time via
+ * their own résumé page (/seeker/profile/resume), so exporting it to
+ * themselves discloses nothing new. For an ENCRYPTED row (§2g Phase 10),
+ * `raw_text` is AES-GCM ciphertext the server itself cannot read — the
+ * DSAR-export decrypt trigger is an explicit MVP cut (named in DESIGN.md
+ * §2g's Phase 10 note): this export does NOT run a live passkey ceremony to
+ * decrypt it server-side (there's no server-side way to, by design), it
+ * substitutes an honest placeholder string so a seeker never receives
+ * ciphertext mislabeled as their resume text. */
 export async function exportMyData(): Promise<string> {
   const session = await requireRole("seeker");
   const admin = createSupabaseAdminClient();
@@ -567,7 +591,10 @@ export async function exportMyData(): Promise<string> {
   const [{ data: fullProfile }, { data: resumes }, { data: matches }, { data: consent }, { data: ledger }] =
     await Promise.all([
       admin.from("profiles").select("*").eq("id", session.userId).single(),
-      admin.from("resumes").select("id, raw_text, storage_path, created_at").eq("profile_id", session.userId),
+      admin
+        .from("resumes")
+        .select("id, raw_text, storage_path, created_at, encrypted")
+        .eq("profile_id", session.userId),
       admin.from("matches").select("id, job_posting_id, status, score, created_at").eq("profile_id", session.userId),
       admin.from("consent_flags").select("*").eq("profile_id", session.userId).maybeSingle(),
       admin.from("points_ledger").select("event, amount, note, created_at").eq("profile_id", session.userId),
@@ -591,11 +618,22 @@ export async function exportMyData(): Promise<string> {
     band: matchBand(score, tier),
   }));
 
+  // Encrypted rows: never hand back ciphertext under the `raw_text` key —
+  // that would read as plaintext to anyone not looking closely. See the
+  // doc comment above for why decrypting it here isn't built this phase.
+  const exportedResumes = (resumes ?? []).map(({ raw_text, encrypted, ...rest }) => ({
+    ...rest,
+    encrypted,
+    raw_text: encrypted
+      ? "[client-encrypted — this MVP release's DSAR export does not decrypt it; view/re-download your resume from Profile > Résumé instead]"
+      : raw_text,
+  }));
+
   return JSON.stringify(
     {
       exportedAt: new Date().toISOString(),
       profile: fullProfile,
-      resumes: resumes ?? [],
+      resumes: exportedResumes,
       matches: bandedMatches,
       consent: consent ?? null,
       pointsLedger: ledger ?? [],

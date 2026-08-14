@@ -1,5 +1,6 @@
 import { requireRole } from "@/lib/auth";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
+import { isResumeEncryptionEnabled } from "../../key-custody-actions";
 import { ResumeCanvas } from "./resume-canvas";
 
 /** Resume editor canvas at its own route — the NavShell template's Profile
@@ -12,7 +13,7 @@ export default async function ResumeCanvasPage() {
   // Folded into the Promise.all below so it doesn't add a serial round-trip.
   const admin = createSupabaseAdminClient();
 
-  const [{ data: profile }, { data: vector }, { data: experience }, { data: driveAccount }] =
+  const [{ data: profile }, { data: vector }, { data: experience }, { data: driveAccount }, encryptionEnabled] =
     await Promise.all([
       supabase
         .from("profiles")
@@ -34,6 +35,7 @@ export default async function ResumeCanvasPage() {
         .eq("profile_id", session.userId)
         .eq("provider", "google_drive")
         .maybeSingle(),
+      isResumeEncryptionEnabled(),
     ]);
 
   return (
@@ -41,6 +43,7 @@ export default async function ResumeCanvasPage() {
       draftText={profile?.draft_text ?? ""}
       redactedText={vector?.redacted_text ?? null}
       driveConnected={driveAccount != null}
+      encryptionEnabled={encryptionEnabled}
       seekerTier={profile?.seeker_tier === "pro" ? "pro" : "free"}
       displayName={profile?.display_name ?? ""}
       headline={profile?.headline ?? null}

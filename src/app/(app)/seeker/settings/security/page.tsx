@@ -3,21 +3,22 @@ import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle } from
 import { requireRole } from "@/lib/auth";
 import { computeSecurityHealthFlags } from "@/lib/security-health";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { isResumeEncryptionEnabled } from "../../key-custody-actions";
+import { PasskeyKeyCustodyCard } from "../passkey-key-custody-card";
 
-/** /seeker/settings/security (DESIGN.md §13e base + §14j deepening, Phase 6).
- * Deliberately light this phase: the Security Command Centre flag panel is
- * real and deterministic (src/lib/security-health.ts), but passkey/recovery-
- * code management and agent/API-token management are explicitly-labeled
- * "Coming soon" placeholders — those are Phase 10/11 per the founder's brief,
- * not built now. Account deletion stays at /account (unchanged, tested
- * nightly as functional test #15) — this page links to it rather than
- * relocating the flow. */
+/** /seeker/settings/security (DESIGN.md §13e base + §14j deepening, Phase 6;
+ * §2g Phase 10 fills the passkey/recovery-code placeholder with a real
+ * enrollment flow — see PasskeyKeyCustodyCard). Agent/API-token management
+ * stays an explicitly-labeled "Coming soon" placeholder (Phase 11). Account
+ * deletion stays at /account (unchanged, tested nightly as functional test
+ * #15) — this page links to it rather than relocating the flow. */
 export default async function SeekerSecuritySettingsPage() {
-  await requireRole("seeker");
+  const session = await requireRole("seeker");
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const encryptionEnabled = await isResumeEncryptionEnabled();
 
   const linkedProviders = (user?.identities ?? []).map((i) => i.provider);
   const flags = computeSecurityHealthFlags({
@@ -76,14 +77,7 @@ export default async function SeekerSecuritySettingsPage() {
         </CardContent>
       </Card>
 
-      <Card className="jb-lift" data-testid="passkey-placeholder-card">
-        <CardHeader>
-          <CardTitle className="text-sm">Passkeys &amp; recovery codes</CardTitle>
-          <CardDescription>
-            Coming soon — passkey enrollment and recovery-code management (DESIGN.md §2g/§14j).
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <PasskeyKeyCustodyCard displayName={session.displayName} initiallyEnrolled={encryptionEnabled} />
 
       <Card className="jb-lift" data-testid="agent-token-placeholder-card">
         <CardHeader>

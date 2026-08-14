@@ -19,6 +19,8 @@ export default defineConfig({
         // infrastructure / browser-only
         "src/lib/supabase/client.ts",
         "src/lib/ai/modal.ts",
+        "src/lib/crypto/webauthn-prf.ts", // real navigator.credentials calls — e2e/manual territory, see its own doc comment
+
         "src/lib/ai/types.ts",        // type-only
         "src/lib/ai/index.ts",        // trivial switch
         // UI — E2E territory
