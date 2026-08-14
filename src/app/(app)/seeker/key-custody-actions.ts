@@ -3,18 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import type { RecoveryCodeInput, RedeemedRecoveryCode, WrappedDataKeyRecord } from "./key-custody-types";
 
 /** Client-held key custody server actions (DESIGN.md §2g, Phase 10). Every
  * function here only ever moves already-wrapped/already-encrypted bytes —
  * none of them can decrypt anything, by construction: the server never
- * holds a KEK or an unwrapped DEK. */
-
-export const RECOVERY_CODE_COUNT = 8; // same shape as a typical TOTP backup-code set
-
-export interface WrappedDataKeyRecord {
-  wrappedDek: string;
-  credentialId: string;
-}
+ * holds a KEK or an unwrapped DEK.
+ *
+ * Shared constants/types live in `./key-custody-types.ts`, NOT here — a
+ * `"use server"` module may only export async functions; exporting a plain
+ * constant or interface here silently invalidates ALL of this module's
+ * exports under Next's production build (a real `next build`/Vercel deploy
+ * catches this; `tsc`/Vitest do not, since neither applies that transform). */
 
 export async function getWrappedDataKey(): Promise<WrappedDataKeyRecord | null> {
   const session = await requireRole("seeker");
@@ -58,12 +58,6 @@ export async function saveWrappedDataKey(wrappedDek: string, credentialId: strin
   revalidatePath("/seeker/profile/resume");
 }
 
-export interface RecoveryCodeInput {
-  codeHash: string;
-  wrappedDek: string;
-  salt: string;
-}
-
 /** Replaces the full recovery-code set — regenerating invalidates every
  * previously-issued code, same UX as regenerating TOTP backup codes. */
 export async function saveRecoveryCodes(codes: RecoveryCodeInput[]): Promise<void> {
@@ -86,11 +80,6 @@ export async function saveRecoveryCodes(codes: RecoveryCodeInput[]): Promise<voi
     })),
   );
   if (insertError) throw new Error(`recovery code save failed: ${insertError.message}`);
-}
-
-export interface RedeemedRecoveryCode {
-  wrappedDek: string;
-  salt: string;
 }
 
 /** Redeem an unused recovery code by hash — one-time use, enforced by

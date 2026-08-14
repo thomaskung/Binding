@@ -16,14 +16,8 @@ import {
 } from "@/lib/crypto/envelope";
 import { clearSessionDataKey } from "@/lib/crypto/session-key";
 import { enrollPasskey, evalPrf, hasWebAuthnSupport } from "@/lib/crypto/webauthn-prf";
-import {
-  RECOVERY_CODE_COUNT,
-  getWrappedDataKey,
-  redeemRecoveryCode,
-  saveRecoveryCodes,
-  saveWrappedDataKey,
-  type RecoveryCodeInput,
-} from "../key-custody-actions";
+import { getWrappedDataKey, redeemRecoveryCode, saveRecoveryCodes, saveWrappedDataKey } from "../key-custody-actions";
+import { RECOVERY_CODE_COUNT, type RecoveryCodeInput } from "../key-custody-types";
 
 interface Props {
   displayName: string;
