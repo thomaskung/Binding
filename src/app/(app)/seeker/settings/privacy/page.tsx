@@ -46,7 +46,7 @@ export default async function SeekerPrivacySettingsPage() {
       supabase
         .from("consent_flags")
         .select(
-          "tos_accepted_at, reveal_override_enabled, contact_sharing_consent, market_signals_opt_in_at, maintenance_consent_at, connected_accounts_opt_in_at",
+          "tos_accepted_at, reveal_override_enabled, contact_sharing_consent, market_signals_opt_in_at, maintenance_consent_at, connected_accounts_opt_in_at, agent_access_opt_in_at",
         )
         .eq("profile_id", session.userId)
         .maybeSingle(),
@@ -149,6 +149,8 @@ export default async function SeekerPrivacySettingsPage() {
         connectedAccountsOptedIn={consent?.connected_accounts_opt_in_at != null}
         connectedAccountsAcceptedAt={consent?.connected_accounts_opt_in_at ?? null}
         driveConnected={driveAccount != null}
+        agentAccessOptedIn={consent?.agent_access_opt_in_at != null}
+        agentAccessAcceptedAt={consent?.agent_access_opt_in_at ?? null}
         coreConsentAcceptedAt={consent?.tos_accepted_at ?? null}
         profilePaused={(profile?.visibility ?? "active") === "paused"}
         notifyNewMatches={profile?.notify_new_matches ?? true}

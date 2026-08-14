@@ -5,6 +5,7 @@ import { getAiProvider } from "@/lib/ai";
 import { AI_REFINE_CHAT_DAILY_CAP, countRefineChatCallsToday, logRefineChatCall } from "@/lib/ai-usage";
 import { requireRole } from "@/lib/auth";
 import {
+  AGENT_ACCESS_CONSENT_VERSION,
   CONNECTED_ACCOUNTS_CONSENT_VERSION,
   MAINTENANCE_CONSENT_VERSION,
   MARKET_SIGNALS_CONSENT_VERSION,
@@ -715,6 +716,30 @@ export async function updateConnectedAccountsConsent(optIn: boolean) {
 
   revalidatePath("/seeker/profile");
   revalidatePath("/seeker/profile/resume");
+}
+
+/** Personal-agent/MCP access consent (DESIGN.md §14e, Phase 11) — same
+ * shape as updateConnectedAccountsConsent: independently revocable,
+ * clearing the timestamp entirely on withdrawal. The MCP route
+ * (src/app/api/mcp/route.ts) re-checks this flag on EVERY call, not just at
+ * token-creation time, so withdrawing consent immediately disables every
+ * already-issued token — this phase's substitute for a dedicated kill
+ * switch (DESIGN.md §14e names one as roadmap). Tokens themselves are left
+ * in place (not deleted) so re-opting-in restores them without re-issuing —
+ * a deliberate difference from Drive's delete-on-withdraw, since a leaked
+ * Drive OAuth token is a third party's credential risk while an agent token
+ * is purely this account's own bearer secret already hash-only stored. */
+export async function updateAgentAccessConsent(optIn: boolean) {
+  const session = await requireRole("seeker");
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase.from("consent_flags").upsert({
+    profile_id: session.userId,
+    agent_access_opt_in_at: optIn ? new Date().toISOString() : null,
+    agent_access_consent_version: optIn ? AGENT_ACCESS_CONSENT_VERSION : null,
+  });
+  if (error) throw new Error(`agent-access consent update failed: ${error.message}`);
+  revalidatePath("/seeker/settings/security");
 }
 
 /** Candidate responds to a pending override reveal. Identity was already

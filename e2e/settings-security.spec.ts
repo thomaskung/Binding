@@ -5,10 +5,9 @@ import { ensureStagingUser, signIn, stagingContext, uniqueLabel } from "./stagin
 /**
  * /seeker/settings/security (DESIGN.md §13e base + §14j deepening, Phase 6;
  * §2g Phase 10 fills the passkey/recovery-code placeholder with a real
- * enrollment flow) against hosted staging. The Security Command Centre flag
- * panel is real and deterministic (src/lib/security-health.ts). Agent/API-
- * token management stays an explicitly-labeled "Coming soon" placeholder
- * (Phase 11).
+ * enrollment flow; §14e Phase 11 fills the agent/API-token placeholder with
+ * a real create/revoke flow) against hosted staging. The Security Command
+ * Centre flag panel is real and deterministic (src/lib/security-health.ts).
  *
  * This spec does NOT click through the real passkey enrollment ceremony —
  * Playwright's Chromium virtual authenticator support for the WebAuthn
@@ -17,13 +16,15 @@ import { ensureStagingUser, signIn, stagingContext, uniqueLabel } from "./stagin
  * It only asserts the real "Enable resume encryption" control renders (not
  * a placeholder) — the crypto plumbing itself is covered without a live
  * ceremony in tests/crypto-envelope.test.ts and e2e/resume-encryption.spec.ts
- * (admin-seeded key).
+ * (admin-seeded key). The agent-token card's own create/revoke/consent-gate
+ * flow is exercised fully in e2e/agent-mcp.spec.ts — this spec only asserts
+ * it renders the real (consent-gated) control, not a placeholder.
  *
  * Modal AI cost: ZERO. Onboards via the free wizard-skip path; nothing here
  * calls an AI provider.
  */
 
-test("Security settings page: flag panel, sign-in methods, passkey control, and Coming-soon placeholder render", async ({
+test("Security settings page: flag panel, sign-in methods, passkey control, and agent-token control render", async ({
   browser,
 }) => {
   test.setTimeout(180_000);
@@ -52,10 +53,12 @@ test("Security settings page: flag panel, sign-in methods, passkey control, and 
   await expect(passkeyCard).toBeVisible();
   await expect(passkeyCard.getByTestId("enable-resume-encryption")).toBeVisible();
 
-  // Agent/API-token management stays a placeholder (Phase 11, not built).
+  // Agent/API-token management is now a real control (Phase 11) — a fresh
+  // seeker hasn't granted agent-access consent yet, so this renders the
+  // consent-required notice, not a create-token form or a placeholder.
   const agentTokenCard = page.getByTestId("agent-token-placeholder-card");
   await expect(agentTokenCard).toBeVisible();
-  await expect(agentTokenCard.getByText("Coming soon", { exact: false })).toBeVisible();
+  await expect(agentTokenCard.getByTestId("agent-access-consent-required")).toBeVisible();
 
   // Account deletion stays at /account (not relocated this phase) — this
   // page links to it rather than duplicating the danger-zone control.
