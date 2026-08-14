@@ -342,7 +342,14 @@ export function OnboardingWizard(props: Props) {
   }
 
   function persist() {
-    return Promise.all([saveDraft(buildFormData()), saveExperience(expItems.map((i) => i.row))]);
+    // revalidate:false — saveDraft/saveExperience normally call revalidatePath,
+    // whose router.refresh races this transition's setStep() and wipes the
+    // wizard back to the resume step on Vercel (override E2E flake 2026-08-14).
+    // The wizard holds all step state client-side; it needs no route refresh.
+    return Promise.all([
+      saveDraft(buildFormData(), { revalidate: false }),
+      saveExperience(expItems.map((i) => i.row), { revalidate: false }),
+    ]);
   }
 
   function continueToDealbreakers() {

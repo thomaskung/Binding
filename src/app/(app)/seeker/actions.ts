@@ -25,8 +25,17 @@ import {
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 
 /** Save draft profile text + dealbreakers + identity/preference fields
- * without republishing (no AI round-trip — that only happens on publish). */
-export async function saveDraft(formData: FormData) {
+ * without republishing (no AI round-trip — that only happens on publish).
+ *
+ * `revalidate` (default true) triggers a router.refresh of the current route
+ * via revalidatePath. The ONBOARDING wizard opts out (`revalidate: false`):
+ * its persist() holds all step state client-side, and the refresh racing the
+ * transition's setStep() wipes the wizard back to the resume step on Vercel
+ * (2026-08-14, override E2E: persist completed but onboarding-finish never
+ * rendered; blank RSC flickers in the trace). The profile page keeps the
+ * default. */
+export async function saveDraft(formData: FormData, opts: { revalidate?: boolean } = {}) {
+  const revalidate = opts.revalidate ?? true;
   const session = await requireRole("seeker");
   const supabase = await createSupabaseServerClient();
 
@@ -57,7 +66,7 @@ export async function saveDraft(formData: FormData) {
     })
     .eq("id", session.userId);
   if (error) throw new Error(`draft save failed: ${error.message}`);
-  revalidatePath("/seeker/profile");
+  if (revalidate) revalidatePath("/seeker/profile");
 }
 
 /** Narrow draft-text-only save for the resume canvas — saveDraft() above is
@@ -85,8 +94,11 @@ export interface ExperienceRowInput {
 /** Replace-all save for the work-history list — same "edit the whole form,
  * save" pattern as the rest of this page. Structured entries stay
  * owner-only (RLS); only aggregated facts derived from them ever reach the
- * match embedding (see publishProfile). */
-export async function saveExperience(rows: ExperienceRowInput[]) {
+ * match embedding (see publishProfile).
+ * `revalidate` (default true) — see saveDraft() for why the onboarding wizard
+ * opts out. */
+export async function saveExperience(rows: ExperienceRowInput[], opts: { revalidate?: boolean } = {}) {
+  const revalidate = opts.revalidate ?? true;
   const session = await requireRole("seeker");
   const admin = createSupabaseAdminClient();
 
@@ -114,7 +126,7 @@ export async function saveExperience(rows: ExperienceRowInput[]) {
     .from("profiles")
     .update({ last_profile_activity_at: new Date().toISOString() })
     .eq("id", session.userId);
-  revalidatePath("/seeker/profile");
+  if (revalidate) revalidatePath("/seeker/profile");
 }
 
 /** Publish: redact -> embed -> replace live skill vector. One AI round-trip
