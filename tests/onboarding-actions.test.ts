@@ -30,6 +30,13 @@ vi.mock("@/lib/consent", () => ({
 
 vi.mock("@/lib/points", () => ({
   seedBalance: vi.fn().mockResolvedValue(undefined),
+  // Referral capture (captureAndEarnReferral in actions.ts) calls this when a
+  // referral_code cookie is present — none of these tests set one, so it
+  // should never actually be reached, but it must be mocked explicitly:
+  // captureAndEarnReferral's try/catch would otherwise silently swallow a
+  // "not a function" error from an un-mocked import and this suite would
+  // stay green through a real regression.
+  earnReferralActivation: vi.fn().mockResolvedValue(false),
 }));
 
 describe("activateSeeker", () => {

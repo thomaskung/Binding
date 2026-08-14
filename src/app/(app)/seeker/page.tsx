@@ -20,6 +20,7 @@ import { MatchResponseButtons } from "./match-response";
 import { LoyaltyLadderCard } from "./loyalty-ladder-card";
 import TrainingCreditsCard from "./training-credits-card";
 import { BenefitsSummaryCard } from "./benefits-summary-card";
+import { InviteTeaserCard } from "@/components/invite-teaser-card";
 
 const BAND_LABEL = { high: "High match", normal: "Normal match", low: "Low match" } as const;
 const BAND_VARIANT = { high: "default", normal: "secondary", low: "outline" } as const;
@@ -123,6 +124,7 @@ export default async function SeekerDashboard({
           lifetimePoints={context.lifetimeEarnedPoints}
           partnerUnlocks={context.partnerUnlocks}
         />
+        <InviteTeaserCard />
       </div>
 
       {!published && (

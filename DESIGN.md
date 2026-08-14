@@ -1,6 +1,6 @@
 # DESIGN.md — Binding (formerly JumpOnBoard) Technical Architecture
 
-**Version 2.17** · Last updated 2026-08-14 · Revision history at the end of this document.
+**Version 2.18** · Last updated 2026-08-14 · Revision history at the end of this document.
 
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [VISION.md](./VISION.md) (goals/metrics). This document describes how the product is actually built. Status: walking-skeleton MVP implemented (see §12 for what's built vs. deferred and where the MVP diverges from the target architecture below).
 
@@ -586,6 +586,26 @@ on the invitee's activation** (not on send — anti-farming). Touch-points: new 
 closed-loop non-monetary invariant (points, never cash). This is the missing top-of-funnel lever the
 whole flywheel depends on.
 
+**Built (Phase 9, 2026-08-14).** `profiles.invite_code` (lazily generated, `src/lib/referrals.ts`) +
+`referrals` table (migration `0029`, service-role-only, text `status` + check constraint rather than a
+new enum, per the `connected_accounts` precedent). `earnReferralActivation` (`points.ts`) pays both
+parties on activation only, deduping on a referrer-leg ledger note and capping the **referrer's** earn
+rate (`REFERRAL_DAILY_CAP`) — an at-cap referral stays `signed_up` rather than being forfeited, and the
+`/invite` dashboard opportunistically retries the earn call for the viewer's own non-activated
+referrals on every load (the only retry path in this phase; no cron). Capture is wired into
+`activateSeeker`/`activateRecruiter` rather than raw signup, and **only on an account's first-ever role
+activation** — added specifically so opting into a second role later can't be farmed as a fresh
+"invitee activation." Real deviations from the original sketch: the redeem-landing route
+(`/invite/[code]`) is a **route handler, not `page.tsx`** — Next.js only allows cookie mutation in
+Server Actions/Route Handlers, never a plain Server Component render, same reason the Google Drive
+OAuth-start endpoint is a route handler. `pending` is reserved in the status check constraint but
+**not populated** by this phase's code — nothing here sends a trackable invite before a referee is
+known (a copy-a-link mechanic, not an email-invite one), so every row this phase writes starts at
+`signed_up`; kept for forward-compat with a future email-invite send tracker. `/invite` is a
+role-agnostic `(app)`-group page, deliberately **not** added to `SEEKER_NAV`/`RECRUITER_NAV` (both
+fixed lists) — surfaced via a small dashboard card on `/seeker` and `/recruiter` instead. Migration not
+yet applied to hosted staging as of this write-up — see CLAUDE.md Gotchas.
+
 ### 13h. Auth — OAuth (Google first) (#13)
 Today: magic-link primary; OAuth buttons inert (`login-form.tsx:74` toasts "coming soon"); password
 gated for demo/e2e. Design: wire `onSocial` → `supabase.auth.signInWithOAuth`, enable **Google first**
@@ -981,3 +1001,4 @@ is single-company research for one candidate's own decision, not a cross-market 
 | 2.15 | 2026-08-14 | **§13e/§14j Security + Privacy settings — BUILT** (Phase 6 of the CCMF-demo MVP build plan). Both pages built once, per §14j's own "extends §13e" framing: Privacy Health Panel, consent center rendered from Phase 5's `CONSENT_REGISTRY` plus two explicit un-versioned rows for the consents the registry can't hold, "who accessed my data" ledger via a new `get_my_access_log()` security-definer RPC (migration `0028`, tier/opt-out gating done inside SQL, not app code), rate-limited DSAR export, plain-delete "remove my original resume" (crypto-shredding deferred to Phase 10), pause-profile, notification prefs, labeled placeholders for the passkey/agent-token management Phases 10/11 will fill in. Real deviation from the original design: account deletion was not moved off `/account`, only linked from the new page. Two real bugs caught and fixed before merge: the DSAR export leaked each match's raw cosine score into the seeker's own downloadable export (a privacy-invariant violation, fixed by banding it like everywhere else), and `get_my_access_log()`'s inner joins would have silently dropped a real access-log row on any lookup miss (hardened to `left join`). |
 | 2.16 | 2026-08-14 | **§13c Progressive disclosure — BUILT, seeker profile only** (Phase 7 of the CCMF-demo MVP build plan). `#13b`'s job editor left flat, out of scope. `src/lib/profile-field-disclosure.ts` refines this section's literal "AI-prefilled → essential" rule with a second criterion: fields that gate matching directly (`min_salary`/`equity_required`/`work_setups`) stay essential regardless of AI-prefill status — collapsing a matching dealbreaker behind an opt-in disclosure risks a seeker never setting it. Caught in review: a build pass's own report claimed this split was already correct while the shipped code actually gated the dealbreaker fields behind the toggle — found by diffing the report against the real diff rather than trusting the summary, fixed before merge. Advanced fields stay mounted in React state while collapsed (a render toggle, never a data-loss one). |
 | 2.17 | 2026-08-14 | **§13b AI job-post authoring — BUILT** (Phase 8 of the CCMF-demo MVP build plan). Paste-JD and Generate modes shipped in `job-editor.tsx` (Refine already existed); both narrower than originally scoped — `JobDraftFields` (title/department/skills/responsibilities/requirements/description) deliberately excludes salary/employment-type/location/work-setup, none reliably extractable/generatable from text without fabricating. Established the extension pattern later phases (12/13/14) are meant to reuse: both new `AiProvider` methods reuse the existing `/extract` Modal endpoint via a `kind` discriminator (mirroring how `/refine` already dispatches on `kind`) rather than provisioning a new endpoint per feature — no `/api/ingest-jd` was added, contra this section's original sketch. Per-field suggest-and-approve apply, with an explicit second-click confirmation before overwriting any field the recruiter already filled in. Same undeployed-Modal-branch gap as `careerAssist` (revision 2.11): `JOB_EXTRACT_SYSTEM`/`JOB_GENERATE_SYSTEM` are written but `modal deploy` hasn't run, so this phase is stub-verified only until that deploy lands; `e2e/job-post-authoring.spec.ts` is written but deliberately not yet wired into any CI tier (real Modal cost, left for founder review). A review pass on this phase also caught and fixed a real gap in `tests/frontier-guardrail.test.ts` (the privacy-invariant pinning file) missing pins for both new JDTextOnly-typed methods. |
+| 2.18 | 2026-08-14 | **§13g Referral/invite acquisition loop — BUILT** (Phase 9 of the CCMF-demo MVP build plan). `profiles.invite_code` + `referrals` table (migration `0029`, service-role-only), `earnReferralActivation` (`points.ts`) paying both parties once on activation, rate-limited on the referrer's earn rate only (`REFERRAL_DAILY_CAP`; an at-cap referral stays `signed_up`, retried opportunistically from the `/invite` dashboard rather than via a cron). Capture wired into `activateSeeker`/`activateRecruiter`, gated to an account's first-ever role activation (anti-farming: a second-role opt-in later must never count as a fresh referral). Real deviations: the redeem-landing endpoint is a route handler (`/invite/[code]/route.ts`), not `page.tsx` — Next.js restricts cookie mutation to Server Actions/Route Handlers; `pending` is reserved in the status check constraint but unpopulated (no email-invite send mechanic exists to track pre-signup, copy-a-link only); `/invite` is role-agnostic and surfaced via a dashboard card rather than a new nav item, keeping `SEEKER_NAV`/`RECRUITER_NAV` closed. Migration not yet applied to hosted staging — `e2e/referral-loop.spec.ts` awaits the next `pnpm db:push`/nightly (CLAUDE.md Gotchas). |

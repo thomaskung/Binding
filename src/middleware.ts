@@ -70,7 +70,11 @@ export default async function middleware(request: NextRequest) {
     path.startsWith("/signup") ||
     path.startsWith("/auth") ||
     path.startsWith("/privacy") ||
-    path.startsWith("/api/health");
+    path.startsWith("/api/health") ||
+    // Referral redeem-landing route only (`/invite/<code>`, always visited
+    // signed out) — trailing slash is deliberate so the `/invite` dashboard
+    // itself (the (app)-group page, requires a session) stays gated.
+    path.startsWith("/invite/");
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
