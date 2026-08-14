@@ -1,13 +1,16 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   CONSENT_VERSION,
   MAINTENANCE_CONSENT_VERSION,
   validateSeekerConsent,
 } from "@/lib/consent";
-import { seedBalance } from "@/lib/points";
+import { earnReferralActivation, seedBalance } from "@/lib/points";
+import { REFERRAL_COOKIE_NAME } from "@/lib/referrals";
 
 async function requireUser() {
   const supabase = await createSupabaseServerClient();
@@ -16,6 +19,57 @@ async function requireUser() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   return { supabase, user };
+}
+
+/**
+ * Referral capture + activation-earn (DESIGN.md §13g). Called from
+ * activateSeeker/activateRecruiter ONLY when this is the account's FIRST
+ * role activation ever (callers check that before calling this) — an
+ * account that has held a role for months and only now opts into a SECOND
+ * role must never be treated as a fresh "invitee activation"; that would
+ * let anyone farm the loop by adding a role after clicking a friend's link.
+ *
+ * Runs at activation rather than at raw signup/`/auth/callback` because
+ * that's the one server-side moment BOTH real signups (magic-link/OAuth,
+ * which land on `/auth/callback`) and this repo's own e2e suite (which
+ * creates accounts via the admin API and signs in with a password,
+ * `e2e/staging-helpers.ts` `ensureStagingUser`/`signIn` — never touching
+ * `/auth/callback` at all) actually converge on.
+ *
+ * Never allowed to fail the activation it's called from: a bug in the
+ * referral loop must not block a brand-new user's onboarding, so every
+ * failure is caught and logged rather than thrown.
+ */
+async function captureAndEarnReferral(admin: SupabaseClient, userId: string) {
+  try {
+    const cookieStore = await cookies();
+    const code = cookieStore.get(REFERRAL_COOKIE_NAME)?.value;
+    // Always clear once read, regardless of outcome below — a code is
+    // single-use per browser, so a later signup in the same browser must
+    // never get attributed to a stale click (invalid code, self-referral,
+    // and already-captured all fall through to the same "do nothing else"
+    // path, but the cookie is gone either way).
+    if (code) cookieStore.delete(REFERRAL_COOKIE_NAME);
+    if (!code) return;
+
+    const { data: referrer } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("invite_code", code)
+      .maybeSingle();
+    if (!referrer || referrer.id === userId) return; // unknown code or self-referral
+
+    const { data: referral, error } = await admin
+      .from("referrals")
+      .insert({ referrer_id: referrer.id, referee_id: userId, invite_code: code, status: "signed_up" })
+      .select("id")
+      .single();
+    if (error || !referral) return; // e.g. the referee-unique index already has a row
+
+    await earnReferralActivation(admin, referral.id, referrer.id, userId);
+  } catch (e) {
+    console.error("referral capture/earn failed (non-fatal)", e);
+  }
 }
 
 /** Activate the seeker role: display name + ToS + the two REQUIRED consents
@@ -35,6 +89,17 @@ export async function activateSeeker(formData: FormData) {
   const maintenance = formData.get("maintenance_consent") === "on";
   if (!displayName) throw new Error("display name required");
   if (consentError) throw new Error(consentError);
+
+  // Referral capture (below) must only fire on a genuinely first-ever role
+  // activation for this account — read the pre-upsert state before it's
+  // overwritten.
+  const { data: existingProfile } = await admin
+    .from("profiles")
+    .select("is_seeker, is_recruiter")
+    .eq("id", user.id)
+    .maybeSingle();
+  const isFirstActivation =
+    !existingProfile || (!existingProfile.is_seeker && !existingProfile.is_recruiter);
 
   const { error } = await admin.from("profiles").upsert(
     {
@@ -57,6 +122,11 @@ export async function activateSeeker(formData: FormData) {
     maintenance_consent_version: maintenance ? MAINTENANCE_CONSENT_VERSION : null,
   });
   await seedBalance(admin, user.id, "seeker");
+  // Must stay AFTER the profiles upsert above: referrals.referee_id has a FK
+  // to profiles(id), so the referee's own profile row has to exist first.
+  if (isFirstActivation) {
+    await captureAndEarnReferral(admin, user.id);
+  }
 
   redirect("/onboarding/seeker/profile");
 }
@@ -88,6 +158,17 @@ export async function activateRecruiter(formData: FormData) {
     throw new Error("Please use a business email address for recruiter accounts.");
   }
 
+  // Referral capture (below) must only fire on a genuinely first-ever role
+  // activation for this account — read the pre-upsert state before it's
+  // overwritten.
+  const { data: existingProfile } = await admin
+    .from("profiles")
+    .select("is_seeker, is_recruiter")
+    .eq("id", user.id)
+    .maybeSingle();
+  const isFirstActivation =
+    !existingProfile || (!existingProfile.is_seeker && !existingProfile.is_recruiter);
+
   const { error } = await admin.from("profiles").upsert(
     {
       id: user.id,
@@ -111,6 +192,11 @@ export async function activateRecruiter(formData: FormData) {
     consent_version: CONSENT_VERSION,
   });
   await seedBalance(admin, user.id, "recruiter");
+  // Must stay AFTER the profiles upsert above: referrals.referee_id has a FK
+  // to profiles(id), so the referee's own profile row has to exist first.
+  if (isFirstActivation) {
+    await captureAndEarnReferral(admin, user.id);
+  }
 
   redirect("/onboarding/recruiter/profile");
 }

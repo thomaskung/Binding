@@ -163,6 +163,122 @@ export async function earnFreshnessConfirmation(
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// Referral-activation earning (DESIGN.md §13g — added 2026-08-14): an invite
+// mechanic where BOTH parties earn only on the invitee's *activation* (never
+// on sending/clicking an invite link) — closes the BUSINESS §6a acquisition-
+// loop gap while keeping the closed-loop non-monetary invariant. Capture
+// (resolving an invite code to a pending `referrals` row) happens in
+// src/app/onboarding/actions.ts at first-role activation; this function is
+// just the pay-out + rate limit, mirroring earnFreshnessConfirmation's
+// dedupe-via-ledger-note-then-appendLedger shape.
+// ---------------------------------------------------------------------------
+export const REFERRAL_REWARD_POINTS = Number(process.env.REFERRAL_REWARD_POINTS ?? 5);
+// Caps the REFERRER's earn rate only — anti-farming against a referrer
+// spamming invite links to accounts they control. The referee side is
+// inherently self-limiting: one account can be a referee at most once,
+// enforced by referrals.referee_id's partial unique index (0029).
+export const REFERRAL_DAILY_CAP = Number(process.env.REFERRAL_DAILY_CAP ?? 10);
+
+// No parens/colons — PostgREST reserves `,`/`.`/`:`/`()` in filter values,
+// and `countReferralPayoutsToday` below matches this prefix with `.like()`.
+// supabase-js doesn't escape those for a plain `like` filter, so keeping the
+// note text to plain words + the uuid (which is hyphen-only) sidesteps the
+// question entirely rather than depending on how a given PostgREST version
+// happens to parse them.
+const REFERRAL_REFERRER_NOTE_PREFIX = "referral activation referrer ";
+const REFERRAL_REFEREE_NOTE_PREFIX = "referral activation referee ";
+
+function referralReferrerNote(referralId: string): string {
+  return `${REFERRAL_REFERRER_NOTE_PREFIX}${referralId}`;
+}
+function referralRefereeNote(referralId: string): string {
+  return `${REFERRAL_REFEREE_NOTE_PREFIX}${referralId}`;
+}
+
+/** Referrer's referral-activation payouts in the last 24h (daily cap —
+ * mirrors countStandardRevealsToday's shape). Filters on the REFERRER-leg
+ * note prefix specifically: both legs of a payout share nothing but the
+ * referral id, so a user who was themselves referred elsewhere must not
+ * have THAT payout (a referee-leg note) counted against their own
+ * referrer cap. */
+export async function countReferralPayoutsToday(
+  admin: SupabaseClient,
+  referrerId: string,
+): Promise<number> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { count, error } = await admin
+    .from("points_ledger")
+    .select("id", { count: "exact", head: true })
+    .eq("profile_id", referrerId)
+    .eq("event", "verified_action")
+    .like("note", `${REFERRAL_REFERRER_NOTE_PREFIX}%`)
+    .gte("created_at", since);
+  if (error) throw new Error(`referral payout count failed: ${error.message}`);
+  return count ?? 0;
+}
+
+/**
+ * Pay out a referral's one-time activation reward to both parties and mark
+ * the `referrals` row 'activated'. Idempotent: dedupes on the referrer-leg
+ * ledger note, which embeds `referralId` (a uuid, globally unique per
+ * referral row) — safe to call repeatedly (e.g. a retry from the /invite
+ * dashboard) without double-paying either party.
+ *
+ * Rate limit: cap checked BEFORE any ledger write (same "cap first"
+ * ordering discipline as revealSpendGuard). The pay-out is an atomic PAIR —
+ * if the referrer is at their daily cap, NEITHER party is paid this call and
+ * the referrals row stays 'signed_up' (not 'activated'), so the referral is
+ * safely retryable later rather than silently forfeited forever. There is no
+ * automatic retry job in this phase (documented limitation — see CLAUDE.md
+ * Gotchas); the /invite dashboard re-attempts this call for the viewer's own
+ * non-activated referrals on every load, which is the practical retry path
+ * once the referrer is back under cap.
+ *
+ * Returns true if this call paid out, false if already paid or still capped
+ * (both are silent no-ops — callers don't need to surface either to the
+ * user, same posture as earnFreshnessConfirmation). */
+export async function earnReferralActivation(
+  admin: SupabaseClient,
+  referralId: string,
+  referrerId: string,
+  refereeId: string,
+): Promise<boolean> {
+  const referrerNote = referralReferrerNote(referralId);
+  const { data: existing, error: existingError } = await admin
+    .from("points_ledger")
+    .select("id")
+    .eq("note", referrerNote)
+    .limit(1);
+  if (existingError) {
+    throw new Error(`referral activation check failed: ${existingError.message}`);
+  }
+  if ((existing ?? []).length > 0) return false;
+
+  const usedToday = await countReferralPayoutsToday(admin, referrerId);
+  if (usedToday >= REFERRAL_DAILY_CAP) return false;
+
+  await appendLedger(admin, {
+    profileId: referrerId,
+    event: "verified_action",
+    amount: REFERRAL_REWARD_POINTS,
+    note: referrerNote,
+  });
+  await appendLedger(admin, {
+    profileId: refereeId,
+    event: "verified_action",
+    amount: REFERRAL_REWARD_POINTS,
+    note: referralRefereeNote(referralId),
+  });
+
+  const { error } = await admin
+    .from("referrals")
+    .update({ status: "activated", activated_at: new Date().toISOString() })
+    .eq("id", referralId);
+  if (error) throw new Error(`referral activation update failed: ${error.message}`);
+  return true;
+}
+
 export class InsufficientPointsError extends Error {
   constructor(profileId: string, balance: number, needed: number) {
     super(`profile ${profileId} has ${balance} points, needs ${needed}`);

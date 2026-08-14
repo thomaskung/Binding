@@ -17,6 +17,7 @@ import {
 import { JobPostingsCard } from "./job-postings-card";
 import { RevealCreditsCard } from "./reveal-credits-card";
 import { MarketIntelCard } from "./market-intel-card";
+import { InviteTeaserCard } from "@/components/invite-teaser-card";
 
 interface JobPostingWithStatus {
   id: string;
@@ -299,6 +300,7 @@ export default async function RecruiterPipelineCommandCenter() {
           <MarketIntelCard skillDemand={skillDemand} />
           <JobPostingsCard jobs={jobs ?? []} />
           <RevealCreditsCard balance={pointsBalance} />
+          <InviteTeaserCard />
         </div>
       </section>
     </main>
