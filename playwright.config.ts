@@ -37,9 +37,11 @@ export default defineConfig({
   // One shared staging database — each spec owns its own users/labels (unique
   // per worker via TEST_RUN_ID's pid suffix), so spec files can run in
   // parallel without cross-spec state interference. Parallel also keeps the
-  // suite ~4x faster, which is what lets production Modal apps (120s
-  // scaledown_window) stay warm naturally across the run — no keep-warm pings,
-  // no separate E2E Modal apps.
+  // suite faster, which is what lets production Modal apps stay warm naturally
+  // across the run — no keep-warm pings, no separate E2E Modal apps.
+  // (workers:4 -> 2 was tried 2026-08-14 to reduce app-stack contention; it did
+  // NOT fix the override/credentials-chip failures and didn't change suite
+  // time, so 4 is kept.)
   workers: 4,
   fullyParallel: false,
   use: {

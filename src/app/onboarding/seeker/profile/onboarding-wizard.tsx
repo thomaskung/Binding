@@ -347,16 +347,32 @@ export function OnboardingWizard(props: Props) {
 
   function continueToDealbreakers() {
     startTransition(async () => {
-      await persist();
-      setStep("dealbreakers");
+      try {
+        await persist();
+        setStep("dealbreakers");
+      } catch (err) {
+        // persist() runs two server actions (saveDraft + saveExperience) that
+        // can hit a transient 500 (hosted Supabase under load). Previously the
+        // rejection escaped the transition and React unmounted the whole wizard
+        // to the Next.js error boundary ("This page couldn't load") — the seeker
+        // lost all their extracted items. Catch it, stay on this step, and let
+        // them click Continue again (the retry costs one cheap DB write, no AI).
+        console.error("onboarding persist failed", err);
+        setStatus("Couldn't save your progress. Check your connection and try again.");
+      }
     });
   }
 
   function finish() {
     startTransition(async () => {
-      await persist();
-      await publishProfile();
-      router.push("/seeker");
+      try {
+        await persist();
+        await publishProfile();
+        router.push("/seeker");
+      } catch (err) {
+        console.error("onboarding publish failed", err);
+        setStatus("Couldn't publish your profile. Check your connection and try again.");
+      }
     });
   }
 

@@ -74,12 +74,16 @@ export function requireFixture(value: string | null | undefined, name: string): 
 // previous in-suite `zz-ai-budget.spec.ts` relied on "sorts last", which only
 // holds for `workers:1` and silently under-counted under `workers:4`.
 //
-// Ceiling history: 27 on 2026-08-06 (whole suite moved to hosted staging),
-// +2 for recruiter-compare-bulk-reveal's fit-summaries on 2026-08-13, then
-// moved to a generous CI-side budget (40) until the true count is re-measured
-// from a clean run and tuned down. salary-stealth.spec.ts (Phase 1, added
-// 2026-08-13) never calls countAiCall() — admin-client inserts + wizard-skip
-// onboarding only, no publish/embed — so it doesn't move this number.
+// Ceiling history (functional suite, excludes UAT): 27 on 2026-08-06 (whole
+// suite moved to hosted staging), then measured per-spec on 2026-08-13 →
+// recruiter-compare-bulk-reveal=7 (bulk-reveal 2× publish + 2 fit-summary),
+// maintenance-nudge=5, smoke=4, override=5 (4 when it flakes), staging-functional=6,
+// no-third-party=2, field-visibility=2 → TOTAL 30 measured (clean run ~31).
+// CI budget is 32 (measured 30 + 2 margin) in .github/workflows/e2e-staging.yml.
+// Phase-1/2 specs added since (salary-stealth, dashboard widgets, market-intel
+// dimensions) never call countAiCall() — admin-client inserts + wizard-skip
+// onboarding + read-only card renders, no publish/embed — so they don't move
+// this number.
 export function aiCounterFile(): string {
   return process.env.E2E_AI_COUNTER_FILE ?? path.join(process.cwd(), "test-results", "ai-calls.log");
 }
