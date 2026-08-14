@@ -1,6 +1,6 @@
 # DESIGN.md — Binding (formerly JumpOnBoard) Technical Architecture
 
-**Version 2.15** · Last updated 2026-08-14 · Revision history at the end of this document.
+**Version 2.16** · Last updated 2026-08-14 · Revision history at the end of this document.
 
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [VISION.md](./VISION.md) (goals/metrics). This document describes how the product is actually built. Status: walking-skeleton MVP implemented (see §12 for what's built vs. deferred and where the MVP diverges from the target architecture below).
 
@@ -486,7 +486,7 @@ input modes, all suggest-and-approve:
   `/api/ingest-jd`. **AI-never-fabricates still holds** — generated JD text is recruiter-owned and
   recruiter-approved before publish.
 
-### 13c. Fewer fields — AI-first with progressive disclosure (#7; extends §2c/§2d)
+### 13c. Fewer fields — AI-first with progressive disclosure (#7; extends §2c/§2d) — **BUILT, seeker profile only** (Phase 7 of the CCMF-demo MVP build plan)
 Principle for the AI era: **AI drafts / human confirms; AI prefills every field it can; advanced or
 optional fields are progressively disclosed** (hidden behind "edit"/"more" until needed) rather than
 presented as a wall of empty inputs. This is the "fewer fields" win *without* breaking the PDPA
@@ -495,6 +495,19 @@ every committed change stays suggest-and-approve (§2c AI-never-fabricates, §11
 Applies to the seeker structured profile (`profile-fields.tsx`, currently ~13 fields + 7 visibility
 controls shown flat) and to #13b's job editor. Not runtime-generative UI — still deterministic slots
 (§2d); progressive disclosure is a state-driven show/hide, not model-emitted markup.
+
+**Shipped**: seeker profile only — `#13b`'s job editor (`job-editor.tsx`) was left flat, out of this
+phase's scope. `src/lib/profile-field-disclosure.ts`'s essential/advanced split refines this
+section's literal "AI-prefilled → essential" rule with a second criterion found necessary during the
+build: fields that gate matching directly (`min_salary`, `equity_required`, `work_setups` —
+`dealbreaker_matrix`) stay essential regardless of AI-prefill status, since collapsing a matching
+dealbreaker behind an opt-in disclosure risks a seeker never setting it and silently matching against
+jobs they'd have excluded — a friction-reduction goal cannot override matching correctness. (A build
+pass's own report initially claimed this split was applied when the shipped code actually gated the
+dealbreaker fields behind the toggle — caught in review by diffing the report against the real diff,
+not trusting the summary; fixed before merge.) Advanced fields (`headline`, `location`, `phone`,
+`references_available`, `share_salary`, `credentials`) stay mounted in React state while collapsed —
+a pure render toggle, never a data-loss one.
 
 ### 13d. Skill assessment + verified-skill matching (BUSINESS §3/§6, extends §3 matching)
 `verified_actions` table + `skill_assessment` enum exist (`0001_schema.sql`) with **zero code**;
@@ -957,3 +970,4 @@ is single-company research for one candidate's own decision, not a cross-market 
 | 2.13 | 2026-08-13 | **§13a Salary stealth — BUILT** (Phase 1 of the CCMF-demo MVP build plan; founder-grilled across 6 rounds + repeated advisor review before and during the build). Marked shipped in place: `band` visibility mode (`coarseSalaryBand()`/`coarseSalaryBounds()` in `src/lib/jobs.ts`, $20k buckets, guarded against the `0024` `(0,0)` null-salary sentinel and any nullish/non-finite input), migration `0025_salary_stealth_band_default.sql` (enum value + both defaults flipped + existing-row backfill for `job_postings.salary_visibility` and `profiles.share_salary` — the latter's backfill needed correcting mid-build: seeker onboarding's `profiles` upsert never wrote this column, so pre-migration rows carried the old `true` default indistinguishable from a real opt-in, not just explicit user choices as first assumed), the job-editor's visibility control rebuilt as an explicit 3-way `<Select>` (a binary cycling toggle would let one click silently escalate disclosure), and three stale `?? "public"` fallback sites beyond this section's original scope. This is the first phase built under the plan's standing scoping rule ("cut big features down, never defer them for being large") and its first real subagent-built-then-advisor-reviewed cycle — two review rounds caught a privacy-preserving gap (raw salary bounds reaching a client component's props for `band` jobs, fixed by exposing pre-coarsened bounds instead) and the nullish-guard hardening above. Plan file: `.claude/plans/business-md-design-md-some-new-floating-lemur.md`. |
 | 2.14 | 2026-08-14 | **§14a RAG-driven profile autofill — BUILT, one-provider slice** (Phase 4 of the CCMF-demo MVP build plan). Google Drive only — LinkedIn/GitHub stay roadmap, no generalized provider abstraction yet. New `connected_accounts` table (`0026`, service-role-only) + independently-versioned `connected_accounts_opt_in_at`/`_consent_version` pair (`0027`, same pattern as every other consent in `consent.ts`). `src/lib/google-drive.ts`: data-access OAuth grant (`access_type=offline`+`prompt=consent`, distinct from Phase 3's login-OAuth), lazy on-demand token refresh (no cron), capped file listing, file-text fetch sharing the existing PDF-extraction path (factored to `src/lib/pdf-extract.ts`). Named MVP cuts: plain list-and-pick instead of Google's Picker API, token encryption-at-rest deferred (interim posture matches every other sensitive table today), Google Cloud Console app stays in unverified test mode. A real e2e case proves withdrawing consent actually deletes the `connected_accounts` row (not just hides the UI) and that both API routes independently re-check the consent flag as defense in depth. |
 | 2.15 | 2026-08-14 | **§13e/§14j Security + Privacy settings — BUILT** (Phase 6 of the CCMF-demo MVP build plan). Both pages built once, per §14j's own "extends §13e" framing: Privacy Health Panel, consent center rendered from Phase 5's `CONSENT_REGISTRY` plus two explicit un-versioned rows for the consents the registry can't hold, "who accessed my data" ledger via a new `get_my_access_log()` security-definer RPC (migration `0028`, tier/opt-out gating done inside SQL, not app code), rate-limited DSAR export, plain-delete "remove my original resume" (crypto-shredding deferred to Phase 10), pause-profile, notification prefs, labeled placeholders for the passkey/agent-token management Phases 10/11 will fill in. Real deviation from the original design: account deletion was not moved off `/account`, only linked from the new page. Two real bugs caught and fixed before merge: the DSAR export leaked each match's raw cosine score into the seeker's own downloadable export (a privacy-invariant violation, fixed by banding it like everywhere else), and `get_my_access_log()`'s inner joins would have silently dropped a real access-log row on any lookup miss (hardened to `left join`). |
+| 2.16 | 2026-08-14 | **§13c Progressive disclosure — BUILT, seeker profile only** (Phase 7 of the CCMF-demo MVP build plan). `#13b`'s job editor left flat, out of scope. `src/lib/profile-field-disclosure.ts` refines this section's literal "AI-prefilled → essential" rule with a second criterion: fields that gate matching directly (`min_salary`/`equity_required`/`work_setups`) stay essential regardless of AI-prefill status — collapsing a matching dealbreaker behind an opt-in disclosure risks a seeker never setting it. Caught in review: a build pass's own report claimed this split was already correct while the shipped code actually gated the dealbreaker fields behind the toggle — found by diffing the report against the real diff rather than trusting the summary, fixed before merge. Advanced fields stay mounted in React state while collapsed (a render toggle, never a data-loss one). |

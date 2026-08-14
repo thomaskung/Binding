@@ -16,10 +16,17 @@ import {
   Textarea,
 } from "@binding/ui";
 import { fieldMode, filterFieldsForSurface, type FieldVisibilityMap } from "@/lib/field-visibility";
+import { advancedFields } from "@/lib/profile-field-disclosure";
 import { regionFromLocation } from "@/lib/profile";
 import { saveDraft, saveExperience } from "../actions";
 
 const WORK_SETUPS = ["onsite", "hybrid", "remote"] as const;
+
+// Progressive disclosure (DESIGN.md §13c, src/lib/profile-field-disclosure.ts):
+// the "Show more fields" affordance reveals exactly these always-manual
+// fields; the count comes from the categorization module, not a hardcoded
+// number, so the label can't drift from the actual split.
+const ADVANCED_FIELD_COUNT = advancedFields().length;
 
 export interface ExperienceRow {
   id?: string;
@@ -105,6 +112,9 @@ export function ProfileFields(props: ProfileFieldsProps) {
   const [equityRequired, setEquityRequired] = useState(props.equityRequired);
   const [experience, setExperience] = useState<ExperienceRow[]>(props.experience);
   const [showAllExperience, setShowAllExperience] = useState(false);
+  // Advanced (always-manual) fields stay in state and get submitted on Save
+  // regardless of this — it's a pure render toggle, never a data-loss one.
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const fieldVisibility: FieldVisibilityMap = props.fieldVisibility ?? {};
   const [status, setStatus] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -170,6 +180,14 @@ export function ProfileFields(props: ProfileFieldsProps) {
         <div className="flex items-center gap-2.5">
           {editing ? (
             <>
+              <Button
+                variant="ghost"
+                size="sm"
+                data-testid="advanced-fields-toggle"
+                onClick={() => setShowAdvanced((v) => !v)}
+              >
+                {showAdvanced ? "Show fewer fields" : `Show more fields (${ADVANCED_FIELD_COUNT})`}
+              </Button>
               <Button variant="outline" disabled={pending} onClick={() => setEditing(false)}>
                 Cancel
               </Button>
@@ -236,14 +254,18 @@ export function ProfileFields(props: ProfileFieldsProps) {
                     <Label className="text-xs" htmlFor="display_name">Full name</Label>
                     <Input id="display_name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs" htmlFor="headline">Headline</Label>
-                    <Input id="headline" value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="Senior Backend Engineer" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs" htmlFor="location">Location (full address, internal only)</Label>
-                    <Input id="location" value={location} onChange={(e) => setLocation(e.target.value)} />
-                  </div>
+                  {showAdvanced && (
+                    <>
+                      <div className="space-y-1">
+                        <Label className="text-xs" htmlFor="headline">Headline</Label>
+                        <Input id="headline" value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="Senior Backend Engineer" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs" htmlFor="location">Location (full address, internal only)</Label>
+                        <Input id="location" value={location} onChange={(e) => setLocation(e.target.value)} />
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
               <Separator className="my-3.5" />
@@ -253,10 +275,12 @@ export function ProfileFields(props: ProfileFieldsProps) {
                     <Label className="text-xs">Email (never shown to recruiters)</Label>
                     <Input value={props.email} disabled />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs" htmlFor="phone">Phone (never shown to recruiters)</Label>
-                    <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
-                  </div>
+                  {showAdvanced && (
+                    <div className="space-y-1">
+                      <Label className="text-xs" htmlFor="phone">Phone (never shown to recruiters)</Label>
+                      <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col gap-0.5 text-left">
@@ -402,6 +426,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
             </CardContent>
           </Card>
 
+          {(!editing || showAdvanced) && (
           <Card className="jb-lift">
             <CardHeader>
               <CardTitle className="text-sm">Credentials</CardTitle>
@@ -441,6 +466,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
               )}
             </CardContent>
           </Card>
+          )}
 
           <Card className="jb-lift">
             <CardHeader>
@@ -632,7 +658,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
               {!editing && referencesAvailable && (
                 <p className="text-xs text-muted-foreground">References available on request.</p>
               )}
-              {editing && (
+              {editing && showAdvanced && (
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
@@ -643,7 +669,8 @@ export function ProfileFields(props: ProfileFieldsProps) {
                 </label>
               )}
 
-              <Separator />
+              {(!editing || showAdvanced) && <Separator />}
+              {(!editing || showAdvanced) && (
               <div className="flex items-center justify-between gap-4">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[13px] font-medium">
@@ -683,6 +710,7 @@ export function ProfileFields(props: ProfileFieldsProps) {
                   {shareSalary ? "Shared" : "Hidden"}
                 </Button>
               </div>
+              )}
             </CardContent>
           </Card>
 
