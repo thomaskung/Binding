@@ -10,60 +10,16 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
   Input,
   Label,
   Separator,
   Textarea,
 } from "@binding/ui";
-import {
-  availableModesFor,
-  fieldMode,
-  filterFieldsForSurface,
-  type FieldVisibilityMap,
-  type FieldVisibilityMode,
-  type ProfileFieldKey,
-} from "@/lib/field-visibility";
+import { fieldMode, filterFieldsForSurface, type FieldVisibilityMap } from "@/lib/field-visibility";
 import { regionFromLocation } from "@/lib/profile";
-import {
-  saveDraft,
-  saveExperience,
-  updateConnectedAccountsConsent,
-  updateFieldVisibility,
-  updateMaintenanceConsent,
-  updateMarketSignalsConsent,
-  updateSettings,
-} from "../actions";
+import { saveDraft, saveExperience } from "../actions";
 
 const WORK_SETUPS = ["onsite", "hybrid", "remote"] as const;
-
-const PRIVACY_FIELD_KEYS: ProfileFieldKey[] = [
-  "headline",
-  "location",
-  "skills",
-  "desired_roles",
-  "industries",
-  "references_available",
-  "credentials",
-];
-const PRIVACY_FIELD_COUNT = PRIVACY_FIELD_KEYS.length;
-
-const MODE_LABEL: Record<FieldVisibilityMode, string> = {
-  visible: "Visible",
-  matching_only: "Matching only",
-  hidden: "Hidden",
-};
-
-const MODE_HINT: Record<FieldVisibilityMode, string | null> = {
-  visible: null,
-  matching_only: "Hidden from recruiters — still used to match you to relevant jobs.",
-  hidden: "Hidden from recruiters and excluded from matching.",
-};
 
 export interface ExperienceRow {
   id?: string;
@@ -80,15 +36,9 @@ export interface ProfileFieldsProps {
   seekerTier?: "free" | "pro";
   draftText: string;
   publishedText: string | null;
+  /** Read-only display here (badges only) — the editable "Pause profile"
+   * control lives on /seeker/settings/privacy now (DESIGN.md §13e). */
   visibility: "active" | "paused";
-  overrideEnabled: boolean;
-  marketSignalsOptedIn: boolean;
-  maintenanceConsented: boolean;
-  connectedAccountsOptedIn: boolean;
-  /** Whether a connected_accounts row already exists (migration 0026) — read
-   * via the admin client server-side (that table has no authenticated RLS
-   * policy), so this is display-only, never re-derived client-side. */
-  driveConnected: boolean;
   minSalary: number | null;
   workSetups: string[];
   equityRequired: boolean;
@@ -126,57 +76,17 @@ function datesLabel(start: string, end: string | null): string {
   return `${year(start)} – ${end ? year(end) : "Present"}`;
 }
 
-function VisibilityControl({
-  fieldKey,
-  label,
-  rawValue,
-  mode,
-  onChange,
-}: {
-  fieldKey: ProfileFieldKey;
-  label: string;
-  rawValue: string;
-  mode: FieldVisibilityMode;
-  onChange: (mode: FieldVisibilityMode) => void;
-}) {
-  const modes = availableModesFor(fieldKey);
-  const hint = MODE_HINT[mode];
-  function cycleMode() {
-    const nextMode = modes[(modes.indexOf(mode) + 1) % modes.length]!;
-    onChange(nextMode);
-  }
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-border/60 py-2 last:border-b-0">
-      <div className="min-w-0 flex-1">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          {label}
-        </div>
-        <div className="truncate text-sm">{rawValue || "—"}</div>
-      </div>
-      <div className="flex flex-col items-end gap-1">
-        <button
-          type="button"
-          aria-label={`${label} visibility: ${MODE_LABEL[mode]}. Click to change.`}
-          className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium hover:bg-secondary transition-colors"
-          onClick={cycleMode}
-        >
-          {MODE_LABEL[mode]}
-        </button>
-        {hint && <span className="max-w-56 text-right text-xs text-muted-foreground">{hint}</span>}
-      </div>
-    </div>
-  );
-}
-
-/** Structured profile page (SeekerProfile template): per-field visibility
- * cycling pills + a live "What recruiters see now" mirror panel. Pills allow
- * seekers to cycle through visibility modes (visible/matching_only/hidden per
- * field) inline; the mirror panel updates live and shows exactly what
- * recruiters will see when a match is revealed (region-only location, salary
- * per consent, per-field visibility gating, credentials summary). Legal/privacy
- * controls the template omits — per-field visibility, market-insights opt-in,
- * profile visibility, the reveal-override toggle — live in the Privacy card
- * (never dropped by the redesign, per the founder's standing rule). */
+/** Structured profile page (SeekerProfile template): editable identity/
+ * preference fields + a live "What recruiters see now" mirror panel. The
+ * mirror panel reflects live-typed edits combined with the CURRENTLY SAVED
+ * per-field visibility settings (`props.fieldVisibility`, read-only here) —
+ * changing visibility mode itself now happens on the dedicated Privacy
+ * settings page (DESIGN.md §13e: "Extract the card into a shared component;
+ * the profile page keeps a link, not the controls"). Legal/privacy controls
+ * the template omits — per-field visibility, market-insights opt-in, profile
+ * visibility, the reveal-override toggle, consent management — live at
+ * /seeker/settings/privacy (never dropped by the redesign, per the founder's
+ * standing rule; just relocated). */
 export function ProfileFields(props: ProfileFieldsProps) {
   const [editing, setEditing] = useState(false);
 
@@ -195,29 +105,9 @@ export function ProfileFields(props: ProfileFieldsProps) {
   const [equityRequired, setEquityRequired] = useState(props.equityRequired);
   const [experience, setExperience] = useState<ExperienceRow[]>(props.experience);
   const [showAllExperience, setShowAllExperience] = useState(false);
-  const [fieldVisibility, setFieldVisibility] = useState<FieldVisibilityMap>(
-    props.fieldVisibility ?? {},
-  );
-  const [marketSignalsOptedIn, setMarketSignalsOptedIn] = useState(props.marketSignalsOptedIn);
-  const [maintenanceConsented, setMaintenanceConsented] = useState(props.maintenanceConsented);
-  const [connectedAccountsOptedIn, setConnectedAccountsOptedIn] = useState(
-    props.connectedAccountsOptedIn,
-  );
+  const fieldVisibility: FieldVisibilityMap = props.fieldVisibility ?? {};
   const [status, setStatus] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-
-  function setVisibility(key: ProfileFieldKey, mode: FieldVisibilityMode) {
-    const next = { ...fieldVisibility, [key]: mode };
-    setFieldVisibility(next);
-    setStatus(null);
-    startTransition(async () => {
-      await updateFieldVisibility(next);
-      // Post-await so "Visibility updated." only shows once the write has
-      // actually committed — tests (and users) can rely on it as a settle
-      // signal before publishing.
-      setStatus("Visibility updated.");
-    });
-  }
 
   function save() {
     startTransition(async () => {
@@ -246,10 +136,6 @@ export function ProfileFields(props: ProfileFieldsProps) {
   const skillsList = skillsText.split(",").map((s) => s.trim()).filter(Boolean);
   const desiredRolesList = desiredRolesText.split(",").map((s) => s.trim()).filter(Boolean);
   const industriesList = industriesText.split(",").map((s) => s.trim()).filter(Boolean);
-
-  const visibleFieldCount = PRIVACY_FIELD_KEYS.filter(
-    (k) => fieldMode(fieldVisibility, k) === "visible",
-  ).length;
 
   // External view derives through the same per-field visibility filter the
   // publish path uses — hidden/matching_only choices apply immediately here.
@@ -800,339 +686,26 @@ export function ProfileFields(props: ProfileFieldsProps) {
             </CardContent>
           </Card>
 
-          <Card className="jb-lift">
+          <Card className="jb-lift" data-testid="privacy-settings-link-card">
             <CardHeader>
-              <CardTitle className="text-sm">Privacy</CardTitle>
-              <CardAction>
-                <span className="text-xs text-muted-foreground">
-                  {visibleFieldCount} of {PRIVACY_FIELD_COUNT} visible
-                </span>
-              </CardAction>
+              <CardTitle className="text-sm">Privacy &amp; consent</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-                <div>
-                  <VisibilityControl
-                    fieldKey="headline"
-                    label="Headline"
-                    rawValue={headline}
-                    mode={fieldMode(fieldVisibility, "headline")}
-                    onChange={(m) => setVisibility("headline", m)}
-                  />
-                  <VisibilityControl
-                    fieldKey="location"
-                    label="Location (region)"
-                    rawValue={location}
-                    mode={fieldMode(fieldVisibility, "location")}
-                    onChange={(m) => setVisibility("location", m)}
-                  />
-                  <VisibilityControl
-                    fieldKey="skills"
-                    label="Skills"
-                    rawValue={skillsList.join(", ")}
-                    mode={fieldMode(fieldVisibility, "skills")}
-                    onChange={(m) => setVisibility("skills", m)}
-                  />
-                  <VisibilityControl
-                    fieldKey="desired_roles"
-                    label="Desired roles"
-                    rawValue={desiredRolesList.join(", ")}
-                    mode={fieldMode(fieldVisibility, "desired_roles")}
-                    onChange={(m) => setVisibility("desired_roles", m)}
-                  />
-                  <VisibilityControl
-                    fieldKey="industries"
-                    label="Target industries"
-                    rawValue={industriesList.join(", ")}
-                    mode={fieldMode(fieldVisibility, "industries")}
-                    onChange={(m) => setVisibility("industries", m)}
-                  />
-                  <VisibilityControl
-                    fieldKey="references_available"
-                    label="References note"
-                    rawValue={referencesAvailable ? "Available on request" : "Not offered"}
-                    mode={fieldMode(fieldVisibility, "references_available")}
-                    onChange={(m) => setVisibility("references_available", m)}
-                  />
-                  <VisibilityControl
-                    fieldKey="credentials"
-                    label="Credentials"
-                    rawValue={credentials}
-                    mode={fieldMode(fieldVisibility, "credentials")}
-                    onChange={(m) => setVisibility("credentials", m)}
-                  />
-                </div>
-
-                <div className="flex items-center gap-2.5 rounded-lg bg-muted px-3 py-2.5 text-xs text-muted-foreground">
-                  <svg
-                    width="15"
-                    height="15"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="flex-none text-primary"
-                  >
-                    <rect x="3" y="11" width="18" height="10" rx="2" />
-                    <path d="M7 11V7a5 5 0 0110 0v4" />
-                  </svg>
-                  <span>
-                    Name &amp; contact stay hidden until you accept a reveal — that rule can&apos;t
-                    be turned off.
-                  </span>
-                </div>
-
-                <Separator />
-
-                <form
-                  action={(fd) =>
-                    startTransition(async () => {
-                      await updateSettings(fd);
-                      setStatus("Settings saved.");
-                    })
-                  }
-                  className="space-y-3"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <Label htmlFor="visibility" className="text-sm">
-                      Profile visibility
-                    </Label>
-                    <select
-                      id="visibility"
-                      name="visibility"
-                      defaultValue={props.visibility}
-                      className="rounded-md border px-2 py-1 text-xs"
-                    >
-                      <option value="active">Actively looking</option>
-                      <option value="paused">Not looking</option>
-                    </select>
-                  </div>
-                  <label className="flex items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      name="reveal_override_enabled"
-                      defaultChecked={props.overrideEnabled}
-                      className="mt-1"
-                    />
-                    <span>
-                      Allow paid reveal-override{" "}
-                      <span className="text-xs text-muted-foreground">
-                        (recruiters can reveal your name pre-opt-in for a premium; you earn points
-                        and can decline)
-                      </span>
-                    </span>
-                  </label>
-                  <Button type="submit" size="sm" variant="outline" disabled={pending}>
-                    Save settings
-                  </Button>
-                </form>
-
-                <Separator />
-
-                <div data-testid="maintenance-consent-card" className="space-y-3.5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm font-semibold">Continuous AI resume maintenance</span>
-                      <span className="text-[13px] leading-normal text-muted-foreground">
-                        Optional and separate from your processing consent: periodic check-ins that
-                        draft profile updates for your approval. Nothing changes without your
-                        explicit approval. Withdraw any time — the maintenance loop stops
-                        immediately.
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={maintenanceConsented}
-                      aria-label="Continuous AI resume maintenance"
-                      disabled={pending}
-                      data-testid="maintenance-consent-toggle"
-                      onClick={() => {
-                        const next = !maintenanceConsented;
-                        setMaintenanceConsented(next);
-                        startTransition(() => updateMaintenanceConsent(next));
-                      }}
-                      className={
-                        "relative h-6 w-10 flex-none rounded-full transition-colors " +
-                        (maintenanceConsented ? "bg-primary" : "bg-secondary")
-                      }
-                    >
-                      <span
-                        className={
-                          "absolute top-0.5 size-5 rounded-full bg-primary-foreground shadow transition-[left] " +
-                          (maintenanceConsented ? "left-[18px]" : "left-0.5")
-                        }
-                      />
-                    </button>
-                  </div>
-                  <Badge variant={maintenanceConsented ? "default" : "secondary"}>
-                    {maintenanceConsented ? "On" : "Off"}
-                  </Badge>
-                </div>
-
-                <Separator />
-
-                <div data-testid="market-insights-consent-card" className="space-y-3.5">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-semibold">Anonymized market insights</span>
-                    <span className="text-xs text-muted-foreground">
-                      A separate, optional program — distinct from your AI-processing consent.
-                    </span>
-                  </div>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm font-semibold">
-                        Contribute to anonymized market insights
-                      </span>
-                      <span className="text-[13px] leading-normal text-muted-foreground">
-                        We use only aggregated, non-identifiable data (never your name, resume, or
-                        individual profile), and only when at least 20 similar people are in the
-                        group — otherwise the signal is suppressed. You can opt out anytime.
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={marketSignalsOptedIn}
-                      aria-label="Contribute to anonymized market insights"
-                      disabled={pending}
-                      data-testid="market-insights-toggle"
-                      onClick={() => {
-                        const next = !marketSignalsOptedIn;
-                        setMarketSignalsOptedIn(next);
-                        startTransition(() => updateMarketSignalsConsent(next));
-                      }}
-                      className={
-                        "relative h-6 w-10 flex-none rounded-full transition-colors " +
-                        (marketSignalsOptedIn ? "bg-primary" : "bg-secondary")
-                      }
-                    >
-                      <span
-                        className={
-                          "absolute top-0.5 size-5 rounded-full bg-primary-foreground shadow transition-[left] " +
-                          (marketSignalsOptedIn ? "left-[18px]" : "left-0.5")
-                        }
-                      />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Badge variant={marketSignalsOptedIn ? "default" : "secondary"}>
-                      {marketSignalsOptedIn ? "On" : "Off"}
-                    </Badge>
-                    <Dialog>
-                      <DialogTrigger
-                        render={
-                          <Button variant="ghost" size="sm" data-testid="market-insights-learn-more" />
-                        }
-                      >
-                        Learn what&apos;s shared / not shared
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>What&apos;s shared, and what&apos;s never shared</DialogTitle>
-                          <DialogDescription>
-                            Only group-level signals leave your profile — never anything that
-                            identifies you.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid grid-cols-2 gap-5 text-sm">
-                          <div>
-                            <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
-                              Shared
-                            </p>
-                            <ul className="flex flex-col gap-2">
-                              <li>Aggregate skill demand</li>
-                              <li>Salary-range trends by role and region</li>
-                              <li>Demand and salary by seniority band (min-20 cohorts)</li>
-                            </ul>
-                          </div>
-                          <div>
-                            <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
-                              Never shared
-                            </p>
-                            <ul className="flex flex-col gap-2">
-                              <li>Your name</li>
-                              <li>Your resume</li>
-                              <li>Your current employer</li>
-                              <li>Any contact details</li>
-                              <li>Your individual profile or answers</li>
-                            </ul>
-                          </div>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div data-testid="connected-accounts-consent-card" className="space-y-3.5">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-semibold">Connected accounts</span>
-                    <span className="text-xs text-muted-foreground">
-                      A separate, optional consent — distinct from your AI-processing consent.
-                    </span>
-                  </div>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm font-semibold">Import from Google Drive</span>
-                      <span className="text-[13px] leading-normal text-muted-foreground">
-                        Let Binding list recent PDF/Doc files in your Drive so you can pick one to
-                        fill in your resume draft — an alternative to pasting text or uploading a
-                        file directly. You choose the file each time; nothing is imported
-                        automatically. Revocable any time.
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={connectedAccountsOptedIn}
-                      aria-label="Import from Google Drive"
-                      disabled={pending}
-                      data-testid="connected-accounts-toggle"
-                      onClick={() => {
-                        const next = !connectedAccountsOptedIn;
-                        setConnectedAccountsOptedIn(next);
-                        startTransition(() => updateConnectedAccountsConsent(next));
-                      }}
-                      className={
-                        "relative h-6 w-10 flex-none rounded-full transition-colors " +
-                        (connectedAccountsOptedIn ? "bg-primary" : "bg-secondary")
-                      }
-                    >
-                      <span
-                        className={
-                          "absolute top-0.5 size-5 rounded-full bg-primary-foreground shadow transition-[left] " +
-                          (connectedAccountsOptedIn ? "left-[18px]" : "left-0.5")
-                        }
-                      />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Badge variant={connectedAccountsOptedIn ? "default" : "secondary"}>
-                      {connectedAccountsOptedIn ? "On" : "Off"}
-                    </Badge>
-                    {props.driveConnected ? (
-                      <Badge variant="outline" data-testid="drive-connected-badge">
-                        Google Drive connected
-                      </Badge>
-                    ) : (
-                      connectedAccountsOptedIn && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          data-testid="connect-google-drive"
-                          render={<a href="/api/connected-accounts/google-drive/authorize" />}
-                        >
-                          Connect Google Drive
-                        </Button>
-                      )
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Field-level visibility, profile pause, consent management, &ldquo;who accessed my
+                data&rdquo;, and data export/deletion controls all moved to a dedicated settings
+                page.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                data-testid="privacy-settings-link"
+                render={<Link href="/seeker/settings/privacy" />}
+              >
+                Open Privacy settings
+              </Button>
+            </CardContent>
+          </Card>
           </div>
 
           {/* Sticky recruiter preview panel */}

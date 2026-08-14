@@ -617,3 +617,23 @@ export async function toggleRecruiterTier() {
   if (updateError) throw new Error(updateError.message);
   revalidatePath("/recruiter");
 }
+
+/** Recruiter-owned opt-out (migration 0028, DESIGN.md §14j): when true, this
+ * recruiter's identity is withheld ("A recruiter") on a seeker Pro-tier "who
+ * accessed my data" view (get_my_access_log() RPC), even though Pro would
+ * otherwise show name + date. Scoped strictly to that ledger view — it does
+ * NOT touch the reveal/messaging path, where this recruiter's identity stays
+ * visible to the candidate by design (0004's profiles_recruiter_identity_
+ * select: candidates must always be able to see who is contacting them). */
+export async function updateHideNameOnReveal(enabled: boolean) {
+  const session = await requireRole("recruiter");
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ hide_name_on_reveal: enabled })
+    .eq("id", session.userId);
+  if (error) throw new Error(`hide-name-on-reveal update failed: ${error.message}`);
+
+  revalidatePath("/settings");
+}

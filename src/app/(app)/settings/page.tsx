@@ -3,10 +3,15 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { coerceRecruiterTier } from "@/lib/recruiter-tier";
 import { DevTierToggle } from "../seeker/dev-tier-toggle";
 import { DevRecruiterTierToggle } from "../recruiter/dev-tier-toggle";
+import { HideNameToggle } from "./hide-name-toggle";
 
 /** Settings page: tier toggle controls for dev environments (relocation from
- * app-shell dropdown). Shows a toggle per role the account actually holds —
- * both, for dual-role accounts, not just whichever is currently active. */
+ * app-shell dropdown), plus the minimal recruiter-facing Privacy section
+ * (DESIGN.md §13e: "Recruiter gets minimal Privacy + Security pages") — just
+ * the hide_name_on_reveal opt-out this phase adds, kept small per the Phase 6
+ * brief rather than a full dedicated /recruiter/settings route. Shows a
+ * toggle per role the account actually holds — both, for dual-role accounts,
+ * not just whichever is currently active. */
 export default async function SettingsPage() {
   const supabase = await createSupabaseServerClient();
   const {
@@ -16,7 +21,7 @@ export default async function SettingsPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("is_seeker, is_recruiter, seeker_tier, recruiter_tier")
+    .select("is_seeker, is_recruiter, seeker_tier, recruiter_tier, hide_name_on_reveal")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -46,6 +51,13 @@ export default async function SettingsPage() {
           <div className="space-y-2">
             <h2 className="text-sm font-semibold">Recruiter tier</h2>
             <DevRecruiterTierToggle tier={recruiterTier} />
+          </div>
+        )}
+
+        {profile?.is_recruiter && (
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold">Privacy</h2>
+            <HideNameToggle initialValue={profile?.hide_name_on_reveal ?? false} />
           </div>
         )}
       </div>

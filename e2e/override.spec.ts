@@ -133,11 +133,36 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   // Paused-profile shield first (DESIGN §4 guardrail): override toggle ON but
   // visibility paused — recruiter must see the unavailable state, never an
   // override button.
-  await seeker.goto("/seeker/profile");
-  await seeker.locator('select[name="visibility"]').selectOption("paused");
-  await seeker.locator('input[name="reveal_override_enabled"]').check();
-  await seeker.getByRole("button", { name: "Save settings" }).click();
-  await expect(seeker.getByText("Settings saved.")).toBeVisible();
+  //
+  // Phase 6 (Security + Privacy settings): both controls moved from the
+  // profile page's form+select+checkbox+"Save settings" button to
+  // independent instant-commit toggle switches on /seeker/settings/privacy
+  // (DESIGN.md §13e — "the profile page keeps a link, not the controls";
+  // reveal_override_enabled specifically now renders in that page's consent
+  // center as an explicitly un-versioned row). Each toggle click optimistically
+  // flips local state before the server action resolves, so — same discipline
+  // e2e/connected-accounts-drive.spec.ts already uses — reload and re-assert
+  // before navigating to the recruiter context, since navigating away can
+  // cancel an in-flight server action (CLAUDE.md Gotchas).
+  await seeker.goto("/seeker/settings/privacy");
+  await seeker.getByTestId("pause-profile-toggle").click();
+  await expect(seeker.getByTestId("pause-profile-toggle")).toHaveAttribute("aria-checked", "true");
+  await seeker.getByTestId("override-consent-toggle").click();
+  await expect(seeker.getByTestId("override-consent-toggle")).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  await seeker.reload();
+  await expect(seeker.getByTestId("pause-profile-toggle")).toHaveAttribute(
+    "aria-checked",
+    "true",
+    { timeout: 15_000 },
+  );
+  await expect(seeker.getByTestId("override-consent-toggle")).toHaveAttribute(
+    "aria-checked",
+    "true",
+    { timeout: 15_000 },
+  );
 
   // The reveal/override controls + unavailable state live in the detail
   // panel that opens when the candidate's card is clicked.
@@ -148,11 +173,17 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   await expect(pausedPanel.getByText(/Override unavailable: candidate currently unavailable/)).toBeVisible();
   await expect(pausedPanel.getByTestId("override-candidate")).toHaveCount(0);
 
-  // Unpause (override stays allowed) — Privacy card on the profile page.
-  await seeker.goto("/seeker/profile");
-  await seeker.locator('select[name="visibility"]').selectOption("active");
-  await seeker.getByRole("button", { name: "Save settings" }).click();
-  await expect(seeker.getByText("Settings saved.")).toBeVisible();
+  // Unpause (override stays allowed) — Pause-profile toggle on the Privacy
+  // settings page (moved from the profile page, see comment above).
+  await seeker.goto("/seeker/settings/privacy");
+  await seeker.getByTestId("pause-profile-toggle").click();
+  await expect(seeker.getByTestId("pause-profile-toggle")).toHaveAttribute("aria-checked", "false");
+  await seeker.reload();
+  await expect(seeker.getByTestId("pause-profile-toggle")).toHaveAttribute(
+    "aria-checked",
+    "false",
+    { timeout: 15_000 },
+  );
 
   // Seeker sees the match but does NOT opt in.
   await seeker.goto("/seeker/matches");

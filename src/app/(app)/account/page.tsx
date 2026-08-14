@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getSessionProfile } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@binding/ui";
@@ -18,12 +19,24 @@ export default async function AccountPage() {
         </p>
       </header>
 
-      <Card className="jb-lift">
-        <CardHeader>
-          <CardTitle>Privacy &amp; security</CardTitle>
-          <CardDescription>Coming soon.</CardDescription>
-        </CardHeader>
-      </Card>
+      {session.isSeeker && (
+        <Card className="jb-lift">
+          <CardHeader>
+            <CardTitle>Privacy &amp; security</CardTitle>
+            <CardDescription>
+              Consent, visibility, and data controls moved to dedicated pages:{" "}
+              <Link href="/seeker/settings/privacy" className="underline">
+                Privacy settings
+              </Link>{" "}
+              ·{" "}
+              <Link href="/seeker/settings/security" className="underline">
+                Security settings
+              </Link>
+              .
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
 
       <Card className="jb-lift ring-destructive/30">
         <CardHeader>

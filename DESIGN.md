@@ -1,6 +1,6 @@
 # DESIGN.md — Binding (formerly JumpOnBoard) Technical Architecture
 
-**Version 2.14** · Last updated 2026-08-14 · Revision history at the end of this document.
+**Version 2.15** · Last updated 2026-08-14 · Revision history at the end of this document.
 
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [VISION.md](./VISION.md) (goals/metrics). This document describes how the product is actually built. Status: walking-skeleton MVP implemented (see §12 for what's built vs. deferred and where the MVP diverges from the target architecture below).
 
@@ -523,7 +523,7 @@ Design:
   - **Fairness**: skill verification is merit-based, consistent with the tenure-not-employer-prestige
     stance already encoded in `src/lib/experience.ts` — it rewards a demonstrated skill, not a brand.
 
-### 13e. Security + Privacy settings — two pages (#14)
+### 13e. Security + Privacy settings — two pages (#14) — **BUILT together with §14j** (Phase 6 of the CCMF-demo MVP build plan; see §14j below for the full shipped scope, built once rather than twice)
 No settings route exists today; consent/visibility toggles are scattered in the seeker profile
 "Privacy" card (`profile-fields.tsx:799`) and `/account`'s privacy section is a "Coming soon" stub.
 Design: **two dedicated pages, single source of truth (toggles move OUT of the profile card).**
@@ -535,6 +535,11 @@ Design: **two dedicated pages, single source of truth (toggles move OUT of the p
 - **Security** (`/seeker/settings/security`): account deletion (moved from `/account`), auth method /
   connected providers, sign-out-everywhere. Replaces the `/account` stub.
 - **Recruiter** gets minimal Privacy + Security pages (company-identity note, deletion, auth).
+
+**Deviation on shipping**: account deletion was **not** moved off `/account` — it stays there,
+with the new Security page only linking to it (the build's concrete scope didn't call for the
+move, and `/account` is an already-live, independently e2e-tested page; relocating it wasn't worth
+the churn this pass). Everything else above shipped as designed.
 
 ### 13f. Dashboard feature-widgets (#1; extends §2d)
 The `/seeker` and `/recruiter` dashboards (and the design-project templates) are the **adaptive
@@ -808,11 +813,40 @@ admin/DPO-approver, per-batch vs. pre-approved authorization policy) and the AI-
 audit-log export (§2g) — fits the Phase-3 Enterprise Module Suite (BUSINESS §3a) as a roadmap item,
 no build priority set here.
 
-### 14j. Security + Privacy settings — deepened (extends §13e), full "regulated business" design pass
+### 14j. Security + Privacy settings — deepened (extends §13e), full "regulated business" design pass — **BUILT** (Phase 6 of the CCMF-demo MVP build plan)
 
 Founder asked to design and consider *all* potential settings that both enhance UX and protect data
 to a regulated-business standard. Both pages keep §13e's existing content as their base and add the
 following.
+
+**Shipped**: Privacy Health Panel (deterministic flag list computed from real timestamp/consent
+columns — "consent not reviewed in 6 months" etc — not model-generated, per this section's own
+"still §2d adaptive-not-generative" caveat); consent center rendered from Phase 5's `CONSENT_REGISTRY`
+plus `reveal_override_enabled`/`contact_sharing_consent` as two explicit un-versioned rows (these
+have no version column, so they sit outside the registry by construction — noted directly in the
+build plan so a later pass doesn't silently drop them); "who accessed my data" ledger via a new
+`get_my_access_log()` security-definer RPC (migration `0028`), company name always shown, recruiter
+name tiered by seeker plan and gated server-side (inside the SQL function, not app code — a
+free-tier seeker's network payload never contains a withheld identity at all) by a new
+`profiles.hide_name_on_reveal` recruiter opt-out column; rate-limited DSAR export; "delete my
+original resume now" (a plain row-delete this phase, explicitly labeled as such — not
+crypto-shredding yet, that's Phase 10 once `user_data_keys` exists); pause-profile (reuses the
+existing `visibility = 'paused'` enum value); notification-preference columns; explicitly-labeled
+"Coming soon" placeholders for passkey/recovery-code management (Phase 10) and agent-token
+management (Phase 11). Connected-account management here is consent-toggle-level (opt in/out,
+status) — the fuller per-account scope/last-synced/revoke listing this section describes stays on
+the profile page's Google Drive card (Phase 4), not duplicated onto this page. Security Command
+Centre shipped as a smaller deterministic flag panel (e.g. no additional sign-in method linked)
+rather than the full roadmap scope this section sketches — the rest (passkey/agent-token
+management) is the two placeholder sections above, reserved for Phases 10/11.
+
+Two real bugs were caught and fixed during this build, before merge: the DSAR export originally
+returned each match's raw cosine `score` (recruiter-only per migration 0001's own comment and the
+platform-wide seeker-never-sees-raw-score invariant) verbatim in the seeker's own downloadable
+export — fixed to map through the existing `matchBand()`, same as everywhere else; and
+`get_my_access_log()` originally used inner joins for its accessor/caller profile lookups, which
+would have silently dropped a real log row (read as "nobody ever accessed your data") if either
+lookup ever missed — hardened to `left join` before either bug reached a real environment.
 
 **Privacy page — new "Privacy Health Panel" at the top** (AI-driven, proactive; deterministic list
 below unchanged in kind, just larger — still §2d adaptive-not-generative, not model-emitted UI):
@@ -922,3 +956,4 @@ is single-company research for one candidate's own decision, not a cross-market 
 | 2.12 | 2026-08-12 | **Strategy/design expansion pass (docs cycle; companion to BUSINESS.md 2.3 + LEGAL_REVIEW.md 1.8), founder-grilled across 11 rounds (~40 questions) + two advisor reviews.** New §2g: client-held key custody / envelope encryption for the original resume upload, reframed (the load-bearing insight) as an AI-processing consent/audit gate rather than "extra encryption" — applies to B2C seekers (live passkey ceremony) and, differently, to enterprise customer-VPC data (a designated HR admin/DPO-approver role authorizes, since most employees have no Binding account under the HR-ingested path); recovery via device-bound passkey + optional one-time recovery codes (N wrapped copies of one data key, server never holds an unwrapped key); password-derived fallback for unsupported devices; deliberately no break-glass exception; existing plaintext `resumes.raw_text` gets a mandatory backfill-encrypt-and-enroll ceremony on next login; total key-loss (device + codes both lost) is accepted as permanent, disclosed data loss, not solved via escrow; new enterprise-facing AI-processing audit-log export. New §14 (2026-08-12 design pass, mirrors §13's shape but §14g is heavier — flagged as needing its own schema sketch at build time): 14a RAG-driven profile autofill (uploaded docs + connected OAuth accounts only, not open public lookup); 14b open-ended AI-graded Q&A supersedes §13d's MCQ as the default skill-assessment design (founder-picked, not a roadmap-only alternative) — restates the anti-farming case and the human-review shape change per-attempt AI grading reopens; 14c AI-generated per-posting screening questions folded into the single cosine score via §13d's required-filter/weighted-advantage pattern; 14d career graph (far-roadmap) with edge/core placement decided now and a dual-purpose consent split (matching vs. enterprise-performance-context); 14e agent/MCP integration (personal + enterprise CLI directions) with rule-based-only auto-replies, most-restrictive-wins conflict resolution, an account-level kill switch, a dedicated agent-access consent, a pointer-only webhook/websocket notify layer (new PII-egress invariant stated explicitly), and an enterprise-only auto-publish bypass with a mandatory automated safety-scan floor; 14f mobile left as an explicit open question with a named revisit trigger; 14g enterprise verification module (internal candidate-scoring + AI-researched employer/education verification + candidate public-footprint summary, all explicitly NOT wired to point-earning, necessarily post-reveal, paid/Advanced-Enterprise-tier, candidate-sees-first with a timed dispute window); 14h Performance & Relations lighter-touch AI synthesis from employee-submitted data only (not passive work-tool monitoring); 14i Enterprise Admin Console named as a new surface for §2g's admin config + audit export; 14j Security+Privacy settings deepened into a full "regulated business" design (AI-driven Privacy Health Panel / Security Command Centre, consent center, OAuth/agent/passkey/session management, tiered "who accessed my data" ledger, rate-limited DSAR export, crypto-shred delete-now, pause-profile); 14k AI Company Research as a standalone feature explicitly kept OUT of §7's AI-Credit-Marketplace scope (an earlier draft of this pass had folded it in — corrected on advisor review, since widening that classifier-gated key's scope would undermine the narrow-scoping its confirmation-only legal status depends on). |
 | 2.13 | 2026-08-13 | **§13a Salary stealth — BUILT** (Phase 1 of the CCMF-demo MVP build plan; founder-grilled across 6 rounds + repeated advisor review before and during the build). Marked shipped in place: `band` visibility mode (`coarseSalaryBand()`/`coarseSalaryBounds()` in `src/lib/jobs.ts`, $20k buckets, guarded against the `0024` `(0,0)` null-salary sentinel and any nullish/non-finite input), migration `0025_salary_stealth_band_default.sql` (enum value + both defaults flipped + existing-row backfill for `job_postings.salary_visibility` and `profiles.share_salary` — the latter's backfill needed correcting mid-build: seeker onboarding's `profiles` upsert never wrote this column, so pre-migration rows carried the old `true` default indistinguishable from a real opt-in, not just explicit user choices as first assumed), the job-editor's visibility control rebuilt as an explicit 3-way `<Select>` (a binary cycling toggle would let one click silently escalate disclosure), and three stale `?? "public"` fallback sites beyond this section's original scope. This is the first phase built under the plan's standing scoping rule ("cut big features down, never defer them for being large") and its first real subagent-built-then-advisor-reviewed cycle — two review rounds caught a privacy-preserving gap (raw salary bounds reaching a client component's props for `band` jobs, fixed by exposing pre-coarsened bounds instead) and the nullish-guard hardening above. Plan file: `.claude/plans/business-md-design-md-some-new-floating-lemur.md`. |
 | 2.14 | 2026-08-14 | **§14a RAG-driven profile autofill — BUILT, one-provider slice** (Phase 4 of the CCMF-demo MVP build plan). Google Drive only — LinkedIn/GitHub stay roadmap, no generalized provider abstraction yet. New `connected_accounts` table (`0026`, service-role-only) + independently-versioned `connected_accounts_opt_in_at`/`_consent_version` pair (`0027`, same pattern as every other consent in `consent.ts`). `src/lib/google-drive.ts`: data-access OAuth grant (`access_type=offline`+`prompt=consent`, distinct from Phase 3's login-OAuth), lazy on-demand token refresh (no cron), capped file listing, file-text fetch sharing the existing PDF-extraction path (factored to `src/lib/pdf-extract.ts`). Named MVP cuts: plain list-and-pick instead of Google's Picker API, token encryption-at-rest deferred (interim posture matches every other sensitive table today), Google Cloud Console app stays in unverified test mode. A real e2e case proves withdrawing consent actually deletes the `connected_accounts` row (not just hides the UI) and that both API routes independently re-check the consent flag as defense in depth. |
+| 2.15 | 2026-08-14 | **§13e/§14j Security + Privacy settings — BUILT** (Phase 6 of the CCMF-demo MVP build plan). Both pages built once, per §14j's own "extends §13e" framing: Privacy Health Panel, consent center rendered from Phase 5's `CONSENT_REGISTRY` plus two explicit un-versioned rows for the consents the registry can't hold, "who accessed my data" ledger via a new `get_my_access_log()` security-definer RPC (migration `0028`, tier/opt-out gating done inside SQL, not app code), rate-limited DSAR export, plain-delete "remove my original resume" (crypto-shredding deferred to Phase 10), pause-profile, notification prefs, labeled placeholders for the passkey/agent-token management Phases 10/11 will fill in. Real deviation from the original design: account deletion was not moved off `/account`, only linked from the new page. Two real bugs caught and fixed before merge: the DSAR export leaked each match's raw cosine score into the seeker's own downloadable export (a privacy-invariant violation, fixed by banding it like everywhere else), and `get_my_access_log()`'s inner joins would have silently dropped a real access-log row on any lookup miss (hardened to `left join`). |
