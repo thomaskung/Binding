@@ -128,10 +128,7 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   await completeSeekerOnboarding(seeker, { name: seekerName, resumeText: RUST_TEXT });
 
   await seeker.goto("/seeker/profile/resume");
-  // 300s: same publishProfile redact+embed behind the finish click above — the
-  // preview only renders once both Modal calls land (flake: 180s timeout,
-  // 2026-08-13/14 under 4-worker contention on the shared binding-llm engine).
-  await expect(seeker.getByTestId("redacted-preview")).toBeVisible({ timeout: 300_000 });
+  await expect(seeker.getByTestId("redacted-preview")).toBeVisible({ timeout: 180_000 });
 
   // Paused-profile shield first (DESIGN §4 guardrail): override toggle ON but
   // visibility paused — recruiter must see the unavailable state, never an

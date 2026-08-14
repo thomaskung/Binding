@@ -65,13 +65,9 @@ export async function completeSeekerOnboarding(
     await page.getByTestId("onboarding-continue-dealbreakers").click({ timeout: 180_000 });
     // finish() awaits publishProfile() → ai.redact + ai.embed. Counted HERE so
     // the cost lives next to the click that causes it and callers can't drift.
-    // 300s action timeout: under the 4-worker nightly suite every worker's
-    // publishProfile serializes through ONE binding-llm vLLM engine, so a
-    // redact+embed pair can sit queued behind 3 other workers' calls for over
-    // a minute — 180s was exceeded twice on override.spec.ts (2026-08-13/14).
     countAiCall(); // ai.redact (publishProfile, via onboarding-finish)
     countAiCall(); // ai.embed  (publishProfile, via onboarding-finish)
-    await page.getByTestId("onboarding-finish").click({ timeout: 300_000 });
+    await page.getByTestId("onboarding-finish").click({ timeout: 180_000 });
   } else {
     await page.getByTestId("wizard-skip").click();
   }
