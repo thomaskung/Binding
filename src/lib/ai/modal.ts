@@ -1,5 +1,12 @@
 import { credentialsFloorSummary, credentialsLooksSafe } from "@/lib/credentials";
-import type { AiProvider, ExtractedProfileFields, JDTextOnly, JobDraftFields, RedactionResult } from "./types";
+import type {
+  AiProvider,
+  AssessmentGradeResult,
+  ExtractedProfileFields,
+  JDTextOnly,
+  JobDraftFields,
+  RedactionResult,
+} from "./types";
 
 /**
  * Private-LLM provider: self-hosted Qwen3 small + medium models + embeddings on
@@ -193,5 +200,21 @@ export const modalProvider: AiProvider = {
       kind: "career_assist",
     });
     return refined;
+  },
+
+  async gradeAssessmentAttempt(rubric: string, answerText: string): Promise<AssessmentGradeResult> {
+    const c = config();
+    const raw = await post<Partial<AssessmentGradeResult>>(c.extractUrl, c.apiToken, {
+      text: answerText,
+      context: rubric,
+      kind: "assessment_grade",
+    });
+    // Defensive normalize (same discipline as normalizeJobDraft above) — a
+    // malformed/partial model response fails CLOSED (not passed), never
+    // silently grants a pass on missing data.
+    return {
+      passed: raw.passed === true,
+      rationale: typeof raw.rationale === "string" ? raw.rationale : "",
+    };
   },
 };

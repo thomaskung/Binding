@@ -238,3 +238,25 @@ describe("stub generalize-credentials", () => {
     expect(a).toBe(b);
   });
 });
+
+describe("stub skill-assessment grading", () => {
+  it("passes a substantive answer", async () => {
+    const result = await stubProvider.gradeAssessmentAttempt(
+      "Answer must explain event loop non-blocking I/O",
+      "Node's event loop delegates blocking I/O to libuv's thread pool so the main thread stays free.",
+    );
+    expect(result.passed).toBe(true);
+    expect(result.rationale.length).toBeGreaterThan(0);
+  });
+
+  it("fails a trivially short answer", async () => {
+    const result = await stubProvider.gradeAssessmentAttempt("Any rubric", "idk");
+    expect(result.passed).toBe(false);
+  });
+
+  it("is deterministic for the same input", async () => {
+    const a = await stubProvider.gradeAssessmentAttempt("rubric", "a reasonably long answer here");
+    const b = await stubProvider.gradeAssessmentAttempt("rubric", "a reasonably long answer here");
+    expect(a).toEqual(b);
+  });
+});

@@ -105,4 +105,23 @@ describe("candidate-derived AI capabilities stay off the frontier-capable path",
     };
     expect(typeof generalize).toBe("function");
   });
+
+  it("gradeAssessmentAttempt takes plain rubric/answer strings, not JDTextOnly (Phase 12, §14b) — BOTH params pinned separately", () => {
+    // The candidate's answer text is unambiguously candidate-derived. The
+    // rubric is treated the same way for consistency (this interface never
+    // wants a rubric routed to a frontier API either) — both parameters get
+    // their own suppression-directive line below rather than pinning just
+    // one and leaving the other's doc-comment claim unverified (see
+    // draftMaintenanceUpdate's test above, which historically only pinned
+    // one of its two params).
+    const grade: AiProvider["gradeAssessmentAttempt"] = async (rubric, answerText) => {
+      // @ts-expect-error — if this compiles, the rubric param was wrongly
+      // branded frontier-capable.
+      const _rubricWouldRequireBrand: JDTextOnly = rubric;
+      // @ts-expect-error — same pin for the candidate's answer text.
+      const _answerWouldRequireBrand: JDTextOnly = answerText;
+      return { passed: false, rationale: "" };
+    };
+    expect(typeof grade).toBe("function");
+  });
 });

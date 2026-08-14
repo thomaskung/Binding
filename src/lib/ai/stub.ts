@@ -1,6 +1,7 @@
 import { credentialsFloorSummary } from "@/lib/credentials";
 import type {
   AiProvider,
+  AssessmentGradeResult,
   ExtractedExperienceEntry,
   ExtractedProfileFields,
   JDTextOnly,
@@ -276,5 +277,19 @@ export const stubProvider: AiProvider = {
     // user's message so e2e/manual checks can confirm it reached the provider.
     const historyNote = history && history.length > 0 ? ` (with ${history.length} prior messages)` : "";
     return `Career assistant stub response${historyNote}: You wrote: "${message}"`;
+  },
+
+  async gradeAssessmentAttempt(rubric: string, answerText: string): Promise<AssessmentGradeResult> {
+    // Deterministic, plumbing-only heuristic — NOT a quality bar (same
+    // caveat as every other stub method): a substantive-length answer
+    // passes, a trivially short one fails. Stable for the same input, no
+    // fabricated confidence.
+    const passed = answerText.trim().length >= 20;
+    return {
+      passed,
+      rationale: passed
+        ? "stub: answer meets the minimum substantive-length bar"
+        : "stub: answer too short to evaluate against the rubric",
+    };
   },
 };
