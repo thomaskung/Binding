@@ -34,17 +34,15 @@ export default defineConfig({
   // Generous: staging is a cold-startable Vercel deployment and the journey
   // specs legitimately run 50s+ when healthy (plus Modal cold starts).
   timeout: 120_000,
-  // workers: 2 (was 4). One shared staging database — each spec owns its own
-  // users/labels (unique per worker via TEST_RUN_ID's pid suffix), so spec
-  // files can run in parallel without cross-spec state interference. But under
-  // workers:4 the single Vercel deployment + hosted Supabase + one Modal vLLM
-  // engine get saturated by ~4x concurrent server actions and AI calls, which
-  // showed up as app-layer hangs (override's onboarding-finish never rendered,
-  // a 5s credentials-chip timeout in staging-functional) on the 2026-08-13/14
-  // nightly runs. workers:2 halves that contention (suite ~2x slower wall
-  // clock, same total Modal spend) while still keeping the production Modal
-  // apps (300s scaledown_window) warm naturally across the run.
-  workers: 2,
+  // One shared staging database — each spec owns its own users/labels (unique
+  // per worker via TEST_RUN_ID's pid suffix), so spec files can run in
+  // parallel without cross-spec state interference. Parallel also keeps the
+  // suite faster, which is what lets production Modal apps stay warm naturally
+  // across the run — no keep-warm pings, no separate E2E Modal apps.
+  // (workers:4 -> 2 was tried 2026-08-14 to reduce app-stack contention; it did
+  // NOT fix the override/credentials-chip failures and didn't change suite
+  // time, so 4 is kept.)
+  workers: 4,
   fullyParallel: false,
   use: {
     baseURL,

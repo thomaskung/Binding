@@ -182,6 +182,15 @@ jobs:
           # in (product default stays 20).
           MATCH_TOP_N: '500'
 
+      - name: Upload test results (traces / error-context for debugging)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
       # Report + enforce the Modal AI call budget. Runs AFTER the whole suite
       # (so all workers are done and the counter file holds the final count —
       # the previous in-suite zz-ai-budget.spec.ts relied on "sorts last", which
