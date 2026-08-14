@@ -19,6 +19,7 @@ import { loadSeekerContext, OverrideBanners } from "./seeker-data";
 import { MatchResponseButtons } from "./match-response";
 import { LoyaltyLadderCard } from "./loyalty-ladder-card";
 import TrainingCreditsCard from "./training-credits-card";
+import { BenefitsSummaryCard } from "./benefits-summary-card";
 
 const BAND_LABEL = { high: "High match", normal: "Normal match", low: "Low match" } as const;
 const BAND_VARIANT = { high: "default", normal: "secondary", low: "outline" } as const;
@@ -117,6 +118,10 @@ export default async function SeekerDashboard({
           ledger={context.recentTrainingLedger}
           careerPathProgram={context.careerPathProgram}
           trainingCompletionCount={context.trainingCompletionCount}
+        />
+        <BenefitsSummaryCard
+          lifetimePoints={context.lifetimeEarnedPoints}
+          partnerUnlocks={context.partnerUnlocks}
         />
       </div>
 

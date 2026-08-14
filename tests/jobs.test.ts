@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { parseCommaList, parseLineList, relativeDayLabel, salaryDisplay } from "@/lib/jobs";
+import {
+  coarseSalaryBounds,
+  parseCommaList,
+  parseLineList,
+  relativeDayLabel,
+  salaryDisplay,
+} from "@/lib/jobs";
 
 describe("parseCommaList", () => {
   it("splits, trims, and drops blanks", () => {
@@ -35,6 +41,54 @@ describe("salaryDisplay", () => {
   // NOT NULL since migration 0024, so salaryDisplay takes plain numbers. The
   // null-bounds path for on_request jobs lives at the callers (seeker cards
   // strip the raw range for privacy and render "Salary on request" directly).
+
+  describe("band visibility (migration 0025, DESIGN §13a)", () => {
+    it("both bounds already on a $20k bucket boundary: displayed as-is", () => {
+      expect(salaryDisplay(160000, 200000, "band")).toBe("$160k – $200k");
+    });
+
+    it("both bounds off-boundary: min floors down, max ceils up", () => {
+      expect(salaryDisplay(182000, 205000, "band")).toBe("$180k – $220k");
+    });
+
+    it("min === max, both landing exactly on a bucket boundary: upper bound bumps one bucket up rather than collapsing to a single figure", () => {
+      expect(salaryDisplay(180000, 180000, "band")).toBe("$180k – $200k");
+    });
+
+    it("a tight true range that stays within a single bucket still widens to a real two-sided band", () => {
+      expect(salaryDisplay(161000, 165000, "band")).toBe("$160k – $180k");
+    });
+
+    it("a wide true range spanning several buckets: rounds each bound independently", () => {
+      expect(salaryDisplay(500000, 650000, "band")).toBe("$500k – $660k");
+    });
+
+    it("the 0024 (0, 0) null-backfill sentinel: falls back to 'Salary on request' rather than a fake $0k-ish band", () => {
+      expect(salaryDisplay(0, 0, "band")).toBe("Salary on request");
+    });
+  });
+});
+
+describe("coarseSalaryBounds", () => {
+  it("rounds off-boundary bounds out to the enclosing bucket", () => {
+    expect(coarseSalaryBounds(182000, 205000)).toEqual({ lo: 180000, hi: 220000 });
+  });
+
+  it("is idempotent: re-bucketing already-bucketed bounds returns them unchanged", () => {
+    const first = coarseSalaryBounds(182000, 205000)!;
+    expect(coarseSalaryBounds(first.lo, first.hi)).toEqual(first);
+  });
+
+  it("returns null for the 0024 (0, 0) null-backfill sentinel", () => {
+    expect(coarseSalaryBounds(0, 0)).toBeNull();
+  });
+
+  it("returns null for nullish/non-finite input instead of coercing to a fake $0k-$20k band", () => {
+    expect(coarseSalaryBounds(null, null)).toBeNull();
+    expect(coarseSalaryBounds(undefined, undefined)).toBeNull();
+    expect(coarseSalaryBounds(null, 200000)).toBeNull();
+    expect(coarseSalaryBounds(NaN, NaN)).toBeNull();
+  });
 });
 
 describe("relativeDayLabel", () => {

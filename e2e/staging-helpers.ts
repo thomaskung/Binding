@@ -80,6 +80,10 @@ export function requireFixture(value: string | null | undefined, name: string): 
 // maintenance-nudge=5, smoke=4, override=5 (4 when it flakes), staging-functional=6,
 // no-third-party=2, field-visibility=2 → TOTAL 30 measured (clean run ~31).
 // CI budget is 32 (measured 30 + 2 margin) in .github/workflows/e2e-staging.yml.
+// Phase-1/2 specs added since (salary-stealth, dashboard widgets, market-intel
+// dimensions) never call countAiCall() — admin-client inserts + wizard-skip
+// onboarding + read-only card renders, no publish/embed — so they don't move
+// this number.
 export function aiCounterFile(): string {
   return process.env.E2E_AI_COUNTER_FILE ?? path.join(process.cwd(), "test-results", "ai-calls.log");
 }

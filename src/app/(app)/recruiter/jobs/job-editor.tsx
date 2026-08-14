@@ -37,6 +37,22 @@ const BAND_LABEL = {
   low: "Low match",
 } as const;
 
+// Explicit label + help copy per visibility value — all three (public/band/
+// on_request) are individually selectable in the visibility <Select> below,
+// never reached by cycling a binary toggle (that shape let one click silently
+// escalate disclosure, e.g. band -> public).
+const SALARY_VISIBILITY_LABEL: Record<SalaryVisibility, string> = {
+  public: "Public",
+  band: "Range shown",
+  on_request: "Hidden",
+};
+const SALARY_VISIBILITY_HELP: Record<SalaryVisibility, string> = {
+  public: "The exact salary range is shown on the posting.",
+  band: "A coarse band (e.g. “$180k – $220k”) is shown — never the exact figure.",
+  on_request:
+    "Hidden by default — candidates see “Salary on request” and can ask during matching.",
+};
+
 export interface EditableJob {
   id: string;
   title: string;
@@ -350,7 +366,9 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
           <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             Salary &amp; visibility
           </h2>
-          <p className="text-sm text-muted-foreground">Set a range and choose whether it&apos;s public.</p>
+          <p className="text-sm text-muted-foreground">
+            Set a range and choose how much of it candidates see.
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -378,37 +396,34 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
             </div>
           </div>
 
-          {/* Prominent, defaults-to-hidden salary visibility control — stealth
-              is the default posture (privacy invariant), public is the
-              explicit opt-in via this switch. */}
-          <div className="flex items-center justify-between gap-4 rounded-xl bg-muted px-4 py-3.5">
-            <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-sm font-semibold">Show salary band to candidates</span>
-              <span className="text-[13px] leading-normal text-muted-foreground">
-                {visibility === "public"
-                  ? "The salary range is shown on the posting."
-                  : "Hidden by default — candidates see “Salary on request” and can ask during matching."}
-              </span>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={visibility === "public"}
-              aria-label="Show salary band to candidates"
-              data-testid="job-salary-visibility-toggle"
-              onClick={() => setVisibility((v) => (v === "public" ? "on_request" : "public"))}
-              className={
-                "relative h-6 w-10 flex-none rounded-full transition-colors " +
-                (visibility === "public" ? "bg-primary" : "bg-secondary")
-              }
+          {/* Explicit 3-way salary visibility control — stealth ('on_request')
+              is the default posture (privacy invariant); 'band' and 'public'
+              are deliberate, individually-selected opt-ins. A single-click
+              cycling toggle would let one click silently escalate disclosure
+              (e.g. a band -> public step reached with no deliberate choice of
+              'public'), so this is a <select>, not a binary switch. */}
+          <div className="space-y-2 rounded-xl bg-muted px-4 py-3.5">
+            <Label htmlFor="salary_visibility">Salary visibility</Label>
+            <Select
+              value={visibility}
+              onValueChange={(v) => setVisibility(v as SalaryVisibility)}
             >
-              <span
-                className={
-                  "absolute top-0.5 size-5 rounded-full bg-primary-foreground shadow transition-[left] " +
-                  (visibility === "public" ? "left-[18px]" : "left-0.5")
-                }
-              />
-            </button>
+              <SelectTrigger
+                id="salary_visibility"
+                data-testid="job-salary-visibility-select"
+                style={{ width: "100%" }}
+              >
+                <SelectValue>{SALARY_VISIBILITY_LABEL[visibility]}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="public">Public</SelectItem>
+                <SelectItem value="band">Range shown</SelectItem>
+                <SelectItem value="on_request">Hidden</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="block text-[13px] leading-normal text-muted-foreground">
+              {SALARY_VISIBILITY_HELP[visibility]}
+            </span>
           </div>
 
           <label className="flex items-center gap-2 text-sm">

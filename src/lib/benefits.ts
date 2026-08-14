@@ -133,6 +133,22 @@ export function loyaltyLadderRows(
 }
 
 /**
+ * Dashboard "Benefits" widget summary: unlike `loyaltyLadderRows` (which
+ * shows the full tier ladder), this widget is a catalog-facing teaser — how
+ * many partner benefits are unlocked AT the current tier vs. still locked.
+ * Pure derivation from the same `benefitTier`/partner list already fetched
+ * for the ladder — no new query needed to back this widget.
+ */
+export function benefitsSummary(
+  lifetimePoints: number,
+  partners: { tier_required: number }[],
+): { tier: number; unlockedCount: number; lockedCount: number } {
+  const tier = benefitTier(lifetimePoints);
+  const unlockedCount = partners.filter((p) => p.tier_required <= tier).length;
+  return { tier, unlockedCount, lockedCount: partners.length - unlockedCount };
+}
+
+/**
  * Query benefit_partners for tier_required only (deliberately excludes
  * code/discount_description — the ladder says WHAT unlocks, never leaks
  * redemption codes). Returns all partners ordered by tier_required.

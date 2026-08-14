@@ -28,6 +28,16 @@ import { ensureStagingUser, signIn, stagingAdminClient, stagingContext, uniqueLa
  *   matched = 4 (all except C's declined job2 row)
  *   interested = 2 (A-job1 interested + B-job1 revealed)
  *   revealed = 1 (B-job1)
+ *
+ * Also asserts the Phase 2 "Your tools" widget grid (DESIGN.md §13f) added
+ * below the command center: Job postings (built from the `jobs` array this
+ * page already fetches — assert the real count/title from this scenario's
+ * own seed, not a global number), Reveal credits (a fresh recruiter has
+ * whatever `RECRUITER_SEED_POINTS` seeds — assert the widget renders, not a
+ * specific balance, since this spec doesn't control that seed value) and
+ * Market intelligence (a k-anonymized aggregate over ALL staging seekers,
+ * not this run's — assert the card/link render, never a specific skill or
+ * count, since the suppression threshold outcome isn't this spec's to pin).
  */
 test("pipeline command-center funnel + alerts + posting health, and Candidates parity", async ({
   browser,
@@ -151,6 +161,50 @@ test("pipeline command-center funnel + alerts + posting health, and Candidates p
   await expect(recruiter.getByText(job1Title).first()).toBeVisible();
   await expect(recruiter.getByText("3 matches")).toBeVisible();
   await expect(recruiter.getByText("2 matches")).toBeVisible();
+
+  // --- "Your tools" widget grid (Phase 2, DESIGN.md §13f) ---
+  await expect(recruiter.getByRole("heading", { name: "Your tools" })).toBeVisible();
+
+  // Job postings: built from the same `jobs` array the funnel/health sections
+  // use, so this scenario's 2 postings are a real, spec-owned count.
+  //
+  // Role note (confirmed via a real CI run, not assumed): these cards' footer
+  // links use `<Button render={<Link .../>}>` (packages/ui's Button wrapper
+  // sets `nativeButton={props.render == null}`, and Base UI's useButton
+  // explicitly merges `role: 'button'` onto the rendered element whenever
+  // `nativeButton` is false — see @base-ui/react/internals/use-button). So
+  // the accessible role is "button", never "link", even though the DOM node
+  // is a real `<a href>`. getByRole("link", ...) will never match; query
+  // "button" instead, same as this codebase's other Button+render composites.
+  const jobPostingsCard = recruiter.getByTestId("job-postings-card");
+  await expect(jobPostingsCard).toBeVisible();
+  await expect(jobPostingsCard.getByText("2 postings")).toBeVisible();
+  await expect(jobPostingsCard.getByRole("button", { name: /View job postings/ })).toHaveAttribute(
+    "href",
+    "/recruiter/jobs",
+  );
+
+  // Reveal credits: a fresh recruiter's balance is whatever the seed grants —
+  // this spec doesn't own that number, so assert the widget renders and
+  // links out, not a specific point value.
+  const revealCreditsCard = recruiter.getByTestId("reveal-credits-card");
+  await expect(revealCreditsCard).toBeVisible();
+  await expect(revealCreditsCard.getByText(/\d+ pts/)).toBeVisible();
+  await expect(revealCreditsCard.getByRole("button", { name: /Review candidates/ })).toHaveAttribute(
+    "href",
+    "/recruiter/candidates",
+  );
+
+  // Market intelligence: a k-anonymized aggregate over ALL staging seekers
+  // (not this scenario's fake candidates, which never get embedded/published)
+  // — assert only that the widget degrades safely and links out, never a
+  // specific skill or count.
+  const marketIntelCard = recruiter.getByTestId("market-intel-card");
+  await expect(marketIntelCard).toBeVisible();
+  await expect(marketIntelCard.getByRole("button", { name: /View market intelligence/ })).toHaveAttribute(
+    "href",
+    "/recruiter/market-intelligence",
+  );
 
   // --- Candidates route: same underlying match rows (5 total across both jobs) ---
   await recruiter.goto("/recruiter/candidates");
