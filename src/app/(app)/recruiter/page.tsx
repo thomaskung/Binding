@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Badge, Button, Card, CardContent, Progress } from "@binding/ui";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getBalance } from "@/lib/points";
+import { fetchSkillDemand } from "@/lib/market-signals";
 import {
   detectStalePostings,
   detectExpiringReveals,
@@ -12,6 +14,9 @@ import {
   type RevealRequestRow,
   type FunnelStage,
 } from "@/lib/pipeline-funnel";
+import { JobPostingsCard } from "./job-postings-card";
+import { RevealCreditsCard } from "./reveal-credits-card";
+import { MarketIntelCard } from "./market-intel-card";
 
 interface JobPostingWithStatus {
   id: string;
@@ -79,12 +84,22 @@ export default async function RecruiterPipelineCommandCenter() {
   // Alerts: stale postings & expiring reveals
   const stalePostingIds = detectStalePostings(matches);
 
-  const { data: reveals } = jobIds.length
-    ? await supabase
-        .from("reveal_requests")
-        .select("job_posting_id, profile_id, path, status, created_at")
-        .in("job_posting_id", jobIds)
-    : { data: [] as RevealRequestRow[] };
+  // Reveals (for alerts) + the two new widget reads run concurrently rather
+  // than as sequential round-trips on a cold lambda. Both widget reads are
+  // guarded: a market-intel RPC hiccup or balance-lookup error must degrade
+  // the widget to an empty state, never 500 the whole Pipeline page — this
+  // page's existing queries all tolerate undefined/empty today and these two
+  // shouldn't be the ones that break that.
+  const [{ data: reveals }, pointsBalance, skillDemand] = await Promise.all([
+    jobIds.length
+      ? supabase
+          .from("reveal_requests")
+          .select("job_posting_id, profile_id, path, status, created_at")
+          .in("job_posting_id", jobIds)
+      : Promise.resolve({ data: [] as RevealRequestRow[] }),
+    getBalance(supabase, session.userId).catch(() => 0),
+    fetchSkillDemand(supabase).catch(() => []),
+  ]);
 
   const expiringReveals = detectExpiringReveals((reveals ?? []) as RevealRequestRow[]);
 
@@ -272,6 +287,19 @@ export default async function RecruiterPipelineCommandCenter() {
             })}
           </div>
         )}
+      </section>
+
+      {/* Your tools — feature-widget grid below the command-center leading
+       * module (DESIGN.md §13f / design-sync ㉖). Training is deliberately
+       * NOT included: /training is requireRole("seeker")-gated today, so
+       * there is no recruiter-side training concept yet to summarize. */}
+      <section className="space-y-3">
+        <h2 className="font-heading text-[15px] font-semibold tracking-tight">Your tools</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          <MarketIntelCard skillDemand={skillDemand} />
+          <JobPostingsCard jobs={jobs ?? []} />
+          <RevealCreditsCard balance={pointsBalance} />
+        </div>
       </section>
     </main>
   );

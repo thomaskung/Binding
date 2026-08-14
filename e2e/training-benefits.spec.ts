@@ -23,7 +23,10 @@ import { ensureStagingUser, signIn, stagingAdminClient, stagingContext } from ".
  *
  * complete a personal program (spends credits, earns credits + points) ->
  * assert the flywheel wrote through to both ledgers -> Benefits reflects the
- * new lifetime-points signal -> code reveal shows the no-payment-nexus copy.
+ * new lifetime-points signal -> code reveal shows the no-payment-nexus copy
+ * -> the /seeker dashboard's Benefits widget (Phase 2, DESIGN.md §13f)
+ * reflects the same tier signal, reusing the exact points/partner data
+ * already earned in this run — no extra seed, no extra Modal cost.
  *
  * Modal AI cost: ZERO. Onboarding uses the free wizard-skip path (no
  * `resumeText`, so `completeSeekerOnboarding` makes no AI call) and
@@ -88,6 +91,18 @@ test("complete a training program, then see the Benefits signal move", async ({ 
   await page.getByTestId("get-code").first().click();
   await expect(page.getByTestId("benefit-code").first()).toBeVisible();
   await expect(page.getByText("Binding never processes this payment.").first()).toBeVisible();
+
+  // --- Seeker dashboard "Benefits" widget (Phase 2 addition): same tier
+  // signal, presentational only, zero extra Modal cost. TRAINING_COMPLETION_
+  // POINTS_REWARD is 5 (free tier), well under the tier-2 threshold (50), so
+  // this account stays Tier 1 — assert the badge and the widget's presence,
+  // not an exact unlocked-partner count (that count depends on the static
+  // benefit_partners seed content, which this spec doesn't own).
+  await page.goto("/seeker");
+  const benefitsCard = page.getByTestId("benefits-summary-card");
+  await expect(benefitsCard).toBeVisible({ timeout: 30_000 });
+  await expect(benefitsCard.getByText("Tier 1", { exact: true })).toBeVisible();
+  await expect(benefitsCard.getByText(/partner benefits? unlocked/)).toBeVisible();
 
   await ctx.close();
 });
