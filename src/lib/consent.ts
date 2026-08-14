@@ -23,6 +23,17 @@ export const MARKET_SIGNALS_CONSENT_VERSION = "2026-07-21-draft";
  * Placeholder text pending legal review (LEGAL_REVIEW.md Q14). */
 export const MAINTENANCE_CONSENT_VERSION = "2026-07-28-draft";
 
+/** Connected-accounts (Google Drive) import consent (DESIGN.md §14a,
+ * Phase 4) — a FOURTH independent consent, same shape as
+ * MARKET_SIGNALS_CONSENT_VERSION above: optional, independently
+ * withdrawable, and bumping it must never imply consent to/from any of the
+ * other three. Required before the Drive OAuth connect flow starts
+ * (/api/connected-accounts/google-drive/authorize) — this is a new,
+ * non-essential input method (an alternative to pasting text or uploading a
+ * PDF), not part of the core AI-processing consent above. Placeholder text
+ * pending legal review (LEGAL_REVIEW.md scope). */
+export const CONNECTED_ACCOUNTS_CONSENT_VERSION = "2026-08-13-draft";
+
 export interface SeekerConsentInput {
   tos: boolean;
   processing: boolean;

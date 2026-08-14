@@ -33,6 +33,7 @@ import { regionFromLocation } from "@/lib/profile";
 import {
   saveDraft,
   saveExperience,
+  updateConnectedAccountsConsent,
   updateFieldVisibility,
   updateMaintenanceConsent,
   updateMarketSignalsConsent,
@@ -83,6 +84,11 @@ export interface ProfileFieldsProps {
   overrideEnabled: boolean;
   marketSignalsOptedIn: boolean;
   maintenanceConsented: boolean;
+  connectedAccountsOptedIn: boolean;
+  /** Whether a connected_accounts row already exists (migration 0026) — read
+   * via the admin client server-side (that table has no authenticated RLS
+   * policy), so this is display-only, never re-derived client-side. */
+  driveConnected: boolean;
   minSalary: number | null;
   workSetups: string[];
   equityRequired: boolean;
@@ -194,6 +200,9 @@ export function ProfileFields(props: ProfileFieldsProps) {
   );
   const [marketSignalsOptedIn, setMarketSignalsOptedIn] = useState(props.marketSignalsOptedIn);
   const [maintenanceConsented, setMaintenanceConsented] = useState(props.maintenanceConsented);
+  const [connectedAccountsOptedIn, setConnectedAccountsOptedIn] = useState(
+    props.connectedAccountsOptedIn,
+  );
   const [status, setStatus] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -1053,6 +1062,73 @@ export function ProfileFields(props: ProfileFieldsProps) {
                         </div>
                       </DialogContent>
                     </Dialog>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div data-testid="connected-accounts-consent-card" className="space-y-3.5">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-semibold">Connected accounts</span>
+                    <span className="text-xs text-muted-foreground">
+                      A separate, optional consent — distinct from your AI-processing consent.
+                    </span>
+                  </div>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm font-semibold">Import from Google Drive</span>
+                      <span className="text-[13px] leading-normal text-muted-foreground">
+                        Let Binding list recent PDF/Doc files in your Drive so you can pick one to
+                        fill in your resume draft — an alternative to pasting text or uploading a
+                        file directly. You choose the file each time; nothing is imported
+                        automatically. Revocable any time.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={connectedAccountsOptedIn}
+                      aria-label="Import from Google Drive"
+                      disabled={pending}
+                      data-testid="connected-accounts-toggle"
+                      onClick={() => {
+                        const next = !connectedAccountsOptedIn;
+                        setConnectedAccountsOptedIn(next);
+                        startTransition(() => updateConnectedAccountsConsent(next));
+                      }}
+                      className={
+                        "relative h-6 w-10 flex-none rounded-full transition-colors " +
+                        (connectedAccountsOptedIn ? "bg-primary" : "bg-secondary")
+                      }
+                    >
+                      <span
+                        className={
+                          "absolute top-0.5 size-5 rounded-full bg-primary-foreground shadow transition-[left] " +
+                          (connectedAccountsOptedIn ? "left-[18px]" : "left-0.5")
+                        }
+                      />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Badge variant={connectedAccountsOptedIn ? "default" : "secondary"}>
+                      {connectedAccountsOptedIn ? "On" : "Off"}
+                    </Badge>
+                    {props.driveConnected ? (
+                      <Badge variant="outline" data-testid="drive-connected-badge">
+                        Google Drive connected
+                      </Badge>
+                    ) : (
+                      connectedAccountsOptedIn && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid="connect-google-drive"
+                          render={<a href="/api/connected-accounts/google-drive/authorize" />}
+                        >
+                          Connect Google Drive
+                        </Button>
+                      )
+                    )}
                   </div>
                 </div>
               </CardContent>

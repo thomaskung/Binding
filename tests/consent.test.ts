@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CONNECTED_ACCOUNTS_CONSENT_VERSION,
   CONSENT_VERSION,
   MAINTENANCE_CONSENT_VERSION,
   MARKET_SIGNALS_CONSENT_VERSION,
@@ -31,11 +32,19 @@ describe("validateSeekerConsent", () => {
 });
 
 describe("consent versions", () => {
-  it("are three independent consents with their own version strings", () => {
+  it("are four independent consents with their own version strings", () => {
     // Bumping one must never imply re-consent to another (src/lib/consent.ts
     // doc contract) — this asserts they at least exist as distinct exports,
-    // so a refactor collapsing them fails loudly.
-    const versions = [CONSENT_VERSION, MARKET_SIGNALS_CONSENT_VERSION, MAINTENANCE_CONSENT_VERSION];
+    // so a refactor collapsing them fails loudly. (Two of the four happen to
+    // share the same date string today because they were drafted the same
+    // day — that's a coincidence of value, not shared identity: each is
+    // still its own export, bumped independently.)
+    const versions = [
+      CONSENT_VERSION,
+      MARKET_SIGNALS_CONSENT_VERSION,
+      MAINTENANCE_CONSENT_VERSION,
+      CONNECTED_ACCOUNTS_CONSENT_VERSION,
+    ];
     for (const v of versions) expect(v).toMatch(/^\d{4}-\d{2}-\d{2}/);
   });
 });

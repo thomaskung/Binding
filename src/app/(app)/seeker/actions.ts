@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { getAiProvider } from "@/lib/ai";
 import { AI_REFINE_CHAT_DAILY_CAP, countRefineChatCallsToday, logRefineChatCall } from "@/lib/ai-usage";
 import { requireRole } from "@/lib/auth";
-import { MAINTENANCE_CONSENT_VERSION, MARKET_SIGNALS_CONSENT_VERSION } from "@/lib/consent";
+import {
+  CONNECTED_ACCOUNTS_CONSENT_VERSION,
+  MAINTENANCE_CONSENT_VERSION,
+  MARKET_SIGNALS_CONSENT_VERSION,
+} from "@/lib/consent";
 import {
   computeExperienceStats,
   experienceFactsSentence,
@@ -418,6 +422,44 @@ export async function updateMaintenanceConsent(optIn: boolean) {
   if (error) throw new Error(`maintenance consent update failed: ${error.message}`);
   revalidatePath("/seeker/profile");
   revalidatePath("/seeker/nudge");
+}
+
+/** Connected-accounts (Google Drive) import consent (DESIGN.md §14a, Phase
+ * 4) — same shape as updateMarketSignalsConsent/updateMaintenanceConsent:
+ * independently revocable, clearing the timestamp entirely on withdrawal.
+ * This only toggles CONSENT — it does not itself start the OAuth flow
+ * (that's /api/connected-accounts/google-drive/authorize, which checks this
+ * flag) and withdrawing it does not revoke an already-granted Google token;
+ * disconnecting the account is a fast-follow, not built this phase. */
+export async function updateConnectedAccountsConsent(optIn: boolean) {
+  const session = await requireRole("seeker");
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase.from("consent_flags").upsert({
+    profile_id: session.userId,
+    connected_accounts_opt_in_at: optIn ? new Date().toISOString() : null,
+    connected_accounts_consent_version: optIn ? CONNECTED_ACCOUNTS_CONSENT_VERSION : null,
+  });
+  if (error) throw new Error(`connected-accounts consent update failed: ${error.message}`);
+
+  if (!optIn) {
+    // "Revocable any time" (the toggle's own copy) means actually
+    // disconnecting, not leaving a live token sitting unused — delete the
+    // connected_accounts row (admin client: that table has no authenticated
+    // RLS policy, migration 0026) so a re-connect requires going through
+    // OAuth again, the same as a first-time connection. This is also what
+    // stops /api/connected-accounts/google-drive/{files,import} from
+    // continuing to serve real Drive data after consent is withdrawn.
+    const admin = createSupabaseAdminClient();
+    await admin
+      .from("connected_accounts")
+      .delete()
+      .eq("profile_id", session.userId)
+      .eq("provider", "google_drive");
+  }
+
+  revalidatePath("/seeker/profile");
+  revalidatePath("/seeker/profile/resume");
 }
 
 /** Candidate responds to a pending override reveal. Identity was already
