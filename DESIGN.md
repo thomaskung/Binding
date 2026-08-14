@@ -1,6 +1,6 @@
 # DESIGN.md — Binding (formerly JumpOnBoard) Technical Architecture
 
-**Version 2.16** · Last updated 2026-08-14 · Revision history at the end of this document.
+**Version 2.17** · Last updated 2026-08-14 · Revision history at the end of this document.
 
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [VISION.md](./VISION.md) (goals/metrics). This document describes how the product is actually built. Status: walking-skeleton MVP implemented (see §12 for what's built vs. deferred and where the MVP diverges from the target architecture below).
 
@@ -469,22 +469,31 @@ templates for these screens are authored in the "Binding UI" project (`dc871eb6`
   through `salaryDisplay()`, drop/neuter the salary sort. The detail page
   (`src/app/(app)/seeker/matches/[id]/page.tsx`) already honors visibility — align the card to it.
 
-### 13b. AI job-post authoring — three modes (fixes recruiter "manual is not good")
-Today recruiter posting is fully manual (`job-editor.tsx`); the only AI is `refineJobText`
-(`src/app/(app)/recruiter/actions.ts:129`) rewriting already-typed prose. Bring recruiters to
-parity with the seeker resume-first flow (`onboarding-wizard.tsx` upload→extract→approve). Three
-input modes, all suggest-and-approve:
-1. **Paste/upload existing JD** → new `extractJobFields(text)` → prefill the editor's structured
-   fields as approve/edit cards (reuse the seeker `ItemCard` pattern).
-2. **Generate from a prompt** → new `generateJob({title, company, notes})` → AI drafts description /
-   responsibilities / requirements for review. This is the "frictionless from nothing" path.
-3. **Refine editor** (existing `refineJobText`) retained for polishing typed prose.
-- New `AiProvider` methods `extractJobFields` / `generateJob` in `src/lib/ai/types.ts` + `stub.ts`
-  + `modal.ts`. Recruiter-authored JD text is `JDTextOnly` (frontier-eligible) but stays on Modal
-  for cost parity — no candidate data involved, so the frontier-guardrail is not implicated.
-- Recruiter-gated ingest: generalize `/api/ingest` (currently seeker-only, `route.ts:15`) or add
-  `/api/ingest-jd`. **AI-never-fabricates still holds** — generated JD text is recruiter-owned and
-  recruiter-approved before publish.
+### 13b. AI job-post authoring — three modes — **BUILT** (Phase 8 of the CCMF-demo MVP build plan)
+Three input modes, all suggest-and-approve, now shipped in `job-editor.tsx`:
+1. **Paste-JD** → `AiProvider.extractJobFields(jd: JDTextOnly)` → a preview dialog (not the seeker
+   `ItemCard` pattern — a dedicated draft-preview card, since a job posting's field shape differs
+   enough from a resume's) the recruiter reviews before Apply.
+2. **Generate** → `AiProvider.generateJob(prompt: JDTextOnly)` → same preview/Apply flow, drafted
+   from a short prompt instead of pasted text.
+3. **Refine editor** (existing `refineJobText`/`refineJobDescription`) — unchanged, was already built.
+- Both new methods return one shared shape, `JobDraftFields` (title/department/skills/
+  responsibilities/requirements/description) — **narrower than this section originally scoped**:
+  deliberately excludes salary, employment type, location, and work setup, none of which are
+  reliably extractable/generatable from text without fabricating (the recruiter fills those in by
+  hand after applying a draft, same as always).
+- **Extension pattern, not a new endpoint per mode**: both reuse the existing `/extract` Modal
+  endpoint via a `kind` discriminator (`"job_extract"`/`"job_generate"`), mirroring how `/refine`
+  already dispatches on `kind` — no `/api/ingest-jd` was added. This is the pattern later phases
+  (12/13/14) are meant to reuse rather than provisioning a new Modal app per feature.
+- Apply is per-field and never blanks a field the draft returned empty; if applying would overwrite
+  content the recruiter already typed, the first click only arms a confirmation (a second explicit
+  click is required) — the suggest-and-approve principle applied at field granularity, not just
+  "preview the whole draft once."
+- **Not yet real end-to-end**: `modal_app/llm.py`'s `JOB_EXTRACT_SYSTEM`/`JOB_GENERATE_SYSTEM`
+  branches are written but not deployed (same gap as `careerAssist`, revision 2.11) — until
+  `modal deploy modal_app/llm.py` runs, both modes are stub-verified only. `e2e/job-post-authoring.spec.ts`
+  is written but deliberately not yet wired into any CI tier (real Modal cost, left for founder review).
 
 ### 13c. Fewer fields — AI-first with progressive disclosure (#7; extends §2c/§2d) — **BUILT, seeker profile only** (Phase 7 of the CCMF-demo MVP build plan)
 Principle for the AI era: **AI drafts / human confirms; AI prefills every field it can; advanced or
@@ -971,3 +980,4 @@ is single-company research for one candidate's own decision, not a cross-market 
 | 2.14 | 2026-08-14 | **§14a RAG-driven profile autofill — BUILT, one-provider slice** (Phase 4 of the CCMF-demo MVP build plan). Google Drive only — LinkedIn/GitHub stay roadmap, no generalized provider abstraction yet. New `connected_accounts` table (`0026`, service-role-only) + independently-versioned `connected_accounts_opt_in_at`/`_consent_version` pair (`0027`, same pattern as every other consent in `consent.ts`). `src/lib/google-drive.ts`: data-access OAuth grant (`access_type=offline`+`prompt=consent`, distinct from Phase 3's login-OAuth), lazy on-demand token refresh (no cron), capped file listing, file-text fetch sharing the existing PDF-extraction path (factored to `src/lib/pdf-extract.ts`). Named MVP cuts: plain list-and-pick instead of Google's Picker API, token encryption-at-rest deferred (interim posture matches every other sensitive table today), Google Cloud Console app stays in unverified test mode. A real e2e case proves withdrawing consent actually deletes the `connected_accounts` row (not just hides the UI) and that both API routes independently re-check the consent flag as defense in depth. |
 | 2.15 | 2026-08-14 | **§13e/§14j Security + Privacy settings — BUILT** (Phase 6 of the CCMF-demo MVP build plan). Both pages built once, per §14j's own "extends §13e" framing: Privacy Health Panel, consent center rendered from Phase 5's `CONSENT_REGISTRY` plus two explicit un-versioned rows for the consents the registry can't hold, "who accessed my data" ledger via a new `get_my_access_log()` security-definer RPC (migration `0028`, tier/opt-out gating done inside SQL, not app code), rate-limited DSAR export, plain-delete "remove my original resume" (crypto-shredding deferred to Phase 10), pause-profile, notification prefs, labeled placeholders for the passkey/agent-token management Phases 10/11 will fill in. Real deviation from the original design: account deletion was not moved off `/account`, only linked from the new page. Two real bugs caught and fixed before merge: the DSAR export leaked each match's raw cosine score into the seeker's own downloadable export (a privacy-invariant violation, fixed by banding it like everywhere else), and `get_my_access_log()`'s inner joins would have silently dropped a real access-log row on any lookup miss (hardened to `left join`). |
 | 2.16 | 2026-08-14 | **§13c Progressive disclosure — BUILT, seeker profile only** (Phase 7 of the CCMF-demo MVP build plan). `#13b`'s job editor left flat, out of scope. `src/lib/profile-field-disclosure.ts` refines this section's literal "AI-prefilled → essential" rule with a second criterion: fields that gate matching directly (`min_salary`/`equity_required`/`work_setups`) stay essential regardless of AI-prefill status — collapsing a matching dealbreaker behind an opt-in disclosure risks a seeker never setting it. Caught in review: a build pass's own report claimed this split was already correct while the shipped code actually gated the dealbreaker fields behind the toggle — found by diffing the report against the real diff rather than trusting the summary, fixed before merge. Advanced fields stay mounted in React state while collapsed (a render toggle, never a data-loss one). |
+| 2.17 | 2026-08-14 | **§13b AI job-post authoring — BUILT** (Phase 8 of the CCMF-demo MVP build plan). Paste-JD and Generate modes shipped in `job-editor.tsx` (Refine already existed); both narrower than originally scoped — `JobDraftFields` (title/department/skills/responsibilities/requirements/description) deliberately excludes salary/employment-type/location/work-setup, none reliably extractable/generatable from text without fabricating. Established the extension pattern later phases (12/13/14) are meant to reuse: both new `AiProvider` methods reuse the existing `/extract` Modal endpoint via a `kind` discriminator (mirroring how `/refine` already dispatches on `kind`) rather than provisioning a new endpoint per feature — no `/api/ingest-jd` was added, contra this section's original sketch. Per-field suggest-and-approve apply, with an explicit second-click confirmation before overwriting any field the recruiter already filled in. Same undeployed-Modal-branch gap as `careerAssist` (revision 2.11): `JOB_EXTRACT_SYSTEM`/`JOB_GENERATE_SYSTEM` are written but `modal deploy` hasn't run, so this phase is stub-verified only until that deploy lands; `e2e/job-post-authoring.spec.ts` is written but deliberately not yet wired into any CI tier (real Modal cost, left for founder review). A review pass on this phase also caught and fixed a real gap in `tests/frontier-guardrail.test.ts` (the privacy-invariant pinning file) missing pins for both new JDTextOnly-typed methods. |

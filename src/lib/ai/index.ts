@@ -2,7 +2,7 @@ import type { AiProvider } from "./types";
 import { stubProvider } from "./stub";
 import { modalProvider } from "./modal";
 
-export type { AiProvider, JDTextOnly, RedactionResult } from "./types";
+export type { AiProvider, JDTextOnly, JobDraftFields, RedactionResult } from "./types";
 export { assertJDTextOnly } from "./types";
 
 /**

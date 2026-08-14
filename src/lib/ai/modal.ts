@@ -1,5 +1,5 @@
 import { credentialsFloorSummary, credentialsLooksSafe } from "@/lib/credentials";
-import type { AiProvider, ExtractedProfileFields, JDTextOnly, RedactionResult } from "./types";
+import type { AiProvider, ExtractedProfileFields, JDTextOnly, JobDraftFields, RedactionResult } from "./types";
 
 /**
  * Private-LLM provider: self-hosted Qwen3 small + medium models + embeddings on
@@ -56,6 +56,28 @@ async function post<T>(url: string, token: string, body: unknown): Promise<T> {
   return (await res.json()) as T;
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+}
+
+/** Defensive normalization for the /extract endpoint's job_extract/
+ * job_generate responses: a 1.7B model asked to emit JSON for a whole job
+ * posting (nested arrays, free-form description) can truncate mid-object or
+ * omit a field entirely — unlike the model can only ever REMOVE specifics
+ * (credentials) posture, here a malformed response must degrade to an empty
+ * draft the recruiter sees as "nothing extracted," never a crash or a
+ * preview rendering `undefined`. */
+function normalizeJobDraft(raw: Partial<JobDraftFields>): JobDraftFields {
+  return {
+    title: typeof raw.title === "string" ? raw.title : "",
+    department: typeof raw.department === "string" ? raw.department : null,
+    skills: stringArray(raw.skills),
+    responsibilities: stringArray(raw.responsibilities),
+    requirements: stringArray(raw.requirements),
+    description: typeof raw.description === "string" ? raw.description : "",
+  };
+}
+
 export const modalProvider: AiProvider = {
   async redact(resumeText: string): Promise<RedactionResult> {
     const c = config();
@@ -99,6 +121,24 @@ export const modalProvider: AiProvider = {
   async extractProfileFields(resumeText: string): Promise<ExtractedProfileFields> {
     const c = config();
     return post<ExtractedProfileFields>(c.extractUrl, c.apiToken, { text: resumeText });
+  },
+
+  async extractJobFields(jd: JDTextOnly): Promise<JobDraftFields> {
+    const c = config();
+    const raw = await post<Partial<JobDraftFields>>(c.extractUrl, c.apiToken, {
+      text: jd,
+      kind: "job_extract",
+    });
+    return normalizeJobDraft(raw);
+  },
+
+  async generateJob(prompt: JDTextOnly): Promise<JobDraftFields> {
+    const c = config();
+    const raw = await post<Partial<JobDraftFields>>(c.extractUrl, c.apiToken, {
+      text: prompt,
+      kind: "job_generate",
+    });
+    return normalizeJobDraft(raw);
   },
 
   async draftMaintenanceUpdate(currentProfileSummary: string, userAnswer: string): Promise<string> {

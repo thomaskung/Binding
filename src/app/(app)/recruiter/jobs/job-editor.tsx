@@ -10,6 +10,11 @@ import {
   Card,
   CardContent,
   CardHeader,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   Input,
   Label,
   Select,
@@ -19,9 +24,17 @@ import {
   SelectValue,
   Textarea,
 } from "@binding/ui";
+import type { JobDraftFields } from "@/lib/ai/types";
 import { EMPLOYMENT_TYPE_LABEL, EMPLOYMENT_TYPES, type EmploymentType, type SalaryVisibility, salaryDisplay } from "@/lib/jobs";
 import { matchBand } from "@/lib/matching";
-import { closeJob, publishJob, refineJobText, saveJob } from "../actions";
+import {
+  closeJob,
+  extractJobFieldsFromText,
+  generateJobFromPrompt,
+  publishJob,
+  refineJobText,
+  saveJob,
+} from "../actions";
 
 const WORK_SETUPS = ["onsite", "hybrid", "remote"] as const;
 
@@ -94,6 +107,20 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
   const [askValue, setAskValue] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // Paste-JD / Generate (Phase 8, DESIGN.md §13b) — suggest-and-approve,
+  // same posture as the Refine suggestions above: a draft is never applied
+  // to the live form without the recruiter clicking through this preview.
+  // A separate transition from `pending` so an in-flight draft fetch doesn't
+  // disable the unrelated Save/Publish buttons.
+  const [pasteJdOpen, setPasteJdOpen] = useState(false);
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [pasteJdText, setPasteJdText] = useState("");
+  const [generatePrompt, setGeneratePrompt] = useState("");
+  const [draft, setDraft] = useState<JobDraftFields | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [confirmOverwrite, setConfirmOverwrite] = useState(false);
+  const [draftPending, startDraftTransition] = useTransition();
 
   const completion = useMemo(() => {
     const fields = [
@@ -175,6 +202,186 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
     if (!askValue.trim()) return;
     refine(askValue.trim());
     setAskValue("");
+  }
+
+  function closeDraftDialogs() {
+    setPasteJdOpen(false);
+    setGenerateOpen(false);
+    setDraft(null);
+    setDraftError(null);
+    setConfirmOverwrite(false);
+  }
+
+  function openPasteJdDialog() {
+    setDraft(null);
+    setDraftError(null);
+    setConfirmOverwrite(false);
+    setPasteJdOpen(true);
+  }
+
+  function openGenerateDialog() {
+    setDraft(null);
+    setDraftError(null);
+    setConfirmOverwrite(false);
+    setGenerateOpen(true);
+  }
+
+  function submitPasteJd() {
+    if (!pasteJdText.trim()) return;
+    setDraft(null);
+    setDraftError(null);
+    setConfirmOverwrite(false);
+    startDraftTransition(async () => {
+      try {
+        setDraft(await extractJobFieldsFromText(pasteJdText));
+      } catch (e) {
+        setDraftError(e instanceof Error ? e.message : "extraction failed");
+      }
+    });
+  }
+
+  function submitGenerate() {
+    if (!generatePrompt.trim()) return;
+    setDraft(null);
+    setDraftError(null);
+    setConfirmOverwrite(false);
+    startDraftTransition(async () => {
+      try {
+        setDraft(await generateJobFromPrompt(generatePrompt));
+      } catch (e) {
+        setDraftError(e instanceof Error ? e.message : "generation failed");
+      }
+    });
+  }
+
+  // Which form fields a draft would touch, and whether the recruiter already
+  // has content there — drives the "don't silently overwrite" confirm below.
+  function draftOverlap(d: JobDraftFields) {
+    const fields: Array<{ hasDraft: boolean; hasCurrent: boolean }> = [
+      { hasDraft: d.title.trim().length > 0, hasCurrent: title.trim().length > 0 },
+      { hasDraft: !!d.department?.trim(), hasCurrent: department.trim().length > 0 },
+      { hasDraft: d.skills.length > 0, hasCurrent: skillsText.trim().length > 0 },
+      { hasDraft: d.responsibilities.length > 0, hasCurrent: responsibilitiesText.trim().length > 0 },
+      { hasDraft: d.requirements.length > 0, hasCurrent: requirementsText.trim().length > 0 },
+      { hasDraft: d.description.trim().length > 0, hasCurrent: description.trim().length > 0 },
+    ];
+    return fields.filter((f) => f.hasDraft && f.hasCurrent).length;
+  }
+
+  // Suggest-and-approve, per-field: only ever sets a field the draft actually
+  // returned non-empty (never blanks a field the recruiter already filled in
+  // for a field the draft left empty). If applying would overwrite content
+  // already in the form, the first click only arms a confirmation (button
+  // label changes) rather than silently clobbering it — a second explicit
+  // click is required to proceed.
+  function applyDraft() {
+    if (!draft) return;
+    const overlap = draftOverlap(draft);
+    if (overlap > 0 && !confirmOverwrite) {
+      setConfirmOverwrite(true);
+      return;
+    }
+    if (draft.title.trim()) setTitle(draft.title.trim());
+    if (draft.department?.trim()) setDepartment(draft.department.trim());
+    if (draft.skills.length > 0) setSkillsText(draft.skills.join(", "));
+    if (draft.responsibilities.length > 0) setResponsibilitiesText(draft.responsibilities.join("\n"));
+    if (draft.requirements.length > 0) setRequirementsText(draft.requirements.join("\n"));
+    if (draft.description.trim()) setDescription(draft.description.trim());
+    closeDraftDialogs();
+  }
+
+  // A malformed/truncated Modal response degrades to an all-empty draft
+  // (see normalizeJobDraft in modal.ts) rather than a crash — but an empty
+  // draft with an enabled Apply button is a dead end for the recruiter
+  // (nothing changes, dialog just closes). Detect and message it instead.
+  function draftIsEmpty(d: JobDraftFields): boolean {
+    return (
+      !d.title.trim() &&
+      !d.department?.trim() &&
+      d.skills.length === 0 &&
+      d.responsibilities.length === 0 &&
+      d.requirements.length === 0 &&
+      !d.description.trim()
+    );
+  }
+
+  // Shared preview for both the paste-JD and generate dialogs — same
+  // data-testid in both so the e2e spec doesn't need to branch per mode.
+  function draftPreview() {
+    if (!draft) return null;
+    if (draftIsEmpty(draft)) {
+      return (
+        <p className="text-sm text-muted-foreground" data-testid="job-draft-preview">
+          Nothing could be extracted from that text — try adding more detail and submitting again.
+        </p>
+      );
+    }
+    const overlap = draftOverlap(draft);
+    return (
+      <div className="max-h-[50vh] space-y-3 overflow-y-auto" data-testid="job-draft-preview">
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Title</p>
+          <p className="text-sm">{draft.title || "—"}</p>
+        </div>
+        {draft.department && (
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+              Department
+            </p>
+            <p className="text-sm">{draft.department}</p>
+          </div>
+        )}
+        {draft.skills.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Skills</p>
+            <div className="flex flex-wrap gap-1.5">
+              {draft.skills.map((s) => (
+                <Badge key={s} variant="secondary" className="text-[12px]">
+                  {s}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+        {draft.responsibilities.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+              Responsibilities
+            </p>
+            <ul className="list-disc space-y-0.5 pl-4 text-sm">
+              {draft.responsibilities.map((r, i) => (
+                <li key={i}>{r}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {draft.requirements.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+              Requirements
+            </p>
+            <ul className="list-disc space-y-0.5 pl-4 text-sm">
+              {draft.requirements.map((r, i) => (
+                <li key={i}>{r}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {draft.description.trim() && (
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+              Description
+            </p>
+            <p className="whitespace-pre-wrap text-sm text-muted-foreground">{draft.description}</p>
+          </div>
+        )}
+        {overlap > 0 && (
+          <p className="text-xs text-amber-600 dark:text-amber-400" data-testid="job-draft-overwrite-warning">
+            Applying will overwrite {overlap} field{overlap === 1 ? "" : "s"} you&apos;ve already filled in.
+          </p>
+        )}
+      </div>
+    );
   }
 
   function saveDraft() {
@@ -282,6 +489,123 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
           </p>
         </div>
       )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-muted-foreground">Draft with AI:</span>
+        <Button variant="outline" size="sm" data-testid="job-paste-jd-open" onClick={openPasteJdDialog}>
+          Paste a JD
+        </Button>
+        <Button variant="outline" size="sm" data-testid="job-generate-open" onClick={openGenerateDialog}>
+          Generate with AI
+        </Button>
+      </div>
+
+      <Dialog open={pasteJdOpen} onOpenChange={(o) => !o && closeDraftDialogs()}>
+        <DialogContent data-testid="job-paste-jd-dialog">
+          <DialogHeader>
+            <DialogTitle>Paste a job description</DialogTitle>
+          </DialogHeader>
+          {!draft && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Paste an external job description and I&apos;ll pull out the title, skills,
+                responsibilities and requirements for you to review.
+              </p>
+              <Textarea
+                data-testid="job-paste-jd-textarea"
+                value={pasteJdText}
+                onChange={(e) => setPasteJdText(e.target.value)}
+                placeholder="Paste the full job description here…"
+                rows={10}
+              />
+              {draftError && <p className="text-sm text-destructive">{draftError}</p>}
+            </div>
+          )}
+          {draft && draftPreview()}
+          <DialogFooter>
+            {!draft ? (
+              <>
+                <Button variant="outline" onClick={closeDraftDialogs} disabled={draftPending}>
+                  Cancel
+                </Button>
+                <Button
+                  data-testid="job-paste-jd-submit"
+                  onClick={submitPasteJd}
+                  disabled={draftPending || !pasteJdText.trim()}
+                >
+                  {draftPending ? "Extracting…" : "Extract fields"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={closeDraftDialogs}>
+                  {draftIsEmpty(draft) ? "Close" : "Discard"}
+                </Button>
+                {!draftIsEmpty(draft) && (
+                  <Button data-testid="job-draft-apply" onClick={applyDraft}>
+                    {confirmOverwrite
+                      ? `Overwrite ${draftOverlap(draft)} filled field${draftOverlap(draft) === 1 ? "" : "s"}`
+                      : "Apply to form"}
+                  </Button>
+                )}
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={generateOpen} onOpenChange={(o) => !o && closeDraftDialogs()}>
+        <DialogContent data-testid="job-generate-dialog">
+          <DialogHeader>
+            <DialogTitle>Generate a job posting with AI</DialogTitle>
+          </DialogHeader>
+          {!draft && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Give me a short prompt — role, team, location — and I&apos;ll draft a full
+                posting for you to review and edit.
+              </p>
+              <Input
+                data-testid="job-generate-prompt"
+                value={generatePrompt}
+                onChange={(e) => setGeneratePrompt(e.target.value)}
+                placeholder="e.g. Senior Backend Engineer, fintech, remote"
+              />
+              {draftError && <p className="text-sm text-destructive">{draftError}</p>}
+            </div>
+          )}
+          {draft && draftPreview()}
+          <DialogFooter>
+            {!draft ? (
+              <>
+                <Button variant="outline" onClick={closeDraftDialogs} disabled={draftPending}>
+                  Cancel
+                </Button>
+                <Button
+                  data-testid="job-generate-submit"
+                  onClick={submitGenerate}
+                  disabled={draftPending || !generatePrompt.trim()}
+                >
+                  {draftPending ? "Generating…" : "Generate draft"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={closeDraftDialogs}>
+                  {draftIsEmpty(draft) ? "Close" : "Discard"}
+                </Button>
+                {!draftIsEmpty(draft) && (
+                  <Button data-testid="job-draft-apply" onClick={applyDraft}>
+                    {confirmOverwrite
+                      ? `Overwrite ${draftOverlap(draft)} filled field${draftOverlap(draft) === 1 ? "" : "s"}`
+                      : "Apply to form"}
+                  </Button>
+                )}
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card className="jb-lift">
         <CardHeader>
@@ -447,6 +771,7 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
         </CardHeader>
         <CardContent className="space-y-3">
           <Textarea
+            data-testid="job-skills"
             value={skillsText}
             onChange={(e) => setSkillsText(e.target.value)}
             placeholder="Node.js, PostgreSQL, AWS, System Design"
@@ -512,6 +837,7 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
         </CardHeader>
         <CardContent>
           <Textarea
+            data-testid="job-responsibilities"
             value={responsibilitiesText}
             onChange={(e) => setResponsibilitiesText(e.target.value)}
             placeholder={"Own the payments ledger service\nScale core services\nPartner with product and infra"}
@@ -529,6 +855,7 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
         </CardHeader>
         <CardContent>
           <Textarea
+            data-testid="job-requirements"
             value={requirementsText}
             onChange={(e) => setRequirementsText(e.target.value)}
             placeholder={"6+ years building backend services\nExperience with distributed systems\nStrong PostgreSQL and AWS"}

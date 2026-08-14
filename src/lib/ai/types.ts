@@ -41,6 +41,22 @@ export interface ExtractedProfileFields {
   experience: ExtractedExperienceEntry[];
 }
 
+/** Structured job-posting fields either extracted from a pasted external JD
+ * or drafted from a short recruiter prompt (Phase 8, DESIGN.md §13b). Kept to
+ * the subset of `EditableJob` (job-editor.tsx) that is realistically
+ * extractable/generatable from text alone — no salary numbers, employment
+ * type, work setup, or location detection; the recruiter fills those in by
+ * hand after applying a draft. Suggest-and-approve only: never auto-applied
+ * to the live form. */
+export interface JobDraftFields {
+  title: string;
+  department: string | null;
+  skills: string[];
+  responsibilities: string[];
+  requirements: string[];
+  description: string;
+}
+
 export interface AiProvider {
   /** Strip PII / generalize quasi-identifiers from resume text. Private-path only. */
   redact(resumeText: string): Promise<RedactionResult>;
@@ -67,6 +83,17 @@ export interface AiProvider {
    * (raw resume text, pre-redaction — same posture as seeker_experience).
    * Never fabricates: only files what the resume actually says. */
   extractProfileFields(resumeText: string): Promise<ExtractedProfileFields>;
+
+  /** Extract structured job-posting fields from a recruiter-pasted external
+   * JD. Recruiter-authored input only (JDTextOnly) — never candidate data.
+   * Never fabricates fields the source text doesn't support; a field the
+   * source text doesn't clearly imply comes back empty, not invented. */
+  extractJobFields(jd: JDTextOnly): Promise<JobDraftFields>;
+
+  /** Generate a full draft job posting from a short recruiter prompt
+   * (role/team/location cues). Recruiter-authored input only (JDTextOnly).
+   * A draft to review and edit, never auto-published. */
+  generateJob(prompt: JDTextOnly): Promise<JobDraftFields>;
 
   /** Draft the maintenance-nudge's suggested profile addition from the
    * seeker's free-text answer to "anything new?". Private-path only.
