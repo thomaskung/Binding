@@ -3,8 +3,12 @@ import { assertJDTextOnly, type AiProvider, type JDTextOnly } from "@/lib/ai/typ
 
 /**
  * The frontier-API privacy rule (DESIGN.md): candidate-derived data may only
- * reach the private Modal path. The one frontier-capable method
- * (refineJobDescription) accepts only the branded JDTextOnly type.
+ * reach the private Modal path. Every frontier-CAPABLE method (recruiter-
+ * authored JD text only — `refineJobDescription`, and Phase 8's
+ * `extractJobFields`/`generateJob`) accepts only the branded JDTextOnly type.
+ * "Capable" doesn't mean every implementation actually calls a frontier API
+ * today (all three currently route through Modal, per src/lib/ai/modal.ts) —
+ * it means the input is safe to send there if a future implementation does.
  *
  * The brand is compile-time enforcement — these tests document the invariant
  * and pin the boundary function's behavior, and the @ts-expect-error lines
@@ -32,6 +36,34 @@ describe("JDTextOnly boundary", () => {
     // JDTextOnly is required without going through assertJDTextOnly.
     const leak: JDTextOnly = candidate.redactedText as string;
     expect(leak).toBeDefined();
+  });
+});
+
+/**
+ * Phase 8's two new job-authoring capabilities are recruiter-authored-input
+ * only (a pasted external JD, or a short generation prompt the recruiter
+ * typed) — same frontier-capable posture as refineJobDescription, so both
+ * must require JDTextOnly, not a plain string. Pinned the same direction as
+ * the JDTextOnly boundary tests above: if either signature is ever loosened
+ * to accept a plain string, that would silently make it possible to pass
+ * candidate-derived text through without going via assertJDTextOnly.
+ */
+describe("job-authoring capabilities stay frontier-capable (JDTextOnly-gated)", () => {
+  const emptyDraft = { title: "", department: null, skills: [], responsibilities: [], requirements: [], description: "" };
+
+  it("extractJobFields cannot be called with a plain string — only JDTextOnly", async () => {
+    const extractJobFields: AiProvider["extractJobFields"] = async () => emptyDraft;
+    // @ts-expect-error — a bare string literal must NOT satisfy the JDTextOnly
+    // parameter; only assertJDTextOnly()'s branded output may be passed here.
+    await extractJobFields("some pasted JD text");
+    expect(await extractJobFields(assertJDTextOnly("some pasted JD text"))).toEqual(emptyDraft);
+  });
+
+  it("generateJob cannot be called with a plain string — only JDTextOnly", async () => {
+    const generateJob: AiProvider["generateJob"] = async () => emptyDraft;
+    // @ts-expect-error — same pin as above, for generateJob's prompt param.
+    await generateJob("senior backend engineer, fintech, remote");
+    expect(await generateJob(assertJDTextOnly("senior backend engineer, fintech, remote"))).toEqual(emptyDraft);
   });
 });
 
