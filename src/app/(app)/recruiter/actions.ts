@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { assertJDTextOnly, getAiProvider } from "@/lib/ai";
+import type { JobDraftFields } from "@/lib/ai/types";
 import { requireRole } from "@/lib/auth";
 import { parseCommaList, parseLineList } from "@/lib/jobs";
 import { refreshMatchesForJob } from "@/lib/matching";
@@ -138,6 +139,25 @@ export async function refineJobText(recruiterAuthoredJd: string): Promise<string
   await requireRole("recruiter");
   const ai = getAiProvider();
   return ai.refineJobDescription(assertJDTextOnly(recruiterAuthoredJd));
+}
+
+/** Paste-JD mode (Phase 8, DESIGN.md §13b): extract structured job-posting
+ * fields from a recruiter-pasted external JD. Same JDTextOnly boundary as
+ * refineJobText — recruiter-authored input only. Suggest-and-approve: the
+ * caller shows the returned draft for review before applying it to the form. */
+export async function extractJobFieldsFromText(recruiterAuthoredJd: string): Promise<JobDraftFields> {
+  await requireRole("recruiter");
+  const ai = getAiProvider();
+  return ai.extractJobFields(assertJDTextOnly(recruiterAuthoredJd));
+}
+
+/** Generate mode (Phase 8, DESIGN.md §13b): draft a full job posting from a
+ * short recruiter prompt. Same JDTextOnly boundary and suggest-and-approve
+ * posture as extractJobFieldsFromText above. */
+export async function generateJobFromPrompt(recruiterAuthoredPrompt: string): Promise<JobDraftFields> {
+  await requireRole("recruiter");
+  const ai = getAiProvider();
+  return ai.generateJob(assertJDTextOnly(recruiterAuthoredPrompt));
 }
 
 interface RevealJobInfo {

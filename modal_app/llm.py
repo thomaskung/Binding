@@ -12,6 +12,9 @@ Endpoints (POST, JSON, Bearer auth via MODAL_API_TOKEN secret):
   /fit-summary  {"candidate": ..., "job": ...}         -> {"summary": ...}
   /refine       {"text": ..., "kind": "profile"|"job_description"|"career_assist"} -> {"refined": ...}
   /extract      {"text": ...}                          -> {"skills":[], "roles":[], "industries":[], "experience":[]}
+                {"text": ..., "kind": "job_extract"}   -> {"title","department","skills":[],"responsibilities":[],"requirements":[],"description"}
+                {"text": ..., "kind": "job_generate"}  -> same shape as job_extract, drafted from a short prompt
+                (kind absent/unrecognized -> resume extraction, unchanged)
 
 Deploy: modal deploy modal_app/llm.py
 Budget: scale-to-zero; T4 handles Qwen3-1.7B comfortably. At MVP volume
@@ -104,6 +107,36 @@ against candidate profiles: clear responsibilities, concrete required skills,
 standard terminology, no fluff. Do NOT add requirements that aren't implied.
 Output only the improved text. /no_think"""
 
+JOB_EXTRACT_SYSTEM = """You extract structured job-posting fields from a
+recruiter-pasted external job description. Return ONLY valid JSON matching
+this schema, no commentary, no markdown:
+{
+  "title": "job title",
+  "department": "team or department name, or null",
+  "skills": ["skill1", "skill2"],
+  "responsibilities": ["responsibility1", "responsibility2"],
+  "requirements": ["requirement1", "requirement2"],
+  "description": "a short paragraph describing the role"
+}
+Extract only what the source text actually supports. Never invent a skill,
+responsibility, requirement, or department the text doesn't mention. Use
+null for department if the text doesn't state one. /no_think"""
+
+JOB_GENERATE_SYSTEM = """You draft a full job posting from a short recruiter
+prompt (role, team, and/or location cues). Return ONLY valid JSON matching
+this schema, no commentary, no markdown:
+{
+  "title": "job title",
+  "department": "team or department name, or null",
+  "skills": ["skill1", "skill2"],
+  "responsibilities": ["responsibility1", "responsibility2"],
+  "requirements": ["requirement1", "requirement2"],
+  "description": "a short paragraph describing the role"
+}
+This is a first draft for the recruiter to review and edit — write plausible,
+generic content appropriate to the prompt. Do NOT state specific salary
+numbers, benefits, or company facts the prompt didn't give you. /no_think"""
+
 CAREER_ASSIST_SYSTEM = """You are a career assistant helping job seekers with
 resume rewriting, cover letters, interview prep, and career-path guidance. Be
 concise and practical. Do NOT ask for or reference specific employer names,
@@ -191,11 +224,34 @@ class Qwen:
     def extract(self, body: dict, authorization: str = Header(default="")):
         _auth(authorization)
         import json
-        raw = self._generate(EXTRACT_SYSTEM, body["text"])
+
+        kind = body.get("kind")
+        if kind == "job_extract":
+            system = JOB_EXTRACT_SYSTEM
+        elif kind == "job_generate":
+            system = JOB_GENERATE_SYSTEM
+        else:
+            system = EXTRACT_SYSTEM
+        raw = self._generate(system, body["text"])
         # The model may wrap JSON in markdown fences or extra text.
-        start = raw.index("{")
-        end = raw.rindex("}") + 1
-        return json.loads(raw[start:end])
+        try:
+            start = raw.index("{")
+            end = raw.rindex("}") + 1
+            return json.loads(raw[start:end])
+        except (ValueError, json.JSONDecodeError):
+            # job_extract/job_generate ask the model to emit a full job
+            # posting as JSON (nested arrays, free-form description) — a
+            # harder generation task for this model size than resume
+            # extraction, and more prone to omitting braces entirely or
+            # truncating mid-object at the 2048-token cap. Degrade to an
+            # empty draft (the TS-side normalizeJobDraft in modal.ts fills in
+            # the rest) rather than a 500 — the recruiter sees "nothing
+            # extracted", not a crash. The plain resume-extraction path (kind
+            # absent) keeps its original behavior: a malformed response there
+            # is unexpected enough to raise loudly instead.
+            if kind in ("job_extract", "job_generate"):
+                return {}
+            raise
 
 
 def _auth(authorization: str) -> None:

@@ -1,5 +1,12 @@
 import { credentialsFloorSummary } from "@/lib/credentials";
-import type { AiProvider, ExtractedExperienceEntry, ExtractedProfileFields, JDTextOnly, RedactionResult } from "./types";
+import type {
+  AiProvider,
+  ExtractedExperienceEntry,
+  ExtractedProfileFields,
+  JDTextOnly,
+  JobDraftFields,
+  RedactionResult,
+} from "./types";
 
 /**
  * Deterministic stub provider for local dev and CI: zero network calls, zero
@@ -56,6 +63,70 @@ const PII_PATTERNS: Array<[RegExp, string]> = [
   [/\b\d+(?:\.\d+)?\s*(?:years?|yrs?)\b/gi, "[YEARS] years"],
   [/\b\d[\d,.]*[MK]?\+?\s*(?:users|customers|clients)\b/gi, "[SCALE] users"],
 ];
+
+// --- Job-post authoring heuristics (paste-JD extract + generate) ---
+// Same posture as the resume-extraction heuristic above: plausible and
+// stable, not an NLP model. Real quality comes from the Modal path.
+
+const JOB_SECTION_HEADER = {
+  responsibilities: /^(?:responsibilities|what you.?ll do|duties)s?\s*:?\s*$/i,
+  requirements: /^(?:requirements|qualifications|what you.?ll need|must.?haves?)\s*:?\s*$/i,
+};
+const BULLET_LINE = /^[-*•]\s*(.+)$/;
+const NUMBERED_LINE = /^\d+[.)]\s*(.+)$/;
+const DEPARTMENT_LINE = /^(?:department|team)\s*:\s*(.+)$/im;
+
+function bulletContent(line: string): string | null {
+  const bullet = BULLET_LINE.exec(line);
+  if (bullet) return bullet[1]!.trim();
+  const numbered = NUMBERED_LINE.exec(line);
+  if (numbered) return numbered[1]!.trim();
+  return null;
+}
+
+/** Splits a pasted JD into responsibilities/requirements bullets, scoped to
+ * whichever named section header they appear under. Bullets that appear
+ * before any recognized header are dropped rather than guessed into a
+ * section — never fabricate a categorization the text doesn't support. */
+function extractJobSections(text: string): { responsibilities: string[]; requirements: string[] } {
+  const responsibilities: string[] = [];
+  const requirements: string[] = [];
+  let section: "responsibilities" | "requirements" | null = null;
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (JOB_SECTION_HEADER.responsibilities.test(line)) {
+      section = "responsibilities";
+      continue;
+    }
+    if (JOB_SECTION_HEADER.requirements.test(line)) {
+      section = "requirements";
+      continue;
+    }
+    const content = bulletContent(line);
+    if (content && section) {
+      (section === "responsibilities" ? responsibilities : requirements).push(content);
+    }
+  }
+  return { responsibilities, requirements };
+}
+
+function extractJobTitle(text: string): string {
+  const firstLine = text
+    .split("\n")
+    .map((l) => l.trim())
+    .find(Boolean);
+  return (firstLine ?? "").replace(/[:\-–—]+$/, "").trim().slice(0, 120);
+}
+
+function extractDepartment(text: string): string | null {
+  const match = DEPARTMENT_LINE.exec(text);
+  return match ? match[1]!.trim() : null;
+}
+
+function skillsIn(text: string): string[] {
+  return SKILL_KEYWORDS.filter((k) => new RegExp(`\\b${escapeRegex(k)}\\b`, "i").test(text));
+}
 
 function hashCode(text: string, seed: number): number {
   let h = seed >>> 0;
@@ -129,10 +200,60 @@ export const stubProvider: AiProvider = {
 
   async extractProfileFields(resumeText: string): Promise<ExtractedProfileFields> {
     const experience = extractExperienceEntries(resumeText);
-    const skills = SKILL_KEYWORDS.filter((k) => new RegExp(`\\b${escapeRegex(k)}\\b`, "i").test(resumeText));
+    const skills = skillsIn(resumeText);
     const industries = INDUSTRY_KEYWORDS.filter((k) => resumeText.toLowerCase().includes(k.toLowerCase()));
     const roles = [...new Set(experience.map((e) => e.role))];
     return { skills, roles, industries, experience };
+  },
+
+  async extractJobFields(jd: JDTextOnly): Promise<JobDraftFields> {
+    const text = jd as string;
+    const { responsibilities, requirements } = extractJobSections(text);
+    // Same trivial cleanup transform as refineJobDescription — the
+    // "description" field of an extracted draft is the cleaned source text,
+    // never invented.
+    const description = text
+      .split("\n")
+      .map((l) => l.trim())
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    return {
+      title: extractJobTitle(text),
+      department: extractDepartment(text),
+      skills: skillsIn(text),
+      responsibilities,
+      requirements,
+      description,
+    };
+  },
+
+  async generateJob(prompt: JDTextOnly): Promise<JobDraftFields> {
+    // Deterministic scaffold, not extraction — the prompt is short recruiter
+    // intent ("Senior Backend Engineer, fintech, remote"), not a source
+    // document to mine. Real generation quality comes from the Modal path;
+    // this only needs to be stable and obviously a placeholder draft.
+    const text = prompt as string;
+    const cues = text
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean);
+    const title = cues[0] || "New role";
+    const context = cues.slice(1);
+    const skills = skillsIn(text);
+    const tail =
+      " (stub-generated draft — expand with team mission, ownership, and success criteria; " +
+      "real generation quality comes from the Modal path.)";
+    const description = context.length > 0 ? `${title} — ${context.join(", ")}.${tail}` : `${title}.${tail}`;
+    const responsibilities = [
+      `Own core ${title} responsibilities`,
+      ...context.map((c) => `Contribute to ${c}-related initiatives`),
+    ];
+    const requirements = [
+      `Relevant experience for a ${title} role`,
+      ...skills.map((s) => `Proficiency with ${s}`),
+    ];
+    return { title, department: null, skills, responsibilities, requirements, description };
   },
 
   async draftMaintenanceUpdate(_currentProfileSummary: string, userAnswer: string): Promise<string> {

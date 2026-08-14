@@ -128,6 +128,98 @@ describe("stub refine-job-description", () => {
   });
 });
 
+describe("stub job-field extraction (paste-JD)", () => {
+  const jd = [
+    "Senior Backend Engineer",
+    "Department: Platform Engineering",
+    "",
+    "Responsibilities:",
+    "- Own the payments ledger service",
+    "- Scale core services for a Fintech platform",
+    "",
+    "Requirements:",
+    "- 6+ years with TypeScript, PostgreSQL and Kubernetes",
+    "- Experience with distributed systems",
+  ].join("\n");
+
+  it("extracts title, department, skills and bulleted sections", async () => {
+    const draft = await stubProvider.extractJobFields(jd as unknown as import("@/lib/ai/types").JDTextOnly);
+    expect(draft.title).toBe("Senior Backend Engineer");
+    expect(draft.department).toBe("Platform Engineering");
+    expect(draft.skills).toEqual(expect.arrayContaining(["TypeScript", "PostgreSQL", "Kubernetes"]));
+    expect(draft.responsibilities).toEqual([
+      "Own the payments ledger service",
+      "Scale core services for a Fintech platform",
+    ]);
+    expect(draft.requirements).toEqual([
+      "6+ years with TypeScript, PostgreSQL and Kubernetes",
+      "Experience with distributed systems",
+    ]);
+  });
+
+  it("is deterministic for the same input", async () => {
+    const jdText = jd as unknown as import("@/lib/ai/types").JDTextOnly;
+    const a = await stubProvider.extractJobFields(jdText);
+    const b = await stubProvider.extractJobFields(jdText);
+    expect(a).toEqual(b);
+  });
+
+  it("never invents skills, department or bullets not present in the text", async () => {
+    const plain = "A short note about the team culture and mission." as unknown as import(
+      "@/lib/ai/types"
+    ).JDTextOnly;
+    const draft = await stubProvider.extractJobFields(plain);
+    expect(draft.skills).toEqual([]);
+    expect(draft.department).toBeNull();
+    expect(draft.responsibilities).toEqual([]);
+    expect(draft.requirements).toEqual([]);
+  });
+
+  it("drops bullets that appear before any recognized section header", async () => {
+    const noHeader = "Some role\n- a bullet with no section above it" as unknown as import(
+      "@/lib/ai/types"
+    ).JDTextOnly;
+    const draft = await stubProvider.extractJobFields(noHeader);
+    expect(draft.responsibilities).toEqual([]);
+    expect(draft.requirements).toEqual([]);
+  });
+});
+
+describe("stub job generation (generate mode)", () => {
+  it("builds a deterministic scaffold from the prompt cues", async () => {
+    const prompt = "Senior Backend Engineer, fintech, remote" as unknown as import(
+      "@/lib/ai/types"
+    ).JDTextOnly;
+    const draft = await stubProvider.generateJob(prompt);
+    expect(draft.title).toBe("Senior Backend Engineer");
+    expect(draft.department).toBeNull();
+    expect(draft.responsibilities.length).toBeGreaterThan(0);
+    expect(draft.requirements.length).toBeGreaterThan(0);
+    expect(draft.description).toContain("Senior Backend Engineer");
+  });
+
+  it("is deterministic for the same prompt", async () => {
+    const prompt = "Staff Data Engineer, healthtech" as unknown as import("@/lib/ai/types").JDTextOnly;
+    const a = await stubProvider.generateJob(prompt);
+    const b = await stubProvider.generateJob(prompt);
+    expect(a).toEqual(b);
+  });
+
+  it("makes no network call and falls back to a generic title for an empty prompt", async () => {
+    const draft = await stubProvider.generateJob("" as unknown as import("@/lib/ai/types").JDTextOnly);
+    expect(draft.title).toBe("New role");
+    expect(draft.skills).toEqual([]);
+  });
+
+  it("only lists skills actually mentioned in the prompt", async () => {
+    const prompt = "Frontend Designer, no backend keywords here" as unknown as import(
+      "@/lib/ai/types"
+    ).JDTextOnly;
+    const draft = await stubProvider.generateJob(prompt);
+    expect(draft.skills).toEqual([]);
+  });
+});
+
 describe("stub generalize-credentials", () => {
   it("returns a category-count rollup for known certs", async () => {
     const result = await stubProvider.generalizeCredentials(
