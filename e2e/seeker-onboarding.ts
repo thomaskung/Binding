@@ -62,7 +62,27 @@ export async function completeSeekerOnboarding(
     await expect(page.getByTestId("onboarding-continue-dealbreakers")).toBeEnabled({
       timeout: 120_000,
     });
-    await page.getByTestId("onboarding-continue-dealbreakers").click({ timeout: 180_000 });
+    // persist() (saveDraft + saveExperience) can hit a TRANSIENT 500 on hosted
+    // Supabase under the parallel-suite load. Until 2026-08-14 that rejection
+    // escaped the wizard's startTransition and crashed the whole page to the
+    // Next.js error boundary ("This page couldn't load", React #441) — the
+    // override spec failed exactly here, then PASSED on the Playwright retry
+    // (proving the 500 is transient). The wizard now catches save errors and
+    // stays mounted, so retry the Continue click until the dealbreakers step
+    // renders; a retry costs one cheap DB write, NOT a full re-extract or a
+    // whole-test retry. Bounded so a genuinely broken page still fails fast.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      await page.getByTestId("onboarding-continue-dealbreakers").click({ timeout: 180_000 });
+      try {
+        await expect(page.getByTestId("onboarding-finish")).toBeVisible({ timeout: 60_000 });
+        break;
+      } catch {
+        if (attempt === 3) {
+          throw new Error("wizard did not reach the dealbreakers step after 3 persist attempts");
+        }
+        await page.waitForTimeout(3_000);
+      }
+    }
     // finish() awaits publishProfile() → ai.redact + ai.embed. Counted HERE so
     // the cost lives next to the click that causes it and callers can't drift.
     countAiCall(); // ai.redact (publishProfile, via onboarding-finish)
