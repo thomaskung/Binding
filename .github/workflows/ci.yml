@@ -190,9 +190,14 @@ jobs:
       # publish/reveal/extract/refine call — same shape as the five above).
       # Founder confirmed and requested it gate on every PR from the start,
       # accepting the first-run risk rather than waiting for a nightly proof.
+      #
+      # login-oauth.spec.ts joined 2026-08-13 (Phase 3 OAuth login,
+      # DESIGN.md §13h): also zero-Modal-cost — covers the disabled-provider
+      # fallback and a magic-link regression check, never a real Google
+      # ceremony.
       - name: Run Modal-free e2e specs against the PR preview
         if: steps.gate.outputs.skip != 'true'
-        run: npx playwright test e2e/app-shell.spec.ts e2e/signup.spec.ts e2e/recruiter-onboarding-wizard.spec.ts e2e/training-benefits.spec.ts e2e/market-intel-dimensions.spec.ts e2e/recruiter-pipeline-dashboard.spec.ts
+        run: npx playwright test e2e/app-shell.spec.ts e2e/signup.spec.ts e2e/recruiter-onboarding-wizard.spec.ts e2e/training-benefits.spec.ts e2e/market-intel-dimensions.spec.ts e2e/recruiter-pipeline-dashboard.spec.ts e2e/login-oauth.spec.ts
         env:
           E2E_BASE_URL: ${{ steps.preview.outputs.base_url }}
           E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}

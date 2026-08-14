@@ -9,9 +9,9 @@ import { LoginForm } from "./login-form";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ intent?: string }>;
+  searchParams: Promise<{ intent?: string; error?: string }>;
 }) {
-  const { intent: rawIntent } = await searchParams;
+  const { intent: rawIntent, error } = await searchParams;
   const intent = resolveIntent(rawIntent);
 
   const session = await getSessionProfile();
@@ -19,5 +19,19 @@ export default async function LoginPage({
     redirect(resolveOnboardingRedirect(session, intent) ?? "/onboarding");
   }
 
-  return <LoginForm intent={intent} />;
+  // `/auth/callback` redirects here on a failed code exchange with one of
+  // two fixed codes — `error` is NEVER free text from the request (see
+  // route.ts): that route is a public, unauthenticated GET endpoint, so any
+  // value reflected onto this page verbatim would let an attacker craft a
+  // link that displays attacker-chosen "error" text on the real login page.
+  // Map the two known codes to fixed copy instead of ever interpolating a
+  // request-controlled string.
+  const initialError =
+    error === "oauth"
+      ? "There was a problem signing in with Google. Please try again or continue with your work email."
+      : error === "auth"
+        ? "That sign-in link didn't work — it may have expired. Please request a new one."
+        : null;
+
+  return <LoginForm intent={intent} initialError={initialError} />;
 }

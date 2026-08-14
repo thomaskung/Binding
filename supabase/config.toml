@@ -339,6 +339,23 @@ skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
 email_optional = false
 
+# Google OAuth (DESIGN.md §13h, Phase 3 — Google first, LinkedIn later).
+# `enabled` stays false here: activation is a founder Supabase-dashboard step
+# (Auth > Providers > Google), and this repo has no `supabase config push`
+# step (only `pnpm db:push`, which is schema migrations only — see
+# CLAUDE.md), so this block does not get synced to the hosted project. It
+# exists so client ID/secret are read from env vars if/when local Supabase
+# ever comes back, and as a documented record of intended config.
+[auth.external.google]
+enabled = false
+client_id = "env(SUPABASE_AUTH_GOOGLE_CLIENT_ID)"
+# DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
+secret = "env(SUPABASE_AUTH_GOOGLE_SECRET)"
+# Overrides the default auth callback URL derived from auth.external_url.
+redirect_uri = ""
+# If enabled, the nonce check will be skipped. Required for local sign in with Google auth.
+skip_nonce_check = false
+
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.
 # You can configure "web3" rate limit in the [auth.rate_limit] section and set up [auth.captcha] if self-hosting.
 [auth.web3.solana]
