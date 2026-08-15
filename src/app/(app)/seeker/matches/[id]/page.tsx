@@ -6,6 +6,8 @@ import { EMPLOYMENT_TYPE_LABEL, relativeDayLabel, salaryDisplay, type Employment
 import { matchBand, type SeekerTier } from "@/lib/matching";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { MatchResponseButtons } from "../../match-response";
+import { listScreeningQuestionsForJob } from "../../screening-actions";
+import { ScreeningQuestions } from "./screening-questions";
 
 const BAND_LABEL = { high: "High match", normal: "Normal match", low: "Low match" } as const;
 
@@ -18,7 +20,7 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
     supabase
       .from("matches")
       .select(
-        "id, status, score, job_postings(title, description, salary_min, salary_max, salary_visibility, department, location, employment_type, skills, responsibilities, requirements, created_at, profiles!job_postings_recruiter_id_fkey(company_name))",
+        "id, status, score, job_postings(id, title, description, salary_min, salary_max, salary_visibility, department, location, employment_type, skills, responsibilities, requirements, created_at, profiles!job_postings_recruiter_id_fkey(company_name))",
       )
       .eq("id", id)
       .eq("profile_id", session.userId)
@@ -42,6 +44,11 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
       ? reveal.message_threads[0]
       : reveal.message_threads
     : null;
+
+  // .catch()-guarded, same discipline as the Phase 2 dashboard-widget reads
+  // (CLAUDE.md) — a screening-question lookup hiccup must not 500 a page
+  // that previously couldn't fail that way.
+  const screeningQuestions = await listScreeningQuestionsForJob(job.id).catch(() => []);
 
   const seekerTier: SeekerTier = profile?.seeker_tier === "pro" ? "pro" : "free";
   const band = matchBand(match.score, seekerTier);
@@ -150,6 +157,8 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
           <MatchResponseButtons matchId={match.id} />
         </div>
       )}
+
+      <ScreeningQuestions jobId={job.id} initialQuestions={screeningQuestions} />
     </main>
   );
 }

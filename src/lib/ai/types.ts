@@ -66,6 +66,16 @@ export interface AssessmentGradeResult {
   rationale: string;
 }
 
+/** One AI-drafted candidate-facing screening question + its grading rubric
+ * (DESIGN.md §14c, Phase 13). `rubric` is grading-only, never shown to the
+ * candidate — same posture as AssessmentGradeResult's rationale field and
+ * skill_assessments.rubric before it. A draft only: the recruiter reviews/
+ * edits before publish, same gate as Phase 12's rubric bank. */
+export interface ScreeningQuestionDraft {
+  question: string;
+  rubric: string;
+}
+
 export interface AiProvider {
   /** Strip PII / generalize quasi-identifiers from resume text. Private-path only. */
   redact(resumeText: string): Promise<RedactionResult>;
@@ -136,4 +146,15 @@ export interface AiProvider {
    * codebase's "qualitative signal only" posture (matchBand, band-only
    * reveal signals). */
   gradeAssessmentAttempt(rubric: string, answerText: string): Promise<AssessmentGradeResult>;
+
+  /** Generate candidate-facing screening questions (+ grading rubrics) from a
+   * recruiter's own job-posting text (DESIGN.md §14c, Phase 13). Recruiter-
+   * authored input only (JDTextOnly), same frontier-capable posture as
+   * extractJobFields/generateJob — a draft to review/edit before publish,
+   * never auto-published. Grading a candidate's answer against the returned
+   * rubric reuses gradeAssessmentAttempt (private-path, candidate-derived
+   * answer text) rather than a separate method — the grading task is
+   * identical (rubric + answer -> pass/rationale) regardless of which
+   * feature produced the rubric. */
+  generateScreeningQuestions(jd: JDTextOnly): Promise<ScreeningQuestionDraft[]>;
 }

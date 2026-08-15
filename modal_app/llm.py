@@ -153,6 +153,20 @@ Grade strictly against the rubric's stated bar — do not pass an answer that
 doesn't meet it out of politeness, and do not fail a correct answer for
 stylistic reasons the rubric doesn't mention. /no_think"""
 
+SCREENING_QUESTIONS_SYSTEM = """You draft candidate-facing screening
+questions and their grading rubrics from a recruiter's own job-posting text.
+Return ONLY valid JSON matching this schema, no commentary, no markdown:
+{
+  "questions": [
+    {"question": "an open-ended question for the candidate to answer", "rubric": "what a passing answer must demonstrate"}
+  ]
+}
+Generate 2-4 questions. Each question must probe something the job text
+actually asks for (a named skill, responsibility, or requirement) — never
+invent a requirement the text doesn't support. Each rubric states a concrete,
+checkable bar for what a passing answer needs to demonstrate, not a vague
+"good answer" description. /no_think"""
+
 
 @app.cls(
     image=image,
@@ -243,6 +257,8 @@ class Qwen:
             system = JOB_GENERATE_SYSTEM
         elif kind == "assessment_grade":
             system = ASSESSMENT_GRADE_SYSTEM
+        elif kind == "screening_questions":
+            system = SCREENING_QUESTIONS_SYSTEM
         else:
             system = EXTRACT_SYSTEM
         # assessment_grade needs two inputs (rubric + candidate answer) —
@@ -275,6 +291,8 @@ class Qwen:
             # enough to raise loudly instead.
             if kind in ("job_extract", "job_generate"):
                 return {}
+            if kind == "screening_questions":
+                return {"questions": []}
             if kind == "assessment_grade":
                 return {"passed": False, "rationale": "grading failed — malformed model response"}
             raise

@@ -27,6 +27,7 @@ import {
 import type { JobDraftFields } from "@/lib/ai/types";
 import { EMPLOYMENT_TYPE_LABEL, EMPLOYMENT_TYPES, type EmploymentType, type SalaryVisibility, salaryDisplay } from "@/lib/jobs";
 import { matchBand } from "@/lib/matching";
+import type { ScreeningQuestion } from "@/lib/screening-questions";
 import {
   closeJob,
   extractJobFieldsFromText,
@@ -35,6 +36,7 @@ import {
   refineJobText,
   saveJob,
 } from "../actions";
+import { ScreeningQuestionsPanel } from "./screening-questions-panel";
 import { updateVerifiedSkillPrefs } from "../skill-assessment-actions";
 
 const WORK_SETUPS = ["onsite", "hybrid", "remote"] as const;
@@ -84,6 +86,10 @@ export interface EditableJob {
   responsibilities: string[];
   requirements: string[];
   verified_skill_prefs?: Record<string, "required" | "weighted">;
+  screening_enabled?: boolean;
+  screening_questions?: ScreeningQuestion[];
+  screening_status?: "draft" | "published";
+  screening_prefs?: Record<string, "required" | "weighted">;
 }
 
 export function JobEditor({
@@ -875,6 +881,15 @@ export function JobEditor({
           </CardContent>
         </Card>
       )}
+
+      <ScreeningQuestionsPanel
+        jobId={job?.id ?? null}
+        jobDescription={description}
+        initialEnabled={job?.screening_enabled ?? false}
+        initialQuestions={job?.screening_questions ?? []}
+        initialStatus={job?.screening_status ?? "draft"}
+        initialPrefs={job?.screening_prefs ?? {}}
+      />
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
