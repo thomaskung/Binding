@@ -20,6 +20,8 @@ import { MatchResponseButtons } from "./match-response";
 import { LoyaltyLadderCard } from "./loyalty-ladder-card";
 import TrainingCreditsCard from "./training-credits-card";
 import { BenefitsSummaryCard } from "./benefits-summary-card";
+import { SkillAssessmentCard } from "./skill-assessment-card";
+import { listAvailableAssessments } from "./skill-assessment-actions";
 import { InviteTeaserCard } from "@/components/invite-teaser-card";
 
 const BAND_LABEL = { high: "High match", normal: "Normal match", low: "Low match" } as const;
@@ -41,7 +43,10 @@ export default async function SeekerDashboard({
   if (view === "matches") redirect("/seeker/matches");
 
   const session = await requireRole("seeker");
-  const context = await loadSeekerContext(session.userId);
+  const [context, skillAssessments] = await Promise.all([
+    loadSeekerContext(session.userId),
+    listAvailableAssessments().catch(() => []),
+  ]);
   const { profile, cards, seekerTier } = context;
 
   const published = !!profile?.published_text;
@@ -124,6 +129,7 @@ export default async function SeekerDashboard({
           lifetimePoints={context.lifetimeEarnedPoints}
           partnerUnlocks={context.partnerUnlocks}
         />
+        <SkillAssessmentCard assessments={skillAssessments} />
         <InviteTeaserCard />
       </div>
 

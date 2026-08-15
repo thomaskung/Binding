@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { findCandidatesForJob, matchBand, passesDealbreakers, refreshMatchesForJob, refreshMatchesForProfile } from "@/lib/matching";
+import {
+  findCandidatesForJob,
+  HIGH_MATCH_THRESHOLD,
+  matchBand,
+  MATCH_COSINE_THRESHOLD,
+  passesDealbreakers,
+  refreshMatchesForJob,
+  refreshMatchesForProfile,
+  VERIFIED_SKILL_BONUS_CAP,
+} from "@/lib/matching";
 
 describe("dealbreaker filter (mirrors match_candidates SQL — keep in sync)", () => {
   const job = { salary_max: 120000, work_setups: ["remote", "hybrid"], offers_equity: false };
@@ -83,6 +92,39 @@ describe("matchBand (seeker-facing match-quality gate)", () => {
   it("free seekers still see normal and low uncapped", () => {
     expect(matchBand(0.7, "free")).toBe("normal");
     expect(matchBand(0.4, "free")).toBe("low");
+  });
+});
+
+describe("verified-skill bonus invariant (§14b, migration 0033 candidate_score_bonus)", () => {
+  it("VERIFIED_SKILL_BONUS_CAP is a small, positive, bounded value", () => {
+    // Sanity bound, not a load-bearing number — just guards against a typo
+    // turning the cap into something absurd (e.g. 10 instead of 0.10).
+    expect(VERIFIED_SKILL_BONUS_CAP).toBeGreaterThan(0);
+    expect(VERIFIED_SKILL_BONUS_CAP).toBeLessThan(HIGH_MATCH_THRESHOLD - MATCH_COSINE_THRESHOLD);
+  });
+
+  it("a free-tier seeker's visible band stays capped at 'normal' regardless of any bonus-boosted score, up to the maximum possible (1.0)", () => {
+    // matchBand doesn't know or care whether its input is raw or
+    // bonus-boosted — the free-tier cap is structural (band === "high" &&
+    // tier !== "pro" -> "normal"), so this holds by construction. Asserted
+    // explicitly anyway: this is exactly the property a future refactor of
+    // matchBand or the bonus pipeline could accidentally break, and the
+    // bonus's whole job is to move scores toward the boundary this test
+    // fuzzes across.
+    for (const score of [0.55, 0.7, 0.84, 0.85, 0.9, 0.95, 1.0]) {
+      expect(matchBand(score, "free")).not.toBe("high");
+    }
+  });
+
+  it("a bonus-boosted score CAN cross the high-match boundary for a Pro-tier seeker — a real, accepted signal change, not a leak", () => {
+    // Documents the intended behavior (DESIGN.md §14b built-note): a Pro
+    // seeker's visible band DOES change based on a verified-skill bonus,
+    // same as it already changes based on raw match quality. This is the
+    // one seeker-visible differential the bonus can produce — accepted,
+    // not a regression to guard against.
+    const rawJustBelowHigh = HIGH_MATCH_THRESHOLD - VERIFIED_SKILL_BONUS_CAP / 2;
+    expect(matchBand(rawJustBelowHigh, "pro")).toBe("normal");
+    expect(matchBand(rawJustBelowHigh + VERIFIED_SKILL_BONUS_CAP, "pro")).toBe("high");
   });
 });
 

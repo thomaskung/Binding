@@ -19,6 +19,19 @@ export const MATCH_COSINE_THRESHOLD = Number(process.env.MATCH_COSINE_THRESHOLD 
  * that floor is ever lowered. */
 export const HIGH_MATCH_THRESHOLD = Number(process.env.HIGH_MATCH_THRESHOLD ?? 0.85);
 
+/** Mirrors the literal cap baked into `candidate_score_bonus()`
+ * (`supabase/migrations/0033_skill_assessments.sql`) — no shared source of
+ * truth since one lives in SQL and one in TS (same hand-sync discipline as
+ * `passesDealbreakers` below). Bounds how much a verified-skill bonus can
+ * ever move a persisted `matches.score`: it can shift a candidate WITHIN the
+ * already-qualified (>= MATCH_COSINE_THRESHOLD) set, including across the
+ * HIGH_MATCH_THRESHOLD boundary for a Pro-tier seeker (a real, intended
+ * quality signal — see DESIGN.md §14b's built-note) — it can never pull a
+ * below-threshold candidate into the qualified set at all (the bonus is
+ * applied only to rows that already cleared the raw-score threshold/top-N
+ * cut in the SQL function, never to the filter itself). */
+export const VERIFIED_SKILL_BONUS_CAP = 0.1;
+
 export type SeekerTier = "free" | "pro";
 export type MatchBand = "high" | "normal" | "low";
 
@@ -104,7 +117,21 @@ export async function refreshMatchesForProfile(
 }
 
 /** Dealbreaker filter, extracted for unit testing (mirrors the SQL in
- * match_candidates — keep the two in sync). */
+ * match_candidates — keep the two in sync).
+ *
+ * Deliberately does NOT cover the fourth, SQL-only dealbreaker added in
+ * migration 0033 (§14b): a job posting's `verified_skill_prefs` "required"
+ * skills need a PASSED `assessment_attempts` row, which requires a live DB
+ * query this function has no way to make — it operates purely on
+ * already-loaded `profile`/`job` objects, by design, so it can be unit
+ * tested without a database. Mirroring that check here would mean either
+ * threading attempt data through this function's signature (this function
+ * is called from UI-adjacent code that doesn't have it) or making it async
+ * and DB-aware, both of which break its "pure function" contract for every
+ * existing caller. The real dealbreaker enforcement lives only in SQL
+ * (match_candidates/match_jobs_for_candidate's `WHERE ... not exists (...)`
+ * clause) — this is a named, accepted gap in this function's coverage, not
+ * an oversight. */
 export function passesDealbreakers(
   dealbreakers: {
     min_salary?: number;

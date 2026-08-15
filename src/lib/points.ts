@@ -164,6 +164,58 @@ export async function earnFreshnessConfirmation(
 }
 
 // ---------------------------------------------------------------------------
+// Skill-assessment-pass earning (DESIGN.md §14b — added 2026-08-14): the one
+// wired `verified_action` earn path this codebase's own §6 doc comment
+// (above) says doesn't exist yet. Dedupes per (profile, assessment) via a
+// ledger-note embedding the assessment id — a candidate can earn again by
+// passing a DIFFERENT assessment, but re-passing the SAME one after an
+// earlier pass never pays out twice. No daily cap on the EARN itself (the
+// attempt-submission path is already rate-limited —
+// ASSESSMENT_ATTEMPTS_DAILY_CAP, src/lib/skill-assessment.ts — a capped
+// number of attempts per day already bounds how many times this can fire).
+// ---------------------------------------------------------------------------
+export const SKILL_ASSESSMENT_PASS_POINTS = Number(process.env.SKILL_ASSESSMENT_PASS_POINTS ?? 5);
+
+function skillAssessmentPassNote(assessmentId: string): string {
+  return `skill assessment pass ${assessmentId}`;
+}
+
+/** Records the verified action + pays out once per (profile, assessment).
+ * Returns true if points were earned, false on an already-paid repeat pass
+ * (silent no-op — callers don't need to surface this to the user; a repeat
+ * pass on the same assessment is still a legitimate attempt, just not a
+ * fresh earn). */
+export async function earnSkillAssessmentPass(
+  admin: SupabaseClient,
+  profileId: string,
+  assessmentId: string,
+  skill: string,
+): Promise<boolean> {
+  const note = skillAssessmentPassNote(assessmentId);
+  const { data, error } = await admin
+    .from("points_ledger")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("event", "verified_action")
+    .eq("note", note)
+    .limit(1);
+  if (error) throw new Error(`skill assessment earn check failed: ${error.message}`);
+  if ((data ?? []).length > 0) return false;
+
+  await appendLedger(admin, {
+    profileId,
+    event: "verified_action",
+    amount: SKILL_ASSESSMENT_PASS_POINTS,
+    note,
+  });
+  const { error: verifiedError } = await admin
+    .from("verified_actions")
+    .insert({ profile_id: profileId, action_type: "skill_assessment", detail: { skill, assessmentId } });
+  if (verifiedError) throw new Error(`verified_actions insert failed: ${verifiedError.message}`);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Referral-activation earning (DESIGN.md §13g — added 2026-08-14): an invite
 // mechanic where BOTH parties earn only on the invitee's *activation* (never
 // on sending/clicking an invite link) — closes the BUSINESS §6a acquisition-

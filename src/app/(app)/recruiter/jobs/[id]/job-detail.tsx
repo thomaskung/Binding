@@ -17,13 +17,21 @@ const STATUS_LABEL = { draft: "Draft", active: "Active", closed: "Closed" } as c
  * (the draft/edit form, shared with /recruiter/jobs/new) is out of scope for
  * this restyle pass — a draft posting therefore still opens into the
  * unstyled editor below. */
-export function JobDetail({ job, matchCount }: { job: EditableJob; matchCount: number }) {
+export function JobDetail({
+  job,
+  matchCount,
+  publishedAssessmentSkills,
+}: {
+  job: EditableJob;
+  matchCount: number;
+  publishedAssessmentSkills: string[];
+}) {
   // Drafts open straight into the edit form — there's nothing useful to view
   // yet. Published/closed jobs open in the read-only view.
   const [editing, setEditing] = useState(job.status === "draft");
 
   if (editing) {
-    return <JobEditor job={job} />;
+    return <JobEditor job={job} publishedAssessmentSkills={publishedAssessmentSkills} />;
   }
 
   const metaLine = [job.department, job.location, EMPLOYMENT_TYPE_LABEL[job.employment_type]]

@@ -57,6 +57,15 @@ export interface JobDraftFields {
   description: string;
 }
 
+/** Open-ended skill-assessment grading result (DESIGN.md §14b, Phase 12).
+ * `rationale` is for founder spot-audits only (§14b's substitute for
+ * per-attempt human review) — never shown to the candidate or recruiter as
+ * product copy. */
+export interface AssessmentGradeResult {
+  passed: boolean;
+  rationale: string;
+}
+
 export interface AiProvider {
   /** Strip PII / generalize quasi-identifiers from resume text. Private-path only. */
   redact(resumeText: string): Promise<RedactionResult>;
@@ -117,4 +126,14 @@ export interface AiProvider {
     message: string,
     history?: Array<{ role: "user" | "assistant"; content: string }>,
   ): Promise<string>;
+
+  /** Grade an open-ended skill-assessment answer against a founder/recruiter
+   * -reviewed rubric (DESIGN.md §14b, supersedes §13d's MCQ auto-score).
+   * Private-path only — both `rubric` (may reflect prior candidate answers
+   * indirectly via iteration) and `answerText` (always candidate-derived)
+   * are plain strings, never JDTextOnly. Grading is binary pass/fail against
+   * the rubric's stated bar, not a numeric score — matches the rest of the
+   * codebase's "qualitative signal only" posture (matchBand, band-only
+   * reveal signals). */
+  gradeAssessmentAttempt(rubric: string, answerText: string): Promise<AssessmentGradeResult>;
 }

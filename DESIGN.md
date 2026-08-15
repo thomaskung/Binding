@@ -1,6 +1,6 @@
 # DESIGN.md — Binding (formerly JumpOnBoard) Technical Architecture
 
-**Version 2.20** · Last updated 2026-08-14 · Revision history at the end of this document.
+**Version 2.21** · Last updated 2026-08-14 · Revision history at the end of this document.
 
 Companion to [BUSINESS.md](./BUSINESS.md) (strategy/pitch) and [VISION.md](./VISION.md) (goals/metrics). This document describes how the product is actually built. Status: walking-skeleton MVP implemented (see §12 for what's built vs. deferred and where the MVP diverges from the target architecture below).
 
@@ -252,7 +252,7 @@ This is a distinct subsystem, not a one-line feature — it's the core answer to
 ## 6. Points/Credits System
 
 - **Closed-loop, non-monetary ledger.** No cash-out, no real-world voucher redemption — this is what keeps it outside SG's Payment Services Act (e-money/SVF licensing) and HK's MSO/SVF licensing regimes. ToS must state points are non-transferable and non-cash-redeemable to preserve this.
-- **Earning is gated behind AI-verified quality actions**: skill assessment pass (AI-generated content, human-reviewed before use), verifiable work-history signal — *not* raw profile-field edits, to prevent low-effort farming for free redemptions. **Build state**: a standalone skill-assessment flow is roadmap (`verified_actions` table + `skill_assessment`/`work_history` enums exist; no assessment UI). The one wired `verified_action` earn today is training-program completion (§7a). Reveal-compensation and freshness-confirmation earning are built.
+- **Earning is gated behind AI-verified quality actions**: skill assessment pass (open-ended, AI-graded against a founder/recruiter-reviewed rubric — §14b, **BUILT Phase 12**), verifiable work-history signal — *not* raw profile-field edits, to prevent low-effort farming for free redemptions. **Build state**: skill-assessment passes now write `verified_actions` (`action_type='skill_assessment'`) and earn via `earnSkillAssessmentPass` (`points.ts`), alongside the pre-existing training-program-completion earn (§7a) on the same `verified_action` event type. Work-history verification (`work_history` enum value) remains roadmap — no mechanism designed yet. Reveal-compensation and freshness-confirmation earning are built.
 - **Earning also occurs automatically on reveal events** (accepted or declined) — candidates get compensated for being part of the marketplace even when a match doesn't convert.
 - **A third earning category, added this revision: freshness confirmation** (§2c) — narrow and rate-limited (not "AI-verified" in the same sense as a skill assessment; see §2c for why that phrasing is deliberately avoided), tied to a genuine suggest-and-approve maintenance update rather than a raw field edit.
 - **Redemption catalog**: AI resume rewriting (available at MVP); AI-Credit Marketplace allowance (fast-follow, see §7).
@@ -532,7 +532,16 @@ not trusting the summary; fixed before merge.) Advanced fields (`headline`, `loc
 `references_available`, `share_salary`, `credentials`) stay mounted in React state while collapsed —
 a pure render toggle, never a data-loss one.
 
-### 13d. Skill assessment + verified-skill matching (BUSINESS §3/§6, extends §3 matching)
+### 13d. Skill assessment + verified-skill matching (BUSINESS §3/§6, extends §3 matching) — **SUPERSEDED by §14b (Phase 12, 2026-08-14)**
+
+**This section's MCQ/auto-score design is superseded, not built.** §14b (open-ended, AI-graded Q&A)
+is the design that actually shipped — read that section, not this one, for the built mechanism. This
+section is kept for history only: it explains why the schema below looks the way it does (§14b
+reuses the same `skill_assessments`/`assessment_attempts`/`verified_skill_prefs` table names and the
+same required-filter/weighted-advantage match-interaction shape) and why an earlier session might
+otherwise mistake this for the live design (a stale-doc trap named explicitly, per the build plan's
+own instruction for this phase, so a future session reading this section first doesn't build MCQ).
+
 `verified_actions` table + `skill_assessment` enum exist (`0001_schema.sql`) with **zero code**;
 matching is a single cosine score by design (`matching.ts:28-53`), no second axis, no prestige proxy.
 Design:
@@ -746,6 +755,75 @@ consequences that must be stated, not inherited silently from §13d:
   detection before a pass is recorded.
 - Work-sample/portfolio analysis stays "nice to have," parked further out — bigger build (artifact
   ingestion + analysis pipeline), not the default.
+
+**Built (Phase 12, 2026-08-14).** Migration `0033_skill_assessments.sql`: `skill_assessments`
+(skill/prompt/rubric/status draft-or-published, unique-per-published-skill), `assessment_attempts`
+(answer_text/embedding/passed/rationale), `job_postings.verified_skill_prefs` jsonb
+(`{"<skill>":"required"|"weighted"}`), `candidate_score_bonus()` SQL function v1, and a one-time
+rewrite of `match_candidates`/`match_jobs_for_candidate` to call it (Phase 13 extends via
+`CREATE OR REPLACE`, no second rewrite). New `AiProvider.gradeAssessmentAttempt(rubric, answerText)`
+— private-path only, both params pinned in `tests/frontier-guardrail.test.ts` (a prior test for a
+different method, `draftMaintenanceUpdate`, only pinned one of its two params; this one pins both,
+named explicitly so the gap isn't repeated). `earnSkillAssessmentPass` (`points.ts`) is the first
+code to ever write `verified_actions` — corrects this doc's own stale "zero code" claim above,
+which now applies only to the still-undesigned `work_history` half of that table.
+
+Real deviations/decisions from this section's design, all made explicitly during Phase 12's build:
+- **Bonus placement, resolved one specific way after review caught a scope risk**: the build plan
+  said "threshold/top-N filtering stays on the raw cosine, ranking/persisted score use the boosted
+  value" — an early implementation draft would have applied the bonus to the SQL threshold/ORDER BY
+  too, which manufactures matches (a below-threshold candidate surfacing purely from a bonus) rather
+  than reordering them. Corrected before merge: both RPCs qualify (dealbreakers + threshold + top-N)
+  on the RAW score in an inner query, then re-rank only that already-qualified set by the boosted
+  score in an outer query — the bonus can move a candidate up within the set, never pull one in from
+  below threshold.
+- **Reveal pricing prices off the boosted score, not the raw one — a founder decision, asked
+  explicitly** (this section didn't originally address the interaction): `matchPriceMultiplier`
+  already reads persisted `matches.score`, so a verified-skill candidate now costs more to reveal.
+  Consistent with "stronger match costs more"; no separate raw-vs-boosted pricing path was built.
+  `VERIFIED_SKILL_BONUS_CAP = 0.10` (`src/lib/matching.ts`, hand-synced with the SQL function's
+  literal cap — no shared source of truth since one lives in SQL and one in TS) bounds the total
+  bonus across every weighted skill for one candidate-job pair, not just a per-skill value.
+- **A second founder decision, also asked explicitly**: rubrics are recruiter/founder-**authored**
+  text (typed into a form), not AI-generated — the plan's load-bearing new AI capability is GRADING
+  an attempt, not drafting the rubric itself. No new `AiProvider` method for rubric generation exists
+  this phase; the review-before-publish gate still applies to catch a poorly-worded rubric before it
+  goes live, whether authored by a human now or (a later phase) an AI draft.
+- **The required-verified-skill dealbreaker is SQL-only, not mirrored in
+  `passesDealbreakers` (`src/lib/matching.ts`)** — that function is a pure, DB-free TS mirror of the
+  other three dealbreakers, and checking "has this candidate passed this assessment" needs a live DB
+  query, which would break its pure-function contract for every existing caller. Named explicitly in
+  that function's own doc comment, not silently under-mirrored.
+- **Duplicate-answer detection avoids passing a raw `vector(1024)` as a PostgREST RPC scalar
+  argument** (untested territory in this codebase — every existing vector usage either computes a
+  comparison entirely in SQL from stored columns or writes a vector into a table column, never passes
+  one as an RPC parameter from `supabase-js`). Instead: insert the attempt (with its embedding) first,
+  then call `is_duplicate_answer(p_attempt_id)`, which looks the embedding up internally by id and
+  compares against every OTHER attempt on the same assessment — only a `uuid` crosses the RPC
+  boundary. A detected duplicate is auto-failed WITHOUT calling the AI grader at all (cheaper, and
+  removes any chance the grader itself is fooled by a copy-pasted answer).
+- **New invariant test lives in `tests/matching.test.ts`** (extending the existing `matchBand`
+  describe block), not `tests/reveal-invariants.test.ts` — this section's own text left it as "add to
+  X or a matching test"; `reveal-invariants.test.ts` turned out to hold only reveal-economy guard
+  tests (cap/pricing), with zero `matchBand`/band-cap assertions, so the natural home was the other
+  option. Confirms the free-tier `high→normal` cap holds regardless of any bonus-boosted score input
+  (structural, since `matchBand` doesn't know or care whether its input is raw or boosted) — and
+  separately documents, as an accepted non-leak, that a Pro-tier seeker's visible band CAN cross the
+  high-match boundary from a bonus, same as it already can from raw match quality.
+- **Points earn**: `SKILL_ASSESSMENT_PASS_POINTS` (`points.ts`), deduped per (profile, assessment) via
+  a ledger-note embedding the assessment id (same shape as the referral/freshness earn paths) — a
+  candidate can earn again by passing a DIFFERENT assessment, never twice for re-passing the same one.
+- **Rate limiting**: `ASSESSMENT_ATTEMPTS_DAILY_CAP` (`src/lib/skill-assessment.ts`, default 5/day per
+  seeker across all assessments) — modeled on `AI_REFINE_CHAT_DAILY_CAP`'s "AI-consuming feature,
+  daily-capped" shape (the closest existing precedent), not on the cooldown-based freshness-earn shape.
+- **Seeker dashboard widget shipped** (`SkillAssessmentCard`), completing the Phase 2 deferral
+  (CLAUDE.md: "needs the unbuilt ㉘ assessment feature, not just a widget") — binary pass/fail status
+  only, never a numeric score, same posture as every other seeker-facing signal in the product.
+- **`modal_app/llm.py`'s `ASSESSMENT_GRADE_SYSTEM` branch is written but NOT deployed** — same
+  undeployed-Modal-branch gap as `CAREER_ASSIST_SYSTEM`/`JOB_EXTRACT_SYSTEM` before it (revisions
+  2.11/2.17): grading only works under `AI_PROVIDER=stub` until someone runs
+  `modal deploy modal_app/llm.py`. `e2e/skill-assessment.spec.ts`'s real-Modal test will fail against
+  real staging until that deploy lands.
 
 ### 14c. AI-generated screening questions per job posting (extends §3 matching, `JDTextOnly`)
 
@@ -1048,3 +1126,4 @@ is single-company research for one candidate's own decision, not a cross-market 
 | 2.18 | 2026-08-14 | **§13g Referral/invite acquisition loop — BUILT** (Phase 9 of the CCMF-demo MVP build plan). `profiles.invite_code` + `referrals` table (migration `0029`, service-role-only), `earnReferralActivation` (`points.ts`) paying both parties once on activation, rate-limited on the referrer's earn rate only (`REFERRAL_DAILY_CAP`; an at-cap referral stays `signed_up`, retried opportunistically from the `/invite` dashboard rather than via a cron). Capture wired into `activateSeeker`/`activateRecruiter`, gated to an account's first-ever role activation (anti-farming: a second-role opt-in later must never count as a fresh referral). Real deviations: the redeem-landing endpoint is a route handler (`/invite/[code]/route.ts`), not `page.tsx` — Next.js restricts cookie mutation to Server Actions/Route Handlers; `pending` is reserved in the status check constraint but unpopulated (no email-invite send mechanic exists to track pre-signup, copy-a-link only); `/invite` is role-agnostic and surfaced via a dashboard card rather than a new nav item, keeping `SEEKER_NAV`/`RECRUITER_NAV` closed. Migration not yet applied to hosted staging — `e2e/referral-loop.spec.ts` awaits the next `pnpm db:push`/nightly (CLAUDE.md Gotchas). |
 | 2.19 | 2026-08-14 | **§2g Client-held key custody — BUILT, B2C MVP slice** (Phase 10 of the CCMF-demo MVP build plan; enterprise decrypt-authorization stays roadmap). Migration `0030_key_custody.sql` (`resumes.encrypted`/`enc_algo`, `user_data_keys`, `user_data_key_recovery`, `decrypt_access_log`, all service-role-only). Pure Web-Crypto envelope primitives (`src/lib/crypto/envelope.ts`, unit-tested) + a browser-only WebAuthn `prf` ceremony (`src/lib/crypto/webauthn-prf.ts`) + a session-scoped in-memory DEK cache (`src/lib/crypto/session-key.ts`) fill the passkey placeholder reserved on `/seeker/settings/security` since Phase 6. `/api/ingest` gains an opt-in `encrypt=true` branch: transient server-side extraction only (logged, never persisted), client encrypts both the extracted text and the metadata-stripped PDF before a second call persists ciphertext. `deleteOriginalResume` now genuinely crypto-shreds (deletes the wrapped-DEK rows alongside every resume row for the profile). Scope was widened mid-build (founder call, asked explicitly): both the PDF bytes AND `resumes.raw_text` are encrypted, not file-only — otherwise DSAR export would still read plaintext. **Second founder-confirmed gap, accepted not fixed**: `profiles.draft_text` (the editable canvas the seeker Saves, which `publishProfile` reads directly for redaction/embedding/matching — never `resumes.raw_text`) still mirrors the same extracted text in plaintext regardless of encryption mode; encrypting it would pull client-held custody into the publish pipeline itself, out of scope for this pass. This phase makes the raw ORIGINAL upload artifact opaque to the server, not resume content in general. Real deviations, all named in §2g's own built-note above: only the "upload processing" decrypt trigger is built (reprocess-from-original doesn't exist as a feature yet; DSAR export substitutes an honest placeholder rather than a live server-side decrypt, which isn't possible by design); no password-derived fallback for unsupported devices; existing plaintext resumes are NOT backfill-encrypted; one passkey credential at a time, not N concurrent; no `enc_nonce` column (nonce travels prepended to each ciphertext blob instead); session-scoped (not per-operation) unlock; no login-gating ceremony. e2e gap named, not silent: `e2e/resume-encryption.spec.ts` covers the server-side plumbing via an admin-seeded key, not a real passkey ceremony — Playwright Chromium's virtual-authenticator `prf`-extension support is unconfirmed. Migration not yet applied to hosted staging (CLAUDE.md Gotchas). |
 | 2.20 | 2026-08-14 | **§14e Personal-agent MCP — BUILT, thin read-only slice** (Phase 11 of the CCMF-demo MVP build plan; the enterprise CLI+MCP direction stays entirely roadmap). `src/app/api/mcp/route.ts` — hand-rolled JSON-RPC (no SDK dependency), bearer-token auth against new `agent_tokens` (migration `0031`, hash-only storage), 3 read-only tools (`get_match_status` band-only, `get_profile_summary`, `get_points_balance`), dispatch decomposed into `src/lib/agent-mcp.ts`'s pure `handleMcpRequest` for unit testing without a live server. New independently-versioned `agent_access` consent (migration `0032`) gates token creation and is re-checked on every call — withdrawing it is this phase's kill switch, disabling every issued token without a separate revoke-all mechanism. `AGENT_CALLS_DAILY_CAP` checked via a pure `agentCallCapGuard` before any tool logic runs; every call logs to `agent_access_log` (tool + timestamp only). Real deviations, all named in §14e's own built-note: no rule-based auto-reply, no most-restrictive-wins conflict resolution, no webhook/websocket layer, no dedicated third-party-agent consent (this slice has no third party — a seeker's own token for their own data). Fills the Phase 6 `/seeker/settings/security` placeholder. Migration not yet applied to hosted staging (CLAUDE.md Gotchas) — `e2e/agent-mcp.spec.ts`'s first real run is the next nightly after merge. |
+| 2.21 | 2026-08-14 | **§14b Skill assessment, open-ended AI-graded — BUILT; §13d explicitly marked SUPERSEDED** (Phase 12 of the CCMF-demo MVP build plan, the heaviest single item — heaviest because it's the first phase to rewrite two live, heavily-used SQL RPCs, `match_candidates`/`match_jobs_for_candidate`, not just add new tables). Migration `0033_skill_assessments.sql`: `skill_assessments`/`assessment_attempts` tables, `job_postings.verified_skill_prefs`, `candidate_score_bonus()` v1, and a one-time RPC rewrite so both matching functions call it (Phase 13 extends via `CREATE OR REPLACE`, no second rewrite). New `AiProvider.gradeAssessmentAttempt` (private-path, both params pinned in the frontier-guardrail test — correcting a gap where a prior similar method only pinned one of its two). `earnSkillAssessmentPass` (`points.ts`) is the first code to ever write `verified_actions`. Real deviations/decisions, all in §14b's own built-note: the bonus re-ranks an already-threshold-qualified set rather than affecting the threshold/top-N cut itself (an early draft would have let the bonus manufacture matches — caught and fixed before merge); reveal pricing now prices off the boosted score (founder-confirmed, asked explicitly); rubrics are recruiter-authored text, not AI-generated (the plan's real new AI capability is grading, not rubric drafting); the required-skill dealbreaker is SQL-only, not mirrored in `passesDealbreakers` (would need a live DB query, breaking that function's pure-function contract); duplicate-answer detection avoids ever passing a raw `vector(1024)` as an RPC scalar argument (untested territory in this codebase) by looking the embedding up server-side from an already-inserted attempt's own id instead; the new band-cap invariant test lives in `tests/matching.test.ts`, not `reveal-invariants.test.ts` (that file turned out to hold zero `matchBand` assertions). Completes the seeker-dashboard Skill Assessment widget Phase 2 explicitly deferred. `modal_app/llm.py`'s `ASSESSMENT_GRADE_SYSTEM` branch is written but not deployed (same gap as `CAREER_ASSIST_SYSTEM`/`JOB_EXTRACT_SYSTEM` before it) — grading only works under `AI_PROVIDER=stub` until `modal deploy` runs. Migration not yet applied to hosted staging (CLAUDE.md Gotchas). |

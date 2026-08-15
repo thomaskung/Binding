@@ -142,6 +142,17 @@ resume rewriting, cover letters, interview prep, and career-path guidance. Be
 concise and practical. Do NOT ask for or reference specific employer names,
 personal contact details, or other identifying information. /no_think"""
 
+ASSESSMENT_GRADE_SYSTEM = """You grade a candidate's open-ended answer to a
+skill-assessment question against a recruiter/founder-reviewed rubric. Return
+ONLY valid JSON matching this schema, no commentary, no markdown:
+{
+  "passed": true or false,
+  "rationale": "one or two sentences explaining the pass/fail decision"
+}
+Grade strictly against the rubric's stated bar — do not pass an answer that
+doesn't meet it out of politeness, and do not fail a correct answer for
+stylistic reasons the rubric doesn't mention. /no_think"""
+
 
 @app.cls(
     image=image,
@@ -230,9 +241,18 @@ class Qwen:
             system = JOB_EXTRACT_SYSTEM
         elif kind == "job_generate":
             system = JOB_GENERATE_SYSTEM
+        elif kind == "assessment_grade":
+            system = ASSESSMENT_GRADE_SYSTEM
         else:
             system = EXTRACT_SYSTEM
-        raw = self._generate(system, body["text"])
+        # assessment_grade needs two inputs (rubric + candidate answer) —
+        # every other kind here takes a single text blob, so this stays a
+        # kind-specific branch rather than a new top-level field everyone
+        # else has to ignore.
+        user = body["text"]
+        if kind == "assessment_grade":
+            user = f"RUBRIC:\n{body.get('context', '')}\n\nCANDIDATE ANSWER:\n{body['text']}"
+        raw = self._generate(system, user)
         # The model may wrap JSON in markdown fences or extra text.
         try:
             start = raw.index("{")
@@ -246,11 +266,17 @@ class Qwen:
             # truncating mid-object at the 2048-token cap. Degrade to an
             # empty draft (the TS-side normalizeJobDraft in modal.ts fills in
             # the rest) rather than a 500 — the recruiter sees "nothing
-            # extracted", not a crash. The plain resume-extraction path (kind
-            # absent) keeps its original behavior: a malformed response there
-            # is unexpected enough to raise loudly instead.
+            # extracted", not a crash. assessment_grade fails CLOSED
+            # (not passed) rather than empty, matching the TS-side
+            # gradeAssessmentAttempt normalize's fail-closed discipline — a
+            # malformed grading response must never silently grant a pass.
+            # The plain resume-extraction path (kind absent) keeps its
+            # original behavior: a malformed response there is unexpected
+            # enough to raise loudly instead.
             if kind in ("job_extract", "job_generate"):
                 return {}
+            if kind == "assessment_grade":
+                return {"passed": False, "rationale": "grading failed — malformed model response"}
             raise
 
 

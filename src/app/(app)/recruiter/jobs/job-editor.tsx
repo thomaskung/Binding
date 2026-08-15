@@ -35,6 +35,7 @@ import {
   refineJobText,
   saveJob,
 } from "../actions";
+import { updateVerifiedSkillPrefs } from "../skill-assessment-actions";
 
 const WORK_SETUPS = ["onsite", "hybrid", "remote"] as const;
 
@@ -82,9 +83,20 @@ export interface EditableJob {
   skills: string[];
   responsibilities: string[];
   requirements: string[];
+  verified_skill_prefs?: Record<string, "required" | "weighted">;
 }
 
-export function JobEditor({ job }: { job: EditableJob | null }) {
+export function JobEditor({
+  job,
+  publishedAssessmentSkills = [],
+}: {
+  job: EditableJob | null;
+  /** Skills with a PUBLISHED skill-assessment rubric (DESIGN.md §14b, Phase
+   * 12) — only these can be set as a required/weighted preference; a draft
+   * rubric has no grading power yet. Empty for a not-yet-saved new job
+   * (verified_skill_prefs can't be set before the job has an id). */
+  publishedAssessmentSkills?: string[];
+}) {
   const [title, setTitle] = useState(job?.title ?? "");
   const [department, setDepartment] = useState(job?.department ?? "");
   const [location, setLocation] = useState(job?.location ?? "");
@@ -97,6 +109,10 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
   const [offersEquity, setOffersEquity] = useState(job?.offers_equity ?? false);
   const [workSetups, setWorkSetups] = useState<string[]>(job?.work_setups ?? []);
   const [skillsText, setSkillsText] = useState((job?.skills ?? []).join(", "));
+  const [verifiedSkillPrefs, setVerifiedSkillPrefs] = useState<Record<string, "required" | "weighted">>(
+    job?.verified_skill_prefs ?? {},
+  );
+  const [savingVerifiedSkillPrefs, setSavingVerifiedSkillPrefs] = useState(false);
   const [description, setDescription] = useState(job?.description ?? "");
   const [responsibilitiesText, setResponsibilitiesText] = useState(
     (job?.responsibilities ?? []).join("\n"),
@@ -793,6 +809,72 @@ export function JobEditor({ job }: { job: EditableJob | null }) {
           <p className="text-xs text-muted-foreground">Separate skills with commas.</p>
         </CardContent>
       </Card>
+
+      {job && publishedAssessmentSkills.length > 0 && (
+        <Card className="jb-lift" data-testid="verified-skills-card">
+          <CardHeader>
+            <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+              Verified skills
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              &quot;Required&quot; excludes a candidate entirely unless they&apos;ve passed that
+              skill&apos;s assessment. &quot;Weighted&quot; gives a small ranking boost to those
+              who have — never a hard filter.{" "}
+              <Link href="/recruiter/skill-assessments" className="underline">
+                Manage assessments
+              </Link>
+              .
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2.5">
+            {skillsText
+              .split(",")
+              .map((s) => s.trim())
+              .filter((s) => s && publishedAssessmentSkills.includes(s))
+              .map((skill) => {
+                const pref = verifiedSkillPrefs[skill];
+                async function setPref(next: "required" | "weighted" | null) {
+                  const updated = { ...verifiedSkillPrefs };
+                  if (next) updated[skill] = next;
+                  else delete updated[skill];
+                  setVerifiedSkillPrefs(updated);
+                  if (!job) return;
+                  setSavingVerifiedSkillPrefs(true);
+                  try {
+                    await updateVerifiedSkillPrefs(job.id, updated);
+                  } finally {
+                    setSavingVerifiedSkillPrefs(false);
+                  }
+                }
+                return (
+                  <div key={skill} className="flex items-center justify-between gap-3" data-testid="verified-skill-row">
+                    <span className="text-sm">{skill}</span>
+                    <div className="flex gap-1.5">
+                      <Button
+                        size="sm"
+                        variant={pref === "required" ? "default" : "outline"}
+                        disabled={savingVerifiedSkillPrefs}
+                        onClick={() => setPref(pref === "required" ? null : "required")}
+                        data-testid={`verified-skill-required-${skill}`}
+                      >
+                        Required
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={pref === "weighted" ? "default" : "outline"}
+                        disabled={savingVerifiedSkillPrefs}
+                        onClick={() => setPref(pref === "weighted" ? null : "weighted")}
+                        data-testid={`verified-skill-weighted-${skill}`}
+                      >
+                        Weighted
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
