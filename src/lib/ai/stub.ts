@@ -7,6 +7,7 @@ import type {
   JDTextOnly,
   JobDraftFields,
   RedactionResult,
+  ScreeningQuestionDraft,
 } from "./types";
 
 /**
@@ -291,5 +292,25 @@ export const stubProvider: AiProvider = {
         ? "stub: answer meets the minimum substantive-length bar"
         : "stub: answer too short to evaluate against the rubric",
     };
+  },
+
+  async generateScreeningQuestions(jd: JDTextOnly): Promise<ScreeningQuestionDraft[]> {
+    // Deterministic scaffold, one question per skill actually found in the
+    // JD text (capped at 3) — never invents a skill the source text doesn't
+    // mention. Real generation quality comes from the Modal path.
+    const text = jd as string;
+    const skills = skillsIn(text).slice(0, 3);
+    if (skills.length === 0) {
+      return [
+        {
+          question: "What draws you to this role, and how does your experience prepare you for it?",
+          rubric: "Answer should reference something specific from the role description, not a generic response.",
+        },
+      ];
+    }
+    return skills.map((skill) => ({
+      question: `Describe a project where you used ${skill} to solve a real problem.`,
+      rubric: `Answer should describe a concrete, specific use of ${skill} — not a generic definition of the technology.`,
+    }));
   },
 };

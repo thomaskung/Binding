@@ -14,7 +14,7 @@ export default async function EditJobPage({ params }: { params: Promise<{ id: st
     supabase
       .from("job_postings")
       .select(
-        "id, title, description, status, salary_min, salary_max, work_setups, department, location, employment_type, salary_visibility, offers_equity, skills, responsibilities, requirements, verified_skill_prefs",
+        "id, title, description, status, salary_min, salary_max, work_setups, department, location, employment_type, salary_visibility, offers_equity, skills, responsibilities, requirements, verified_skill_prefs, screening_enabled, screening_questions, screening_status, screening_prefs",
       )
       .eq("id", id)
       .eq("recruiter_id", session.userId)

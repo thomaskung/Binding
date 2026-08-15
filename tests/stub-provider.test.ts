@@ -220,6 +220,36 @@ describe("stub job generation (generate mode)", () => {
   });
 });
 
+describe("stub screening-question generation (Phase 13, §14c)", () => {
+  it("generates one question per skill actually found in the JD, capped at 3", async () => {
+    const jd = "Senior Backend Engineer needing TypeScript, PostgreSQL, Kubernetes and Go." as unknown as import(
+      "@/lib/ai/types"
+    ).JDTextOnly;
+    const drafts = await stubProvider.generateScreeningQuestions(jd);
+    expect(drafts.length).toBeLessThanOrEqual(3);
+    expect(drafts.length).toBeGreaterThan(0);
+    for (const d of drafts) {
+      expect(d.question.length).toBeGreaterThan(0);
+      expect(d.rubric.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("falls back to a generic question when no known skill is mentioned", async () => {
+    const jd = "A role about team culture and mission, no technical keywords here." as unknown as import(
+      "@/lib/ai/types"
+    ).JDTextOnly;
+    const drafts = await stubProvider.generateScreeningQuestions(jd);
+    expect(drafts).toHaveLength(1);
+  });
+
+  it("is deterministic for the same input", async () => {
+    const jd = "Staff Data Engineer, Python and Kafka" as unknown as import("@/lib/ai/types").JDTextOnly;
+    const a = await stubProvider.generateScreeningQuestions(jd);
+    const b = await stubProvider.generateScreeningQuestions(jd);
+    expect(a).toEqual(b);
+  });
+});
+
 describe("stub generalize-credentials", () => {
   it("returns a category-count rollup for known certs", async () => {
     const result = await stubProvider.generalizeCredentials(

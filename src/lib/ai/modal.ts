@@ -6,6 +6,7 @@ import type {
   JDTextOnly,
   JobDraftFields,
   RedactionResult,
+  ScreeningQuestionDraft,
 } from "./types";
 
 /**
@@ -83,6 +84,24 @@ function normalizeJobDraft(raw: Partial<JobDraftFields>): JobDraftFields {
     requirements: stringArray(raw.requirements),
     description: typeof raw.description === "string" ? raw.description : "",
   };
+}
+
+/** Defensive normalization for the /extract endpoint's screening_questions
+ * response — same "malformed degrades to empty, never a crash" posture as
+ * normalizeJobDraft above. A question missing either field is dropped
+ * entirely rather than kept with a blank half (a question with no rubric
+ * can never be graded; a rubric with no question can never be shown). */
+function normalizeScreeningQuestions(raw: unknown): ScreeningQuestionDraft[] {
+  const list = Array.isArray((raw as { questions?: unknown })?.questions)
+    ? (raw as { questions: unknown[] }).questions
+    : [];
+  return list
+    .filter((q): q is { question: unknown; rubric: unknown } => typeof q === "object" && q !== null)
+    .map((q) => ({
+      question: typeof q.question === "string" ? q.question : "",
+      rubric: typeof q.rubric === "string" ? q.rubric : "",
+    }))
+    .filter((q) => q.question.trim() !== "" && q.rubric.trim() !== "");
 }
 
 export const modalProvider: AiProvider = {
@@ -216,5 +235,14 @@ export const modalProvider: AiProvider = {
       passed: raw.passed === true,
       rationale: typeof raw.rationale === "string" ? raw.rationale : "",
     };
+  },
+
+  async generateScreeningQuestions(jd: JDTextOnly): Promise<ScreeningQuestionDraft[]> {
+    const c = config();
+    const raw = await post<unknown>(c.extractUrl, c.apiToken, {
+      text: jd,
+      kind: "screening_questions",
+    });
+    return normalizeScreeningQuestions(raw);
   },
 };

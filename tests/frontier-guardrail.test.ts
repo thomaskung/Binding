@@ -65,6 +65,15 @@ describe("job-authoring capabilities stay frontier-capable (JDTextOnly-gated)", 
     await generateJob("senior backend engineer, fintech, remote");
     expect(await generateJob(assertJDTextOnly("senior backend engineer, fintech, remote"))).toEqual(emptyDraft);
   });
+
+  it("generateScreeningQuestions cannot be called with a plain string — only JDTextOnly (Phase 13, §14c)", async () => {
+    const generateScreeningQuestions: AiProvider["generateScreeningQuestions"] = async () => [];
+    // @ts-expect-error — same pin as above, for the JD-text param.
+    await generateScreeningQuestions("senior backend engineer, fintech, remote");
+    expect(await generateScreeningQuestions(assertJDTextOnly("senior backend engineer, fintech, remote"))).toEqual(
+      [],
+    );
+  });
 });
 
 /**
