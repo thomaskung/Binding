@@ -2,8 +2,8 @@ import type { AiProvider } from "./types";
 import { stubProvider } from "./stub";
 import { modalProvider } from "./modal";
 
-export type { AiProvider, JDTextOnly, JobDraftFields, RedactionResult } from "./types";
-export { assertJDTextOnly } from "./types";
+export type { AiProvider, CompanyIdentifier, JDTextOnly, JobDraftFields, RedactionResult } from "./types";
+export { assertCompanyIdentifier, assertJDTextOnly } from "./types";
 
 /**
  * Provider selection via AI_PROVIDER env var:

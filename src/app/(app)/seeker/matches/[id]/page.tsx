@@ -7,6 +7,7 @@ import { matchBand, type SeekerTier } from "@/lib/matching";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { MatchResponseButtons } from "../../match-response";
 import { listScreeningQuestionsForJob } from "../../screening-actions";
+import { CompanyResearch } from "./company-research";
 import { ScreeningQuestions } from "./screening-questions";
 
 const BAND_LABEL = { high: "High match", normal: "Normal match", low: "Low match" } as const;
@@ -159,6 +160,7 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
       )}
 
       <ScreeningQuestions jobId={job.id} initialQuestions={screeningQuestions} />
+      <CompanyResearch jobId={job.id} companyName={company} />
     </main>
   );
 }

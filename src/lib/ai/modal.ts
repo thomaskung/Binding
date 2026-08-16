@@ -1,7 +1,9 @@
 import { credentialsFloorSummary, credentialsLooksSafe } from "@/lib/credentials";
+import { searchCompanyInfo } from "@/lib/web-search";
 import type {
   AiProvider,
   AssessmentGradeResult,
+  CompanyIdentifier,
   ExtractedProfileFields,
   JDTextOnly,
   JobDraftFields,
@@ -244,5 +246,29 @@ export const modalProvider: AiProvider = {
       kind: "screening_questions",
     });
     return normalizeScreeningQuestions(raw);
+  },
+
+  async researchCompany(company: CompanyIdentifier): Promise<string> {
+    // Real external call #1: public-source grounding text (not Modal, not
+    // tracked by countAiCall() — see web-search.ts's own doc comment).
+    const groundingText = await searchCompanyInfo(company);
+    if (!groundingText.trim()) {
+      // No search results at all — summarizing nothing would mean the model
+      // fabricates a company profile from its own (possibly stale/wrong)
+      // pretraining knowledge, exactly what the grounding step exists to
+      // prevent. Fail honest instead of calling Modal on empty input.
+      return "No public information found for this company.";
+    }
+    const c = config();
+    // Real external call #2: Modal summarizes the grounding text — this one
+    // IS a normal Modal round-trip, dispatched through /refine like
+    // career_assist/job_description/maintenance_update (all plain-string
+    // results, unlike /extract's structured-JSON kinds).
+    const { refined } = await post<{ refined: string }>(c.refineUrl, c.apiToken, {
+      text: groundingText,
+      company,
+      kind: "company_research",
+    });
+    return refined;
   },
 };

@@ -167,6 +167,16 @@ invent a requirement the text doesn't support. Each rubric states a concrete,
 checkable bar for what a passing answer needs to demonstrate, not a vague
 "good answer" description. /no_think"""
 
+COMPANY_RESEARCH_SYSTEM = """You summarize public information about an
+employer for a job candidate deciding whether to apply, using ONLY the
+search-result snippets provided — never your own background knowledge about
+the company, which may be outdated or wrong. If the snippets don't support a
+claim, leave it out rather than filling in from what you already "know."
+Cover culture, recent news, and reputation where the snippets support it.
+2-4 short paragraphs, plain text, no markdown, no commentary about your
+process. If the snippets are too sparse to say anything substantive, say so
+plainly instead of padding with generic filler. /no_think"""
+
 
 @app.cls(
     image=image,
@@ -241,9 +251,14 @@ class Qwen:
             system = REFINE_JD_SYSTEM
         elif kind == "career_assist":
             system = CAREER_ASSIST_SYSTEM
+        elif kind == "company_research":
+            system = COMPANY_RESEARCH_SYSTEM
         else:
             system = REFINE_PROFILE_SYSTEM
-        return {"refined": self._generate(system, body["text"])}
+        user = body["text"]
+        if kind == "company_research":
+            user = f"COMPANY: {body.get('company', '')}\n\nSEARCH RESULTS:\n{body['text']}"
+        return {"refined": self._generate(system, user)}
 
     @modal.fastapi_endpoint(method="POST")
     def extract(self, body: dict, authorization: str = Header(default="")):

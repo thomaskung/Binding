@@ -2,6 +2,7 @@ import { credentialsFloorSummary } from "@/lib/credentials";
 import type {
   AiProvider,
   AssessmentGradeResult,
+  CompanyIdentifier,
   ExtractedExperienceEntry,
   ExtractedProfileFields,
   JDTextOnly,
@@ -312,5 +313,12 @@ export const stubProvider: AiProvider = {
       question: `Describe a project where you used ${skill} to solve a real problem.`,
       rubric: `Answer should describe a concrete, specific use of ${skill} — not a generic definition of the technology.`,
     }));
+  },
+
+  async researchCompany(company: CompanyIdentifier): Promise<string> {
+    // No real network call, same as every other stub — this never hits
+    // Brave or Modal. Deterministic, obviously-a-stub text so a dev/CI run
+    // can't be mistaken for real grounded research.
+    return `${company} (stub company research — real research quality comes from the Modal + web-search path).`;
   },
 };
