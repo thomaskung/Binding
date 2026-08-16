@@ -22,6 +22,27 @@ export function assertJDTextOnly(recruiterAuthoredText: string): JDTextOnly {
   return recruiterAuthoredText as JDTextOnly;
 }
 
+declare const companyIdentifierBrand: unique symbol;
+
+/** A company name/domain only — the ONLY data shape allowed to reach
+ * `src/lib/web-search.ts` (DESIGN.md §14k, Phase 14: this stack's first
+ * outbound egress path outside Modal and the JD-only frontier lane). This is
+ * a DIFFERENT boundary than `JDTextOnly`: `JDTextOnly` gates what may reach a
+ * frontier LLM API; `CompanyIdentifier` gates what may reach a public
+ * web-search API. The two brands are deliberately not interchangeable — a
+ * `JDTextOnly` value (recruiter-authored JD prose) is not a company
+ * name/domain, and passing one where the other is expected is exactly the
+ * kind of accidental widening this brand exists to catch at compile time.
+ * Never construct from candidate-derived data. */
+export type CompanyIdentifier = string & { readonly [companyIdentifierBrand]: true };
+
+/** Boundary constructor. Call ONLY with a recruiter/employer-provided company
+ * name (e.g. `profiles.company_name`) — never candidate-derived text, never
+ * raw JD prose. */
+export function assertCompanyIdentifier(companyName: string): CompanyIdentifier {
+  return companyName as CompanyIdentifier;
+}
+
 export interface RedactionResult {
   redactedText: string;
 }
@@ -157,4 +178,20 @@ export interface AiProvider {
    * identical (rubric + answer -> pass/rationale) regardless of which
    * feature produced the rubric. */
   generateScreeningQuestions(jd: JDTextOnly): Promise<ScreeningQuestionDraft[]>;
+
+  /** Summarize public-source information about an employer for the
+   * seeker-facing job-match page (DESIGN.md §14k, Phase 14). Unlike every
+   * other method here, this one is NOT candidate-derived and NOT
+   * recruiter-authored JD prose — it takes only a `CompanyIdentifier`
+   * (company name/domain), and its grounding text comes from a real,
+   * separately-tracked external web-search call (src/lib/web-search.ts),
+   * not from anything a user typed. Deliberately NOT routed through or
+   * funded by the AI-Credit-Marketplace/career-assistant allowance (§7) —
+   * that allowance's narrow, classifier-gated scope is load-bearing for its
+   * confirmation-only legal status (LEGAL_REVIEW.md); adding live public-web
+   * retrieval to what it can invoke would widen that scope, so this is a
+   * standalone capability instead. Labeled "AI-researched, aggregated public
+   * information, not official" by the caller — no dispute-window mechanism
+   * (the subject is a company, not a named individual, unlike §14g). */
+  researchCompany(company: CompanyIdentifier): Promise<string>;
 }

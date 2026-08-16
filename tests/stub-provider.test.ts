@@ -250,6 +250,22 @@ describe("stub screening-question generation (Phase 13, §14c)", () => {
   });
 });
 
+describe("stub company research (Phase 14, §14k)", () => {
+  it("makes no network call and returns a deterministic, obviously-stub string", async () => {
+    const company = "Acme Corp" as unknown as import("@/lib/ai/types").CompanyIdentifier;
+    const result = await stubProvider.researchCompany(company);
+    expect(result).toContain("Acme Corp");
+    expect(result.toLowerCase()).toContain("stub");
+  });
+
+  it("is deterministic for the same input", async () => {
+    const company = "Acme Corp" as unknown as import("@/lib/ai/types").CompanyIdentifier;
+    const a = await stubProvider.researchCompany(company);
+    const b = await stubProvider.researchCompany(company);
+    expect(a).toBe(b);
+  });
+});
+
 describe("stub generalize-credentials", () => {
   it("returns a category-count rollup for known certs", async () => {
     const result = await stubProvider.generalizeCredentials(

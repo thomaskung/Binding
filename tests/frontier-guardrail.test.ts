@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertJDTextOnly, type AiProvider, type JDTextOnly } from "@/lib/ai/types";
+import { assertCompanyIdentifier, assertJDTextOnly, type AiProvider, type CompanyIdentifier, type JDTextOnly } from "@/lib/ai/types";
 
 /**
  * The frontier-API privacy rule (DESIGN.md): candidate-derived data may only
@@ -132,5 +132,43 @@ describe("candidate-derived AI capabilities stay off the frontier-capable path",
       return { passed: false, rationale: "" };
     };
     expect(typeof grade).toBe("function");
+  });
+});
+
+/**
+ * researchCompany (DESIGN.md §14k, Phase 14) is neither of the two existing
+ * categories above: not candidate-derived (private-path), and not
+ * recruiter-authored JD prose (JDTextOnly/frontier-capable) either. It's a
+ * THIRD, distinct boundary — CompanyIdentifier gates what may reach the new
+ * web-search egress path (src/lib/web-search.ts), not what may reach a
+ * frontier LLM. Pinned both directions: a plain string must not satisfy it
+ * (same shape as every other boundary test in this file), AND a JDTextOnly
+ * value must not satisfy it either — the two brands are deliberately
+ * non-interchangeable, so a future session can't quietly reuse
+ * assertJDTextOnly() to satisfy this parameter instead of adding a real
+ * CompanyIdentifier boundary at the call site.
+ */
+describe("researchCompany uses a distinct CompanyIdentifier boundary, not JDTextOnly or a plain string", () => {
+  it("brands a company name", () => {
+    const company: CompanyIdentifier = assertCompanyIdentifier("Acme Corp");
+    expect(typeof company).toBe("string");
+  });
+
+  it("rejects a plain string at compile time", () => {
+    const research: AiProvider["researchCompany"] = async () => "";
+    // @ts-expect-error — a bare string must NOT satisfy CompanyIdentifier;
+    // if this stops erroring, the web-search boundary has been weakened.
+    void research("Acme Corp");
+    expect(typeof research).toBe("function");
+  });
+
+  it("rejects a JDTextOnly value — the two brands are not interchangeable", () => {
+    const research: AiProvider["researchCompany"] = async () => "";
+    const jd = assertJDTextOnly("We are hiring a backend engineer…");
+    // @ts-expect-error — JDTextOnly must NOT satisfy CompanyIdentifier; a
+    // recruiter-authored JD is not a company name/domain, and this brand
+    // exists precisely so the two can't be silently swapped.
+    void research(jd);
+    expect(typeof research).toBe("function");
   });
 });
