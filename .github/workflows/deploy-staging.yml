@@ -222,8 +222,40 @@ jobs:
       # warm-up pass. recruiter-pipeline-dashboard.spec.ts was missing from
       # this list until now — Phase 2's PR added it to ci.yml's PR gate but
       # not here, a real drift caught while rebasing Phase 3 on top.
+      #
+      # agent-mcp/referral-loop/resume-encryption/route-smoke joined this list
+      # 2026-08-17 to close the up-to-24h gap between a merge and the 3am
+      # nightly for 4 recent features + basic route coverage — all four are
+      # confirmed zero-Modal-cost (each spec's own doc comment, or, for
+      # route-smoke, by construction) and confirmed to read no MODAL_*/
+      # E2E_WARM_MODAL/MATCH_TOP_N env var (grepped `process.env` across the
+      # files plus staging-helpers.ts), so this job's smaller env block below
+      # is sufficient — no MODAL_* fetch needed for this step.
       - name: Run Modal-free specs against staging
-        run: npx playwright test e2e/app-shell.spec.ts e2e/signup.spec.ts e2e/recruiter-onboarding-wizard.spec.ts e2e/training-benefits.spec.ts e2e/market-intel-dimensions.spec.ts e2e/recruiter-pipeline-dashboard.spec.ts e2e/login-oauth.spec.ts
+        run: npx playwright test e2e/app-shell.spec.ts e2e/signup.spec.ts e2e/recruiter-onboarding-wizard.spec.ts e2e/training-benefits.spec.ts e2e/market-intel-dimensions.spec.ts e2e/recruiter-pipeline-dashboard.spec.ts e2e/login-oauth.spec.ts e2e/agent-mcp.spec.ts e2e/referral-loop.spec.ts e2e/resume-encryption.spec.ts e2e/route-smoke.spec.ts
+        env:
+          E2E_BASE_URL: https://binding-staging.vercel.app
+          E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+          E2E_SERVICE_ROLE_KEY: ${{ secrets.E2E_SERVICE_ROLE_KEY }}
+          E2E_STAGING_BASIC_USER: staging
+          E2E_STAGING_BASIC_PW: ${{ secrets.E2E_STAGING_BASIC_PW }}
+          E2E_STAGING_SECRET: ${{ secrets.E2E_STAGING_SECRET }}
+
+      # skill-assessment/screening-questions/company-research each get their
+      # own single-file --grep invocation rather than being folded into the
+      # combined command above: Playwright's --grep filters by test title
+      # across EVERY file passed on the command line, not per-file, so
+      # combining a --grep with the whole-file specs above would have also
+      # filtered out those files' tests (none of their titles match either
+      # pattern) — confirmed from Playwright's own matching behavior, not
+      # assumed. Each of these three specs has other tests in the same file
+      # that DO cost real Modal/search calls, so only the one zero-cost test
+      # per file runs here, isolated to its own command.
+      - name: Run zero-cost skill-assessment/screening-questions/company-research checks
+        run: |
+          npx playwright test e2e/skill-assessment.spec.ts --grep "draft never candidate-visible until published"
+          npx playwright test e2e/screening-questions.spec.ts --grep "candidate_score_bonus v2"
+          npx playwright test e2e/company-research.spec.ts --grep "zero AI or search calls"
         env:
           E2E_BASE_URL: https://binding-staging.vercel.app
           E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}

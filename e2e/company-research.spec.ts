@@ -105,3 +105,52 @@ test("Seeker: research a company, then a second view hits the cache with zero ad
 
   await ctx.close();
 });
+
+// Smoke job variant: card renders with zero AI or search calls (skips click, skips countAiCall()).
+test("Seeker: company research card renders with zero AI or search calls", async ({ browser }) => {
+  test.setTimeout(60_000);
+  const ctx = await stagingContext(browser);
+  const page = await ctx.newPage();
+  const recruiter = await ensureStagingUser("recruiter");
+  const seeker = await ensureStagingUser("seeker");
+  const admin = stagingAdminClient();
+
+  // Onboard the recruiter before seeding, matching this file's own real-cost
+  // test above — kept for consistency within the file even though other
+  // specs (e.g. skill-assessment.spec.ts's candidate_score_bonus test) use a
+  // bare ensureStagingUser() id as an FK target with no onboarding at all, so
+  // it isn't proven strictly required.
+  await signIn(page, recruiter.email);
+  await completeRecruiterOnboarding(page, { name: uniqueLabel("Rec Smoke"), company: uniqueLabel("Smoke Co") });
+
+  const { data: job, error: jobError } = await admin
+    .from("job_postings")
+    .insert({
+      recruiter_id: recruiter.id,
+      title: uniqueLabel("Smoke Job"),
+      description: "d",
+      salary_min: 1,
+      salary_max: 1,
+      work_setups: ["remote"],
+      status: "active",
+    })
+    .select("id")
+    .single();
+  if (jobError || !job) throw new Error(`seed job failed: ${jobError?.message}`);
+
+  const { data: match, error: matchError } = await admin
+    .from("matches")
+    .insert({ job_posting_id: job.id, profile_id: seeker.id, score: 0.8, status: "surfaced" })
+    .select("id")
+    .single();
+  if (matchError || !match) throw new Error(`seed match failed: ${matchError?.message}`);
+
+  await signIn(page, seeker.email);
+  await completeSeekerOnboarding(page, { name: uniqueLabel("Seeker Smoke") });
+
+  await page.goto(`/seeker/matches/${match.id}`);
+  await expect(page.getByTestId("company-research-card")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("research-company")).toBeVisible();
+
+  await ctx.close();
+});
