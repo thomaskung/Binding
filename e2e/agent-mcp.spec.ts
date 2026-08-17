@@ -19,7 +19,7 @@ import { ensureStagingUser, signIn, stagingAdminClient, stagingContext, uniqueLa
  */
 
 test("MCP route: consent-gated, bearer-authed, revocable — end to end via real HTTP", async ({ browser }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
   const ctx = await stagingContext(browser);
   const page = await ctx.newPage();
   const seeker = await ensureStagingUser("seeker");
@@ -40,6 +40,7 @@ test("MCP route: consent-gated, bearer-authed, revocable — end to end via real
   await expect(consentToggle).toHaveAttribute("aria-checked", "false");
   await consentToggle.click();
   await expect(consentToggle).toHaveAttribute("aria-checked", "true");
+  await expect(consentToggle).toBeEnabled({ timeout: 15_000 }); // action committed
   await page.reload();
   await expect(page.getByTestId("agent-access-toggle")).toHaveAttribute("aria-checked", "true");
 
@@ -102,7 +103,7 @@ test("MCP route: consent-gated, bearer-authed, revocable — end to end via real
 test("Withdrawing agent-access consent disables an already-issued token (the de facto kill switch)", async ({
   browser,
 }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
   const ctx = await stagingContext(browser);
   const page = await ctx.newPage();
   const seeker = await ensureStagingUser("seeker");
@@ -131,6 +132,10 @@ test("Withdrawing agent-access consent disables an already-issued token (the de 
   await page.goto("/seeker/settings/privacy");
   await page.getByTestId("agent-access-toggle").click();
   await expect(page.getByTestId("agent-access-toggle")).toHaveAttribute("aria-checked", "false");
+  // Wait for the consent-revocation action to commit (toggle re-enabled) — the
+  // /api/mcp route reads agent_access_opt_in_at from the DB, and posting before
+  // the write lands still returns 200 (the kill-switch test race, 2026-08-17).
+  await expect(page.getByTestId("agent-access-toggle")).toBeEnabled({ timeout: 15_000 });
 
   // Same token, never revoked — but consent is gone, so the route refuses.
   const afterWithdraw = await page.request.post("/api/mcp", {
