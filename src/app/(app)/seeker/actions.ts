@@ -97,6 +97,19 @@ export interface ExperienceRowInput {
   endDate: string | null;
 }
 
+/** True when a string is a real date usable by Postgres. The extract model
+ * echoes the schema's placeholder "YYYY-MM" (or "YYYY"/"MM-DD") instead of a
+ * real date for invented experience rows; inserting that literal into a
+ * `date` column throws `invalid input syntax for type date`, which rejected
+ * onboarding persist (override E2E, 2026-08-17, Vercel digest 3116349117).
+ * Drop such rows rather than crash the save. */
+function isUsableDateInput(value: string | null | undefined): boolean {
+  if (!value || typeof value !== "string") return false;
+  const v = value.trim();
+  if (/^[YMDymd]{2,4}([-/][YMDymd]{1,2}){0,2}$/.test(v)) return false; // "YYYY-MM", "YYYY", "MM-DD"
+  return !Number.isNaN(new Date(v).getTime());
+}
+
 /** Replace-all save for the work-history list — same "edit the whole form,
  * save" pattern as the rest of this page. Structured entries stay
  * owner-only (RLS); only aggregated facts derived from them ever reach the
@@ -114,7 +127,13 @@ export async function saveExperience(rows: ExperienceRowInput[], opts: { revalid
     .eq("profile_id", session.userId);
   if (deleteError) throw new Error(deleteError.message);
 
-  const validRows = rows.filter((r) => r.role.trim() && r.company.trim() && r.startDate);
+  const validRows = rows.filter(
+    (r) =>
+      r.role.trim() &&
+      r.company.trim() &&
+      isUsableDateInput(r.startDate) &&
+      (!r.endDate || isUsableDateInput(r.endDate)),
+  );
   if (validRows.length > 0) {
     const { error: insertError } = await admin.from("seeker_experience").insert(
       validRows.map((r) => ({
