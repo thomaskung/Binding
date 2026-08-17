@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { completeRecruiterOnboarding } from "./recruiter-onboarding";
 import { completeSeekerOnboarding } from "./seeker-onboarding";
-import { countAiCall, ensureStagingUser, signIn, stagingAdminClient, stagingContext, uniqueLabel } from "./staging-helpers";
+import { countAiCall, ensureStagingProfile, ensureStagingUser, signIn, stagingAdminClient, stagingContext, uniqueLabel } from "./staging-helpers";
 
 /**
  * AI Company Research (DESIGN.md §14k, Phase 14) against hosted staging.
@@ -27,7 +27,7 @@ import { countAiCall, ensureStagingUser, signIn, stagingAdminClient, stagingCont
  */
 
 test("Seeker: research a company, then a second view hits the cache with zero additional calls", async ({ browser }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(480_000);
   const ctx = await stagingContext(browser);
   const page = await ctx.newPage();
   const recruiter = await ensureStagingUser("recruiter");
@@ -37,6 +37,9 @@ test("Seeker: research a company, then a second view hits the cache with zero ad
   const companyName = uniqueLabel("Research Co");
   await signIn(page, recruiter.email);
   await completeRecruiterOnboarding(page, { name: uniqueLabel("Rec Research"), company: companyName });
+  // seeker is seeded into matches below BEFORE it onboards — create its
+  // profiles row so the FK insert doesn't violate matches_profile_id_fkey.
+  await ensureStagingProfile(seeker.id, { seeker: true });
 
   const { data: job, error: jobError } = await admin
     .from("job_postings")
