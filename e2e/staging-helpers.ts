@@ -156,6 +156,34 @@ export async function ensureStagingUser(role: "seeker" | "recruiter"): Promise<{
 }
 
 /**
+ * Ensure a `profiles` row exists for a freshly created auth user BEFORE the
+ * app's onboarding runs. `ensureStagingUser` only creates the auth.users row;
+ * the `profiles` row is normally created by onboarding. Specs that seed
+ * FK-referenced rows (job_postings.recruiter_id, matches.profile_id, etc.)
+ * via the admin client BEFORE onboarding would otherwise hit a foreign-key
+ * violation (matches_profile_id_fkey / job_postings_recruiter_id_fkey — the
+ * screening-questions/company-research nightly failures, 2026-08-17).
+ */
+export async function ensureStagingProfile(
+  id: string,
+  opts: { seeker?: boolean; recruiter?: boolean; displayName?: string; companyName?: string } = {},
+) {
+  const admin = stagingAdminClient();
+  const { error } = await admin.from("profiles").upsert(
+    {
+      id,
+      is_seeker: opts.seeker ?? false,
+      is_recruiter: opts.recruiter ?? false,
+      display_name: opts.displayName ?? "",
+      company_name: opts.companyName ?? null,
+    },
+    { onConflict: "id" },
+  );
+  if (error) throw new Error(`ensureStagingProfile failed: ${error.message}`);
+  return id;
+}
+
+/**
  * Fill the login email and wait for the Continue button to enable. React 19
  * hydration can reset a controlled input right after fill (value snaps back to
  * "" and the button stays disabled) on cold staging instances. The only signal
@@ -163,7 +191,7 @@ export async function ensureStagingUser(role: "seeker" | "recruiter"): Promise<{
  * value, up to a generous budget.
  */
 async function fillEmailAndEnableContinue(page: Page, email: string) {
-  const deadline = Date.now() + 90_000;
+  const deadline = Date.now() + 150_000;
   let reloads = 0;
   while (Date.now() < deadline) {
     // Re-resolve locators each pass — a reload (below) swaps the DOM.
@@ -171,19 +199,19 @@ async function fillEmailAndEnableContinue(page: Page, email: string) {
     const continueBtn = page.getByRole("button", { name: "Continue with email" });
     await input.fill(email).catch(() => {});
     try {
-      await expect(continueBtn).toBeEnabled({ timeout: 4_000 });
+      await expect(continueBtn).toBeEnabled({ timeout: 5_000 });
       return;
     } catch {
       // The value snapped back (hydration) or the lambda is still cold. A full
       // reload kicks a fresh hydration pass and usually clears it faster than
       // repeated refills — bounded so a genuinely broken page still fails.
-      if (reloads < 6) {
+      if (reloads < 10) {
         reloads++;
         await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
       }
     }
   }
-  throw new Error(`email fill did not stick within 90s`);
+  throw new Error(`email fill did not stick within 150s`);
 }
 
 export async function signIn(page: Page, email: string) {

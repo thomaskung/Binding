@@ -3,6 +3,7 @@ import { completeRecruiterOnboarding } from "./recruiter-onboarding";
 import { completeSeekerOnboarding } from "./seeker-onboarding";
 import {
   countAiCall,
+  ensureStagingProfile,
   ensureStagingUser,
   requireFixture,
   signIn,
@@ -76,7 +77,7 @@ test("Recruiter: create, edit, and publish a skill-assessment rubric — draft n
 test("Seeker: real graded attempt, then a near-duplicate resubmission is auto-failed without a second grading call", async ({
   browser,
 }) => {
-  test.setTimeout(300_000);
+  test.setTimeout(480_000);
   const ctx = await stagingContext(browser);
   const page = await ctx.newPage();
   const seeker = await ensureStagingUser("seeker");
@@ -156,6 +157,10 @@ test("candidate_score_bonus: a passed weighted-skill attempt yields a positive, 
 
   await signIn(page, recruiter.email);
   await completeRecruiterOnboarding(page, { name: uniqueLabel("Rec Bonus"), company: uniqueLabel("Bonus Co") });
+  // candidate is never onboarded — create its profiles row so the
+  // assessment_attempts.profile_id seed below satisfies the FK (otherwise the
+  // insert silently fails and the bonus stays 0).
+  await ensureStagingProfile(candidate.id, { seeker: true });
 
   const skill = uniqueLabel("BonusSkill");
   const { data: assessment, error: assessmentError } = await admin

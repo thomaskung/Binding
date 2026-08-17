@@ -3,6 +3,7 @@ import { completeRecruiterOnboarding } from "./recruiter-onboarding";
 import { completeSeekerOnboarding } from "./seeker-onboarding";
 import {
   countAiCall,
+  ensureStagingProfile,
   ensureStagingUser,
   requireFixture,
   signIn,
@@ -105,12 +106,17 @@ test("Recruiter: generate, edit, and publish screening questions — draft never
 });
 
 test("Seeker: real graded screening-question answer", async ({ browser }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
   const ctx = await stagingContext(browser);
   const page = await ctx.newPage();
   const recruiter = await ensureStagingUser("recruiter");
   const seeker = await ensureStagingUser("seeker");
   const admin = stagingAdminClient();
+  // Profiles rows don't exist yet (ensureStagingUser only creates auth.users) —
+  // create them so the job_postings/matches FK seeds below (before onboarding)
+  // don't violate matches_profile_id_fkey / job_postings_recruiter_id_fkey.
+  await ensureStagingProfile(recruiter.id, { recruiter: true });
+  await ensureStagingProfile(seeker.id, { seeker: true });
 
   const questionId = crypto.randomUUID();
   const jobTitle = uniqueLabel("Answer Job");
@@ -185,6 +191,9 @@ test("candidate_score_bonus v2: passed weighted screening answer yields a positi
 
   await signIn(page, recruiter.email);
   await completeRecruiterOnboarding(page, { name: uniqueLabel("Rec Bonus2"), company: uniqueLabel("Bonus2 Co") });
+  // candidate is never onboarded (only the recruiter is) — create its profiles
+  // row so candidate_screening_answers.profile_id seed below satisfies the FK.
+  await ensureStagingProfile(candidate.id, { seeker: true });
 
   const questionId = crypto.randomUUID();
   const { data: job, error: jobError } = await admin
