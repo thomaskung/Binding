@@ -58,6 +58,7 @@ test("Drive not connected: consent toggle reveals a Connect-Drive link, resume p
   // than only checking client-side state that would look identical even if
   // the server action had silently thrown (e.g. the migration missing).
   await expect(toggle).toHaveAttribute("aria-checked", "true");
+  await expect(toggle).toBeEnabled({ timeout: 15_000 }); // server action committed
   await page.reload();
   await expect(page.getByTestId("connected-accounts-toggle")).toHaveAttribute(
     "aria-checked",
@@ -190,11 +191,11 @@ test("withdrawing consent actually revokes the connection, not just hides the UI
 
   // Prove the server-side write actually happened (not just optimistic
   // client state) the same way the first test proves a grant: reload and
-  // re-check a value that only a fresh server read can produce. A reload
-  // is a real navigation, so by the time it completes the earlier action
-  // request has necessarily already reached and been processed by the
-  // server (Next.js server actions run to completion server-side once
-  // received, independent of what the client does next).
+  // re-check a value that only a fresh server read can produce. Wait for the
+  // toggle to re-enable first — it stays disabled while the server action's
+  // transition is in flight, and reloading before the write commits serves
+  // the stale value (the round-trip flake, 2026-08-17).
+  await expect(toggle).toBeEnabled({ timeout: 15_000 });
   await page.reload();
   await expect(page.getByTestId("connected-accounts-toggle")).toHaveAttribute(
     "aria-checked",

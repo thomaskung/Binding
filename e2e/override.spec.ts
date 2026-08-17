@@ -152,6 +152,10 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
     "aria-checked",
     "true",
   );
+  // Both server actions committed (toggles re-enabled) before reload — see
+  // waitToggleCommitted in staging-helpers.ts.
+  await expect(seeker.getByTestId("pause-profile-toggle")).toBeEnabled({ timeout: 15_000 });
+  await expect(seeker.getByTestId("override-consent-toggle")).toBeEnabled({ timeout: 15_000 });
   await seeker.reload();
   await expect(seeker.getByTestId("pause-profile-toggle")).toHaveAttribute(
     "aria-checked",
@@ -178,6 +182,7 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   await seeker.goto("/seeker/settings/privacy");
   await seeker.getByTestId("pause-profile-toggle").click();
   await expect(seeker.getByTestId("pause-profile-toggle")).toHaveAttribute("aria-checked", "false");
+  await expect(seeker.getByTestId("pause-profile-toggle")).toBeEnabled({ timeout: 15_000 });
   await seeker.reload();
   await expect(seeker.getByTestId("pause-profile-toggle")).toHaveAttribute(
     "aria-checked",

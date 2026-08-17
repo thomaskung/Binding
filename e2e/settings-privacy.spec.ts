@@ -47,6 +47,11 @@ test("consent toggles + pause-profile round-trip: click, reload, verify the serv
   await expect(maintenanceToggle).toHaveAttribute("aria-checked", "false");
   await maintenanceToggle.click();
   await expect(maintenanceToggle).toHaveAttribute("aria-checked", "true");
+  // Wait for the toggle to re-enable: it's disabled while the server action's
+  // startTransition is in flight, so enabled == the DB write + revalidatePath
+  // committed. Without this, reload races the un-awaited action and serves the
+  // stale value (the round-trip flake, 2026-08-17).
+  await expect(maintenanceToggle).toBeEnabled({ timeout: 15_000 });
   await page.reload();
   await expect(page.getByTestId("maintenance-consent-toggle")).toHaveAttribute(
     "aria-checked",
@@ -59,6 +64,7 @@ test("consent toggles + pause-profile round-trip: click, reload, verify the serv
   await expect(notifyToggle).toHaveAttribute("aria-checked", "false");
   await notifyToggle.click();
   await expect(notifyToggle).toHaveAttribute("aria-checked", "true");
+  await expect(notifyToggle).toBeEnabled({ timeout: 15_000 }); // action committed
   await page.reload();
   await expect(page.getByTestId("notify-product-updates-toggle")).toHaveAttribute(
     "aria-checked",
@@ -72,6 +78,7 @@ test("consent toggles + pause-profile round-trip: click, reload, verify the serv
   await expect(pauseToggle).toHaveAttribute("aria-checked", "false");
   await pauseToggle.click();
   await expect(pauseToggle).toHaveAttribute("aria-checked", "true");
+  await expect(pauseToggle).toBeEnabled({ timeout: 15_000 }); // action committed
   await page.reload();
   await expect(page.getByTestId("pause-profile-toggle")).toHaveAttribute(
     "aria-checked",
@@ -118,6 +125,10 @@ test("the two un-versioned consent rows (reveal-override, contact-sharing) rende
   await contactToggle.click();
   await expect(contactToggle).toHaveAttribute("aria-checked", "true");
 
+  // Both actions committed (toggles re-enabled) before reload — see
+  // waitToggleCommitted in staging-helpers.ts.
+  await expect(overrideToggle).toBeEnabled({ timeout: 15_000 });
+  await expect(contactToggle).toBeEnabled({ timeout: 15_000 });
   await page.reload();
   await expect(page.getByTestId("override-consent-toggle")).toHaveAttribute(
     "aria-checked",
@@ -295,6 +306,7 @@ test("recruiter hide_name_on_reveal toggle on /settings round-trips (migration 0
 
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-checked", "true");
+  await expect(toggle).toBeEnabled({ timeout: 15_000 }); // action committed
   await page.reload();
   await expect(page.getByTestId("hide-name-on-reveal-toggle")).toHaveAttribute(
     "aria-checked",
