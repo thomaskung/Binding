@@ -1,5 +1,12 @@
 // Deletes stale staging test users (created per-run by e2e/staging-helpers.ts
-// ensureStagingUser with @staging.local emails) that are older than 24h.
+// ensureStagingUser with @staging.local emails) that are older than 60
+// minutes. Triggered right after the nightly "Staging E2E" workflow
+// completes (cleanup-staging.yml) rather than on a fixed cron gap, so a
+// 60-minute buffer — not 0 — is the safety margin: @staging.local is shared
+// with every PR-gate e2e run (ci.yml) too, which has no per-run id to
+// distinguish from the nightly run's own users, so an unbuffered sweep could
+// delete a concurrently-running PR check's users mid-test. PR-gate runs
+// finish in ~10 minutes (see CLAUDE.md), well inside this buffer.
 // Kept as a committed script (not a /tmp heredoc) so the workflow can resolve
 // @supabase/supabase-js from the repo's node_modules after `pnpm install`.
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
@@ -15,7 +22,7 @@ if (!url || !key) {
 
 const admin = createClient(url, key, { auth: { persistSession: false } });
 
-const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 
 // listUsers is paginated (50 per page by default) — fetch every page or the
 // oldest (stale) users, which sort later, are never seen.
