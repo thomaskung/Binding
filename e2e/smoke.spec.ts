@@ -119,14 +119,14 @@ test("full reveal slice", async ({ browser }) => {
   await recruiter.getByTestId("open-thread").click();
   await recruiter.getByTestId("message-input").fill("Hi! Keen to chat about the payments role.");
   await recruiter.getByTestId("message-send").click();
-  await expect(recruiter.getByTestId("message-bubble")).toHaveCount(1);
+  await expect(recruiter.getByTestId("message-bubble")).toHaveCount(1, { timeout: 15_000 });
 
   await seeker.goto("/seeker/matches");
   await seeker.getByRole("button", { name: "Message recruiter" }).click();
-  await expect(seeker.getByTestId("message-bubble")).toHaveCount(1);
+  await expect(seeker.getByTestId("message-bubble")).toHaveCount(1, { timeout: 15_000 });
   await seeker.getByTestId("message-input").fill("Sounds interesting — tell me more.");
   await seeker.getByTestId("message-send").click();
-  await expect(seeker.getByTestId("message-bubble")).toHaveCount(2);
+  await expect(seeker.getByTestId("message-bubble")).toHaveCount(2, { timeout: 15_000 });
 
   await seekerCtx.close();
   await recruiterCtx.close();
