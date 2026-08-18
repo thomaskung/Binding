@@ -160,7 +160,7 @@ test("candidate_score_bonus: a passed weighted-skill attempt yields a positive, 
   // candidate is never onboarded — create its profiles row so the
   // assessment_attempts.profile_id seed below satisfies the FK (otherwise the
   // insert silently fails and the bonus stays 0).
-  await ensureStagingProfile(candidate.id, { seeker: true });
+  await ensureStagingProfile(candidate.id);
 
   const skill = uniqueLabel("BonusSkill");
   const { data: assessment, error: assessmentError } = await admin

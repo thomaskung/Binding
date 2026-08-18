@@ -115,8 +115,8 @@ test("Seeker: real graded screening-question answer", async ({ browser }) => {
   // Profiles rows don't exist yet (ensureStagingUser only creates auth.users) —
   // create them so the job_postings/matches FK seeds below (before onboarding)
   // don't violate matches_profile_id_fkey / job_postings_recruiter_id_fkey.
-  await ensureStagingProfile(recruiter.id, { recruiter: true });
-  await ensureStagingProfile(seeker.id, { seeker: true });
+  await ensureStagingProfile(recruiter.id);
+  await ensureStagingProfile(seeker.id);
 
   const questionId = crypto.randomUUID();
   const jobTitle = uniqueLabel("Answer Job");
@@ -193,7 +193,7 @@ test("candidate_score_bonus v2: passed weighted screening answer yields a positi
   await completeRecruiterOnboarding(page, { name: uniqueLabel("Rec Bonus2"), company: uniqueLabel("Bonus2 Co") });
   // candidate is never onboarded (only the recruiter is) — create its profiles
   // row so candidate_screening_answers.profile_id seed below satisfies the FK.
-  await ensureStagingProfile(candidate.id, { seeker: true });
+  await ensureStagingProfile(candidate.id);
 
   const questionId = crypto.randomUUID();
   const { data: job, error: jobError } = await admin

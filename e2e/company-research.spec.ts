@@ -39,7 +39,7 @@ test("Seeker: research a company, then a second view hits the cache with zero ad
   await completeRecruiterOnboarding(page, { name: uniqueLabel("Rec Research"), company: companyName });
   // seeker is seeded into matches below BEFORE it onboards — create its
   // profiles row so the FK insert doesn't violate matches_profile_id_fkey.
-  await ensureStagingProfile(seeker.id, { seeker: true });
+  await ensureStagingProfile(seeker.id);
 
   const { data: job, error: jobError } = await admin
     .from("job_postings")
@@ -125,6 +125,9 @@ test("Seeker: company research card renders with zero AI or search calls", async
   // it isn't proven strictly required.
   await signIn(page, recruiter.email);
   await completeRecruiterOnboarding(page, { name: uniqueLabel("Rec Smoke"), company: uniqueLabel("Smoke Co") });
+  // seeker is seeded into matches before it onboards — create its profiles
+  // row so the FK insert doesn't violate matches_profile_id_fkey.
+  await ensureStagingProfile(seeker.id);
 
   const { data: job, error: jobError } = await admin
     .from("job_postings")

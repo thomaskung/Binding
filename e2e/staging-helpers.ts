@@ -166,14 +166,19 @@ export async function ensureStagingUser(role: "seeker" | "recruiter"): Promise<{
  */
 export async function ensureStagingProfile(
   id: string,
-  opts: { seeker?: boolean; recruiter?: boolean; displayName?: string; companyName?: string } = {},
+  opts: { displayName?: string; companyName?: string } = {},
 ) {
+  // Role flags intentionally NOT set: a role-less profiles row satisfies the
+  // job_postings/matches/assessment FK seeds but keeps the user "not onboarded"
+  // (onboarded == is_seeker||is_recruiter), so the subsequent sign-in still
+  // routes to /onboarding and completeSeekerOnboarding/RecruiterOnboarding
+  // run normally (their consent action upserts on id and flips the flag).
   const admin = stagingAdminClient();
   const { error } = await admin.from("profiles").upsert(
     {
       id,
-      is_seeker: opts.seeker ?? false,
-      is_recruiter: opts.recruiter ?? false,
+      is_seeker: false,
+      is_recruiter: false,
       display_name: opts.displayName ?? "",
       company_name: opts.companyName ?? null,
     },

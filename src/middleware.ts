@@ -38,6 +38,24 @@ export default async function middleware(request: NextRequest) {
   const gate = stagingGate(request);
   if (gate) return gate;
 
+  const path = request.nextUrl.pathname;
+  // Public routes need no session and (critically) no Supabase auth call —
+  // getUser() on every request is what piles up against the edge middleware's
+  // invocation timeout under load (Vercel 504 MIDDLEWARE_INVOCATION_TIMEOUT,
+  // the "email fill did not stick" / page-won't-load flakes, 2026-08-17/18).
+  const isPublic =
+    path === "/" ||
+    path.startsWith("/login") ||
+    path.startsWith("/signup") ||
+    path.startsWith("/auth") ||
+    path.startsWith("/privacy") ||
+    path.startsWith("/api/health") ||
+    // Referral redeem-landing route only (`/invite/<code>`, always visited
+    // signed out) — trailing slash is deliberate so the `/invite` dashboard
+    // itself (the (app)-group page, requires a session) stays gated.
+    path.startsWith("/invite/");
+  if (isPublic) return NextResponse.next({ request });
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -63,20 +81,7 @@ export default async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const path = request.nextUrl.pathname;
-  const isPublic =
-    path === "/" ||
-    path.startsWith("/login") ||
-    path.startsWith("/signup") ||
-    path.startsWith("/auth") ||
-    path.startsWith("/privacy") ||
-    path.startsWith("/api/health") ||
-    // Referral redeem-landing route only (`/invite/<code>`, always visited
-    // signed out) — trailing slash is deliberate so the `/invite` dashboard
-    // itself (the (app)-group page, requires a session) stays gated.
-    path.startsWith("/invite/");
-
-  if (!user && !isPublic) {
+  if (!user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
