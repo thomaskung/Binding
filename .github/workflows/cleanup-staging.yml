@@ -10,6 +10,14 @@ on:
   workflow_run:
     workflows: ['Staging E2E']
     types: [completed]
+  # Backstop: workflow_run only fires from Staging E2E completing, so if that
+  # workflow is ever renamed/disabled/starved (e.g. GitHub auto-disables
+  # scheduled workflows after prolonged repo inactivity), cleanup would
+  # silently never run again with no independent trigger of its own. A daily
+  # cron re-adds that independence; the 60-min staleness filter in
+  # cleanup-staging.mjs makes a redundant same-day firing a no-op.
+  schedule:
+    - cron: '30 4 * * *'
   workflow_dispatch:
 
 jobs:
