@@ -20,6 +20,17 @@ import { join } from "node:path";
 import { stubProvider } from "../src/lib/ai/stub";
 import { credentialsFloorSummary } from "../src/lib/credentials";
 import { seniorityBand } from "../src/lib/experience";
+import {
+  deriveKekFromRecoveryCode,
+  generateDataKey,
+  generateRecoveryCode,
+  hashRecoveryCode,
+  importAesKey,
+  randomBytes,
+  wrapDek,
+  encryptText,
+} from "../src/lib/crypto/envelope";
+import { hashAgentToken } from "../src/lib/agent-mcp";
 
 const DIR = import.meta.dirname;
 const DEMO_PASSWORD = "J0B!Demo#2026$secure";
@@ -27,9 +38,24 @@ const MATCH_THRESHOLD = 0.55;
 const MATCH_TOP_N = 20;
 const SEEKER_SEED_POINTS = 10;
 const RECRUITER_SEED_POINTS = 100;
+const REFERRAL_REWARD_POINTS = 5; // must match src/lib/points.ts REFERRAL_REWARD_POINTS
+const REFERRAL_DAILY_CAP = 10; // must match src/lib/points.ts REFERRAL_DAILY_CAP
 export const SEEKER_COUNT = 50;
 
-type Recruiter = { id: string; email: string; displayName: string; companyName: string; kind: "tech" | "finance" };
+export type RecruiterJson = { id: string; email: string; displayName: string; companyName: string; kind: "tech" | "finance" };
+type Recruiter = RecruiterJson & { recruiterTier: "free" | "solo" | "advanced" | "pro_saas" };
+
+const RECRUITER_TIERS = ["free", "solo", "advanced", "pro_saas"] as const;
+
+/** Deterministic tier assignment by index — cycles through all 4 recruiter
+ * tiers (0020_recruiter_tier.sql) across the 8 seeded companies so each tier
+ * has at least one real account, rather than every recruiter defaulting to
+ * 'free'. Kept separate from smoke-recruiters.json (not a JSON field) since
+ * it's cheap to derive and avoids hand-editing 8 JSON rows every time a tier
+ * is added/removed. */
+export function assignRecruiterTiers(recruiters: RecruiterJson[]): Recruiter[] {
+  return recruiters.map((r, i) => ({ ...r, recruiterTier: RECRUITER_TIERS[i % RECRUITER_TIERS.length]! }));
+}
 
 type RoleFamily = {
   key: string;
@@ -176,6 +202,13 @@ type Seeker = {
   id: string; email: string; displayName: string; headline: string; location: string;
   yearsExperience: number; skills: string[]; industries: string[]; desiredRoles: string[];
   credentials: string; text: string; minSalary: number; workSetups: string[];
+  // --- scenario-variance fields (comprehensive coverage, see CLAUDE.md/plan) ---
+  seekerTier: "free" | "pro"; // exercises matchBand() high->normal cap (0006)
+  shareSalary: boolean; // 0025 default is false; a slice opts back in
+  maintenanceConsentWithdrawn: boolean; // 0016 — optional/withdrawable consent
+  agentAccessOptIn: boolean; // 0032 — gates agent_tokens creation
+  connectedAccountsOptIn: boolean; // 0027
+  isDualRoleRecruiter: boolean; // is_seeker=true AND is_recruiter=true on this row
 };
 
 export function buildSeeker(i: number): Seeker {
@@ -206,14 +239,26 @@ export function buildSeeker(i: number): Seeker {
     displayName: name, headline, location, yearsExperience: years,
     skills, industries, desiredRoles, credentials, text,
     minSalary, workSetups: i % 3 === 0 ? ["remote", "hybrid"] : i % 3 === 1 ? ["hybrid", "onsite"] : ["remote"],
+    seekerTier: i % 4 === 0 ? "pro" : "free", // ~25% pro
+    shareSalary: i % 5 === 0,
+    maintenanceConsentWithdrawn: i % 7 === 0,
+    agentAccessOptIn: i % 6 === 0,
+    connectedAccountsOptIn: i % 8 === 0,
+    isDualRoleRecruiter: i === 0, // one seeker also acts as a recruiter
   };
 }
 
-type Job = { id: string; recruiterId: string; title: string; description: string; salaryMin: number; salaryMax: number; workSetups: string[]; location: string };
+type Job = {
+  id: string; recruiterId: string; title: string; description: string;
+  salaryMin: number; salaryMax: number; workSetups: string[]; location: string;
+  salaryVisibility: "public" | "band" | "on_request"; // 0025 salary stealth
+  offersEquity: boolean; // 0019
+};
 
 export function buildJobs(recruiters: Recruiter[]): Job[] {
   const techR = recruiters.filter((r) => r.kind === "tech");
   const finR = recruiters.filter((r) => r.kind === "finance");
+  const VISIBILITY = ["on_request", "band", "public"] as const; // cycle so all 3 are represented
   return FAMILIES.map((fam, i) => {
     const r = rng(5000 + i * 11);
     const pool = fam.kind === "tech" ? techR : finR;
@@ -231,14 +276,145 @@ export function buildJobs(recruiters: Recruiter[]): Job[] {
         `Required skills: ${fam.skills.slice(0, 6).join(", ")}. ${fam.achievement}. ${seniorYears}+ years experience.`,
       salaryMin, salaryMax: salaryMin + 45000,
       workSetups: i % 2 === 0 ? ["remote", "hybrid"] : ["hybrid", "onsite"], location,
+      salaryVisibility: VISIBILITY[i % VISIBILITY.length]!,
+      offersEquity: i % 3 === 0,
     };
   });
+}
+
+// --- Structured work history (seeker_experience, 0008) ----------------------
+export type ExperienceRow = {
+  seekerIdx: number; role: string; company: string; industry: string;
+  startMonthsAgo: number; endMonthsAgo: number | null; // null = current/ongoing
+};
+
+const PRIOR_COMPANIES = ["Northbridge Systems", "Vantage Analytics", "Ridgeline Partners", "Solace Digital", "Kestrel Holdings"];
+
+/** Multi-role history for every 3rd seeker — the rest only carry the scalar
+ * `years_experience`, same as today, so tenure/stability derivation
+ * (src/lib/experience.ts) has a real slice of profiles to actually run
+ * against without every seeker needing full structured history. */
+export function buildSeekerExperience(seekers: Seeker[]): ExperienceRow[] {
+  const rows: ExperienceRow[] = [];
+  seekers.forEach((s, i) => {
+    if (i % 3 !== 0) return;
+    const fam = FAMILIES[i % FAMILIES.length]!;
+    const totalMonths = s.yearsExperience * 12;
+    const currentSpan = Math.floor(totalMonths * 0.6);
+    rows.push({
+      seekerIdx: i, role: s.headline, company: PRIOR_COMPANIES[i % PRIOR_COMPANIES.length]!,
+      industry: fam.industries[0]!, startMonthsAgo: currentSpan, endMonthsAgo: null,
+    });
+    if (totalMonths - currentSpan > 6) {
+      rows.push({
+        seekerIdx: i, role: fam.titles[0]!, company: PRIOR_COMPANIES[(i + 1) % PRIOR_COMPANIES.length]!,
+        industry: fam.industries[fam.industries.length - 1]!, startMonthsAgo: totalMonths, endMonthsAgo: currentSpan + 1,
+      });
+    }
+  });
+  return rows;
+}
+
+// --- Referrals (0029) --------------------------------------------------------
+export type ReferralRow = { referrerIdx: number; refereeIdx: number; status: "activated" | "signed_up"; daysAgo: number };
+
+/** Referral pairs among the 50 seekers (referrer/referee both drawn from the
+ * same pool — no separate accounts needed). Includes a deliberate
+ * at-daily-cap case: seeker #2 gets exactly REFERRAL_DAILY_CAP activated
+ * referrals on one backdated day, plus one more that stays 'signed_up'
+ * (the real stuck state — src/app/onboarding/actions.ts's
+ * captureAndEarnReferral only flips signed_up -> activated when
+ * earnReferralActivation's daily-cap check passes; it's a no-op, not an
+ * error, when the cap is already hit that day). All backdated (never
+ * "today") per the plan's requirement that seeded time-gated rows don't
+ * start a seeded recruiter/seeker already at-cap for e2e specs run today. */
+export function buildReferralPlan(): ReferralRow[] {
+  const rows: ReferralRow[] = [];
+  const CAP_REFERRER = 2;
+  const CAP_DAY = 5; // days ago — same day for every row in this referrer's cap group
+  for (let n = 0; n < REFERRAL_DAILY_CAP; n++) {
+    rows.push({ referrerIdx: CAP_REFERRER, refereeIdx: 10 + n, status: "activated", daysAgo: CAP_DAY });
+  }
+  rows.push({ referrerIdx: CAP_REFERRER, refereeIdx: 20, status: "signed_up", daysAgo: CAP_DAY });
+  // Ordinary activated referrals, spread across different referrers/days —
+  // exercises the common (non-cap) path.
+  rows.push({ referrerIdx: 3, refereeIdx: 21, status: "activated", daysAgo: 12 });
+  rows.push({ referrerIdx: 4, refereeIdx: 22, status: "activated", daysAgo: 20 });
+  rows.push({ referrerIdx: 7, refereeIdx: 23, status: "activated", daysAgo: 30 });
+  return rows;
+}
+
+// --- Agent tokens / MCP access (0031/0032) -----------------------------------
+export type AgentTokenRow = { seekerIdx: number; label: string; revoked: boolean; toolCalls: string[] };
+
+export function buildAgentTokenPlan(): AgentTokenRow[] {
+  return [
+    { seekerIdx: 6, label: "Career copilot", revoked: false, toolCalls: ["list_matches", "get_profile"] },
+    { seekerIdx: 12, label: "Old integration", revoked: true, toolCalls: ["list_matches"] },
+  ];
+}
+
+// --- Connected accounts (0026/0027) ------------------------------------------
+export type ConnectedAccountRow = { seekerIdx: number };
+
+export function buildConnectedAccountPlan(): ConnectedAccountRow[] {
+  return [{ seekerIdx: 8 }, { seekerIdx: 16 }];
+}
+
+// --- Key custody (0030) -------------------------------------------------------
+export type KeyCustodyPlan = {
+  seekerIdx: number;
+  wrappedDekPrimary: string; // wrapped under the "primary" recovery code's KEK (see note below)
+  primaryCredentialId: string;
+  recoveryCodes: { codeHash: string; wrappedDek: string; salt: string }[];
+  encryptedRawTextB64: string;
+};
+
+/** Real, working envelope-encryption key custody for a couple of seekers —
+ * NOT fabricated ciphertext. `src/lib/crypto/envelope.ts` is pure
+ * `globalThis.crypto.subtle` with no `node:crypto` import (its own doc
+ * comment: designed to run identically in Node and the browser), so the
+ * recovery-code KEK derivation path needs no WebAuthn ceremony and is fully
+ * scriptable here. The passkey/`prf` KEK path genuinely requires a browser
+ * and is out of scope — so `user_data_keys` (normally passkey-wrapped) is
+ * seeded via the SAME recovery-code-derived KEK as one of the recovery rows,
+ * labeled with a placeholder `credential_id` rather than a real WebAuthn
+ * credential id. `isResumeEncryptionEnabled()` only checks for a
+ * `user_data_keys` row's existence (src/app/(app)/seeker/key-custody-actions.ts),
+ * so this is functionally real: the resulting ciphertext genuinely decrypts
+ * via either the "primary" path or any of the recovery codes. */
+export async function buildKeyCustody(seekerIdx: number): Promise<KeyCustodyPlan> {
+  const dek = generateDataKey();
+  const dekKey = await importAesKey(dek);
+  const codes = Array.from({ length: 8 }, () => generateRecoveryCode()); // RECOVERY_CODE_COUNT
+  const recoveryCodes: { codeHash: string; wrappedDek: string; salt: string }[] = [];
+  for (const code of codes) {
+    const salt = randomBytes(16);
+    const kek = await deriveKekFromRecoveryCode(code, salt);
+    recoveryCodes.push({
+      codeHash: await hashRecoveryCode(code),
+      wrappedDek: await wrapDek(kek, dek),
+      salt: Buffer.from(salt).toString("base64"),
+    });
+  }
+  const primary = recoveryCodes[0]!;
+  const encryptedRawTextB64 = await encryptText(
+    dekKey,
+    "Seed resume plaintext for key-custody verification — this text is only ever visible after a real DEK unwrap.",
+  );
+  return {
+    seekerIdx,
+    wrappedDekPrimary: primary.wrappedDek,
+    primaryCredentialId: "seed-recovery-derived-primary",
+    recoveryCodes,
+    encryptedRawTextB64,
+  };
 }
 
 function readJson<T>(name: string): T { return JSON.parse(readFileSync(join(DIR, name), "utf8")); }
 
 async function main() {
-  const recruiters = readJson<Recruiter[]>("smoke-recruiters.json");
+  const recruiters = assignRecruiterTiers(readJson<RecruiterJson[]>("smoke-recruiters.json"));
   const seekers = Array.from({ length: SEEKER_COUNT }, (_, i) => buildSeeker(i));
   const jobs = buildJobs(recruiters);
 
@@ -283,32 +459,52 @@ async function main() {
   const profileCols =
     "id, is_seeker, is_recruiter, company_name, display_name, headline, location, " +
     "skills, industries, desired_roles, seniority_band, years_experience, " +
-    "credentials, credentials_summary, dealbreaker_matrix, draft_text, published_text";
+    "credentials, credentials_summary, dealbreaker_matrix, draft_text, published_text, " +
+    "seeker_tier, share_salary, recruiter_tier, invite_code";
   lines.push(`insert into profiles (${profileCols}) values`);
-  const recruiterRows = recruiters.map((r) =>
-    `  ('${r.id}', false, true, ${sqlString(r.companyName)}, ${sqlString(r.displayName)}, null, null, ` +
-    `'{}'::text[], '{}'::text[], '{}'::text[], null, null, null, null, null, null, null)`,
-  );
-  const seekerRows = seekers.map((s) => {
+  const recruiterRows = recruiters.map((r, i) => {
+    // seeker #0 is the dual-role case (is_seeker AND is_recruiter both true
+    // on ONE row) — folded into its own seeker row below, not here.
+    return (
+      `  ('${r.id}', false, true, ${sqlString(r.companyName)}, ${sqlString(r.displayName)}, null, null, ` +
+      `'{}'::text[], '{}'::text[], '{}'::text[], null, null, null, null, null, null, null, ` +
+      `'free', false, ${sqlString(r.recruiterTier)}, ${sqlString(`seed-r${i}`)})`
+    );
+  });
+  const seekerRows = seekers.map((s, i) => {
     const dealbreakers = sqlString(JSON.stringify({ min_salary: s.minSalary, currency: "USD", work_setups: s.workSetups }));
     const credSummary = credentialsFloorSummary(s.credentials);
+    const isRecruiter = s.isDualRoleRecruiter;
+    const companyName = isRecruiter ? sqlString("Moonstone Talent (seeker-run agency)") : "null";
     return (
-      `  ('${s.id}', true, false, null, ${sqlString(s.displayName)}, ${sqlString(s.headline)}, ${sqlString(s.location)}, ` +
+      `  ('${s.id}', true, ${isRecruiter}, ${companyName}, ${sqlString(s.displayName)}, ${sqlString(s.headline)}, ${sqlString(s.location)}, ` +
       `${sqlArray(s.skills)}, ${sqlArray(s.industries)}, ${sqlArray(s.desiredRoles)}, ` +
       `${sqlString(seniorityBand(s.yearsExperience))}, ${s.yearsExperience}, ` +
       `${s.credentials ? sqlString(s.credentials) : "null"}, ${credSummary ? sqlString(credSummary) : "null"}, ` +
-      `${dealbreakers}::jsonb, ${sqlString(s.text)}, ${sqlString(s.text)})`
+      `${dealbreakers}::jsonb, ${sqlString(s.text)}, ${sqlString(s.text)}, ` +
+      `${sqlString(s.seekerTier)}, ${s.shareSalary}, 'free', ${sqlString(`seed-s${i}`)})`
     );
   });
   lines.push([...recruiterRows, ...seekerRows].join(",\n") + ";", "");
 
   // --- consent_flags ------------------------------------------------------
   lines.push(
-    "insert into consent_flags (profile_id, reveal_override_enabled, tos_accepted_at, processing_consent_at, market_signals_opt_in_at, consent_version) values",
+    "insert into consent_flags (profile_id, reveal_override_enabled, tos_accepted_at, processing_consent_at, " +
+    "market_signals_opt_in_at, consent_version, profiling_consent_at, maintenance_consent_at, " +
+    "maintenance_consent_version, agent_access_opt_in_at, agent_access_consent_version, " +
+    "connected_accounts_opt_in_at, connected_accounts_consent_version) values",
     [
-      ...recruiters.map((r) => `  ('${r.id}', false, now(), null, null, '2026-07-17-draft')`),
-      // seekers opt into market signals so k>=20 cohorts clear
-      ...seekers.map((s) => `  ('${s.id}', true, now(), now(), now(), '2026-07-17-draft')`),
+      ...recruiters.map((r) => `  ('${r.id}', false, now(), null, null, '2026-07-17-draft', null, null, null, null, null, null, null)`),
+      // seekers opt into market signals so k>=20 cohorts clear; maintenance/
+      // agent-access/connected-accounts consent vary per seeker (see
+      // buildSeeker) so the withdrawn/opted-out paths have real coverage
+      // instead of every account granting every consent.
+      ...seekers.map((s) => {
+        const maint = s.maintenanceConsentWithdrawn ? "null, null" : "now(), '2026-07-28-draft'";
+        const agent = s.agentAccessOptIn ? "now(), '2026-08-14-draft'" : "null, null";
+        const connected = s.connectedAccountsOptIn ? "now(), '2026-08-01-draft'" : "null, null";
+        return `  ('${s.id}', true, now(), now(), now(), '2026-07-17-draft', now(), ${maint}, ${agent}, ${connected})`;
+      }),
     ].join(",\n") + ";",
     "",
   );
@@ -337,14 +533,14 @@ async function main() {
 
   // --- job_postings (real stub embeddings) --------------------------------
   lines.push(
-    "insert into job_postings (id, recruiter_id, title, description, status, salary_min, salary_max, work_setups, location, embedding) values",
+    "insert into job_postings (id, recruiter_id, title, description, status, salary_min, salary_max, work_setups, location, embedding, salary_visibility, offers_equity) values",
   );
   const jobRows: string[] = [];
   for (const j of jobs) {
     const embedding = await stubProvider.embed(`${j.title}\n\n${j.description}`);
     const workSetups = `array[${j.workSetups.map((w) => sqlString(w)).join(",")}]::work_setup[]`;
     jobRows.push(
-      `  ('${j.id}', '${j.recruiterId}', ${sqlString(j.title)}, ${sqlString(j.description)}, 'active', ${j.salaryMin}, ${j.salaryMax}, ${workSetups}, ${sqlString(j.location)}, ${sqlVector(embedding)})`,
+      `  ('${j.id}', '${j.recruiterId}', ${sqlString(j.title)}, ${sqlString(j.description)}, 'active', ${j.salaryMin}, ${j.salaryMax}, ${workSetups}, ${sqlString(j.location)}, ${sqlVector(embedding)}, ${sqlString(j.salaryVisibility)}, ${j.offersEquity})`,
     );
   }
   lines.push(jobRows.join(",\n") + ";", "");
@@ -363,6 +559,113 @@ async function main() {
       "",
     );
   });
+
+  // --- seeker_experience (0008) -------------------------------------------
+  const experienceRows = buildSeekerExperience(seekers);
+  lines.push(
+    "insert into seeker_experience (profile_id, role, company, industry, start_date, end_date) values",
+    experienceRows
+      .map((e) => {
+        const seeker = seekers[e.seekerIdx]!;
+        const endDate = e.endMonthsAgo === null ? "null" : `(now() - interval '${e.endMonthsAgo} months')::date`;
+        return `  ('${seeker.id}', ${sqlString(e.role)}, ${sqlString(e.company)}, ${sqlString(e.industry)}, (now() - interval '${e.startMonthsAgo} months')::date, ${endDate})`;
+      })
+      .join(",\n") + ";",
+    "",
+  );
+
+  // --- referrals (0029) + paired points_ledger reward rows ----------------
+  // Mirrors the exact end-state src/lib/points.ts's earnReferralActivation
+  // (called from src/app/onboarding/actions.ts's captureAndEarnReferral)
+  // would produce — inserted directly here since this generator has no live
+  // DB connection to call those functions against. Kept in lockstep by the
+  // REFERRAL_REWARD_POINTS/REFERRAL_DAILY_CAP constants above matching
+  // src/lib/points.ts's.
+  const referralPlan = buildReferralPlan();
+  lines.push(
+    "insert into referrals (referrer_id, referee_id, invite_code, status, created_at, activated_at) values",
+    referralPlan
+      .map((row) => {
+        const referrer = seekers[row.referrerIdx]!;
+        const referee = seekers[row.refereeIdx]!;
+        const createdAt = `now() - interval '${row.daysAgo} days'`;
+        const activatedAt = row.status === "activated" ? createdAt : "null";
+        return `  ('${referrer.id}', '${referee.id}', 'seed-s${row.referrerIdx}', '${row.status}', ${createdAt}, ${activatedAt})`;
+      })
+      .join(",\n") + ";",
+    "",
+  );
+  const activatedReferrals = referralPlan.filter((r) => r.status === "activated");
+  lines.push(
+    "insert into points_ledger (profile_id, event, amount, note) values",
+    activatedReferrals
+      .flatMap((row) => {
+        const referrer = seekers[row.referrerIdx]!;
+        const referee = seekers[row.refereeIdx]!;
+        return [
+          `  ('${referrer.id}', 'verified_action', ${REFERRAL_REWARD_POINTS}, 'referral activation reward (referrer)')`,
+          `  ('${referee.id}', 'verified_action', ${REFERRAL_REWARD_POINTS}, 'referral activation reward (referee)')`,
+        ];
+      })
+      .join(",\n") + ";",
+    "",
+  );
+
+  // --- agent_tokens / agent_access_log (0031) ------------------------------
+  const agentTokenPlan = buildAgentTokenPlan();
+  lines.push(
+    "insert into agent_tokens (id, profile_id, token_hash, label, revoked_at) values",
+    agentTokenPlan
+      .map((t, i) => {
+        const seeker = seekers[t.seekerIdx]!;
+        const tokenId = `40000000-0000-0000-0000-${String(i + 1).padStart(12, "0")}`;
+        // Seed tokens hash a fixed, clearly-fake raw value — nothing sensitive,
+        // never a real bearer credential (this table only stores the hash).
+        const revokedAt = t.revoked ? "now() - interval '2 days'" : "null";
+        return `  ('${tokenId}', '${seeker.id}', ${sqlString(hashAgentToken(`seed-agent-token-${i}`))}, ${sqlString(t.label)}, ${revokedAt})`;
+      })
+      .join(",\n") + ";",
+    "",
+  );
+  lines.push(
+    "insert into agent_access_log (profile_id, agent_token_id, tool) values",
+    agentTokenPlan
+      .flatMap((t, i) => {
+        const seeker = seekers[t.seekerIdx]!;
+        const tokenId = `40000000-0000-0000-0000-${String(i + 1).padStart(12, "0")}`;
+        return t.toolCalls.map((tool) => `  ('${seeker.id}', '${tokenId}', ${sqlString(tool)})`);
+      })
+      .join(",\n") + ";",
+    "",
+  );
+
+  // --- connected_accounts (0026) -------------------------------------------
+  // No reusable app action exists for this table (it's written inline by the
+  // OAuth callback route, which needs a real redirect — see plan research);
+  // seed rows use clearly-placeholder token values, matching that this table
+  // stores opaque provider tokens the app never inspects for shape.
+  const connectedPlan = buildConnectedAccountPlan();
+  lines.push(
+    "insert into connected_accounts (profile_id, provider, access_token, refresh_token, expires_at, scope) values",
+    connectedPlan
+      .map((c) => {
+        const seeker = seekers[c.seekerIdx]!;
+        return `  ('${seeker.id}', 'google_drive', 'seed-placeholder-access-token', 'seed-placeholder-refresh-token', now() + interval '1 hour', 'drive.readonly')`;
+      })
+      .join(",\n") + ";",
+    "",
+  );
+
+  // Key custody (0030) is deliberately NOT emitted here: buildKeyCustody
+  // uses envelope.ts's randomBytes/generateRecoveryCode, which are real
+  // crypto-random (globalThis.crypto.getRandomValues) — plugging that into
+  // this generator would break its stated determinism invariant (the doc
+  // comment at the top of this file: "no Math.random / Date.now, so the
+  // checked-in SQL is stable across regenerations"), producing a spurious
+  // diff on every `pnpm test-data:generate` run. buildKeyCustody stays
+  // exported and is used by scripts/seed-staging.ts's live pass instead,
+  // same as the other AI/live-only entities (screening questions, skill
+  // assessments, company research).
 
   const outPath = join(DIR, "smoke-seed.generated.sql");
   writeFileSync(outPath, lines.join("\n"));
