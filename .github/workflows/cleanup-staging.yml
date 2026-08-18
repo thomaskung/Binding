@@ -1,15 +1,23 @@
 name: Staging Cleanup
 on:
-  # Daily, not weekly: ci.yml's PR gate now runs e2e on every push and each
-  # run creates its own @staging.local users (e2e/staging-helpers.ts). At a
-  # weekly cadence those would accumulate for up to 7 days between sweeps
-  # instead of 1.
+  # Fires right after the nightly "Staging E2E" workflow finishes, rather
+  # than a fixed cron gap — the old 2:30 UTC cron ran only ~2.5h after that
+  # run's own midnight-UTC start, so its own @staging.local users (still
+  # under the old 24h filter) were skipped and lingered a full extra day.
+  # No `conclusion == 'success'` gate: nightly e2e is expected to sometimes
+  # be red (see CLAUDE.md's open staging-investigation gotcha), and gating
+  # on success would silently stop cleanup from ever firing while it is.
+  workflow_run:
+    workflows: ['Staging E2E']
+    types: [completed]
+  # Backstop: workflow_run only fires from Staging E2E completing, so if that
+  # workflow is ever renamed/disabled/starved (e.g. GitHub auto-disables
+  # scheduled workflows after prolonged repo inactivity), cleanup would
+  # silently never run again with no independent trigger of its own. A daily
+  # cron re-adds that independence; the 60-min staleness filter in
+  # cleanup-staging.mjs makes a redundant same-day firing a no-op.
   schedule:
-    # 2:30 UTC, BEFORE the 3am nightly e2e-staging run — otherwise the
-    # accumulated @staging.local seekers (same generic embedding text) crowd
-    # fresh per-run seekers out of match_candidates' top-20 (MATCH_TOP_N),
-    # and smoke/override/compare/pipeline tests see no match card.
-    - cron: '30 2 * * *'
+    - cron: '30 4 * * *'
   workflow_dispatch:
 
 jobs:
