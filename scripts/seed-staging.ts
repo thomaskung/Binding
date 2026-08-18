@@ -805,17 +805,29 @@ async function countTable(table: string): Promise<number> {
 
 async function verify(): Promise<void> {
   console.log("\n--verify: counting rows per newly-seeded table…");
-  let anyZero = false;
+  const zeroTables: string[] = [];
   for (const table of REQUIRED_VERIFY_TABLES) {
     const count = await countTable(table);
     console.log(`  ${table}: ${count}`);
-    if (!count) anyZero = true;
+    if (!count) zeroTables.push(table);
   }
   for (const table of BEST_EFFORT_VERIFY_TABLES) {
     const count = await countTable(table);
     console.log(`  ${table}: ${count}${count ? "" : " (best-effort — depends on real match/AI-grading outcome, not necessarily a bug)"}`);
   }
-  if (anyZero) throw new Error("--verify: one or more REQUIRED tables have zero rows — a table's insert silently no-opped (check grants/RLS/FK order)");
+  if (zeroTables.length) {
+    // verified_actions' zero has two distinct causes (see the doc comment
+    // above REQUIRED_VERIFY_TABLES) — a silent insert no-op (grants/RLS/FK,
+    // same as every other REQUIRED table) or real Modal grading rejecting
+    // ASSESSMENT_DEFS' passAnswer content. Say both so whoever reads this
+    // doesn't waste time re-running before checking assessment_attempts.rationale.
+    const messages = zeroTables.map((t) =>
+      t === "verified_actions"
+        ? `${t} (either a silent insert no-op like the others below, OR real Modal grading rejected ASSESSMENT_DEFS' passAnswer content — check assessment_attempts.rationale before assuming grants/RLS/FK order)`
+        : t,
+    );
+    throw new Error(`--verify: one or more REQUIRED tables have zero rows — a table's insert silently no-opped (check grants/RLS/FK order): ${messages.join("; ")}`);
+  }
   console.log("--verify: all required tables non-zero.");
 }
 
