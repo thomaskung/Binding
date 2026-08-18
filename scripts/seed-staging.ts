@@ -107,42 +107,86 @@ async function embed(text: string): Promise<number[]> {
   throw new Error("embed failed after retries");
 }
 
+/** Finds a user by email across ALL pages — not just the first 1000. On a
+ * staging project with heavy e2e/PR-gate churn, total auth.users easily
+ * exceeds 1000 and a target email (especially an OLDER @smoke.local/
+ * @demo.local account) can sort well past that window, so a single-page
+ * lookup silently misses it. */
+async function findUserByEmail(email: string): Promise<string | null> {
+  for (let page = 1; page <= 200; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ perPage: 1000, page });
+    if (error) throw new Error(`listUsers page ${page} failed: ${error.message}`);
+    const u = data.users.find((x) => x.email === email);
+    if (u) return u.id;
+    if (data.users.length < 1000) return null; // last page
+  }
+  throw new Error(`findUserByEmail(${email}): exceeded page guard without finding user or reaching the last page`);
+}
+
 async function ensureUser(email: string): Promise<string> {
   const { data, error } = await admin.auth.admin.createUser({ email, password: PASSWORD, email_confirm: true });
   if (data.user) return data.user.id;
   if (error?.code === "email_exists") {
-    const { data: list } = await admin.auth.admin.listUsers({ perPage: 1000 });
-    const u = list.users.find((x) => x.email === email);
-    if (u) return u.id;
+    const existing = await findUserByEmail(email);
+    if (existing) return existing;
   }
   throw new Error(`createUser(${email}): ${error?.message}`);
+}
+
+/** Deletes rows in tables that reference a profile via a plain (non-
+ * cascading) FK — currently only skill_assessments.created_by (migration
+ * 0033 has no `on delete` clause, so it defaults to RESTRICT and blocks
+ * deleting the referenced user). Discovered empirically: deleting a large
+ * batch of @staging.local test accounts hit "Database error deleting user"
+ * for every account that had ever created a (test) skill assessment.
+ * Deleting these test-created rows here (not just nulling created_by) is
+ * correct for @staging.local/@smoke.local/@demo.local test accounts —
+ * they're not the durable catalog content (that's the 0010/0011 migration
+ * seed rows, which have no created_by/FK to any deletable account). */
+async function clearNonCascadingReferences(profileId: string): Promise<void> {
+  await admin.from("skill_assessments").delete().eq("created_by", profileId);
 }
 
 /** Delete the seed accounts (@smoke.local + @demo.local, and — only with
  * --include-staging-local — @staging.local too) — cascades their
  * marketplace data — so re-seeding is clean. Paginates by always fetching
- * page 1 and deleting until none remain.
+ * page 1 and deleting until none remain (matching users shift into view as
+ * earlier ones are removed).
  *
  * --include-staging-local is the one-time full wipe (plan Part 2): before
  * running it, confirm no PR-gate or nightly e2e run is in flight
  * (`gh run list --workflow=ci.yml --status=in_progress` and the same for
  * e2e-staging.yml) — @staging.local is shared with every such run and has
  * no per-run id to filter on, so wiping it while one is executing deletes
- * that run's own test data out from under it. */
+ * that run's own test data out from under it. Even then, expect a handful
+ * of @staging.local stragglers to reappear afterward from CI runs that
+ * start during/after the wipe — that's ordinary churn, not a bug; the
+ * ongoing nightly cleanup job sweeps those, and they never collide with
+ * this script's own fixed @smoke.local/@demo.local email list either way. */
 async function wipeSeedUsers() {
   const domains = INCLUDE_STAGING_LOCAL ? [...SEED_DOMAINS, "@staging.local"] : SEED_DOMAINS;
   console.log(`RESET: deleting ${domains.join(" / ")} users (cascades their data)…`);
-  let total = 0;
-  for (let guard = 0; guard < 200; guard++) {
-    const { data } = await admin.auth.admin.listUsers({ perPage: 200 });
-    const seed = data.users.filter((u) => domains.some((d) => u.email?.endsWith(d)));
+  let deleted = 0;
+  const failedEmails = new Set<string>(); // skip on retry so one stuck user can't burn the whole guard budget
+  for (let guard = 0; guard < 2000; guard++) {
+    const { data, error: listError } = await admin.auth.admin.listUsers({ perPage: 200 });
+    if (listError) throw new Error(`listUsers failed: ${listError.message}`);
+    const seed = data.users.filter((u) => domains.some((d) => u.email?.endsWith(d)) && !failedEmails.has(u.email!));
     if (!seed.length) break;
     for (const u of seed) {
-      await admin.auth.admin.deleteUser(u.id);
-      total++;
+      await clearNonCascadingReferences(u.id);
+      const { error } = await admin.auth.admin.deleteUser(u.id);
+      if (error) {
+        failedEmails.add(u.email!);
+        console.error(`  FAILED to delete ${u.email}: ${error.message}`);
+      } else {
+        deleted++;
+      }
     }
   }
-  console.log(`  deleted ${total} seed users`);
+  console.log(
+    `  deleted ${deleted} seed users${failedEmails.size ? `, ${failedEmails.size} FAILED (see errors above — investigate before trusting the reseed is complete)` : ""}`,
+  );
 }
 
 // --- Abort-and-revert tracking for the live/AI pass -----------------------
