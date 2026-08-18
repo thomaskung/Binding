@@ -13,7 +13,11 @@ import { extractText, getDocumentProxy } from "unpdf";
  * Drive import).
  */
 export async function extractPdfText(buffer: Uint8Array): Promise<string> {
-  const pdf = await getDocumentProxy(buffer);
+  // unpdf (pdf.js underneath) detaches the input ArrayBuffer once parsed —
+  // `buffer` reports length 0 after this call returns. api/ingest/route.ts
+  // reuses the same buffer for stripPdfMetadata() right after calling this,
+  // so pass pdf.js a copy and leave the caller's buffer intact.
+  const pdf = await getDocumentProxy(buffer.slice());
   const extracted = await extractText(pdf, { mergePages: true });
   return extracted.text.trim();
 }
