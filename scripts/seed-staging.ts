@@ -556,10 +556,35 @@ async function main() {
   console.log(`  screening questions: ${screeningJobIdxs.length} jobs (2 published, 2 draft), sample answers incl. one dealbreaker fail`);
 
   // --- skill assessments (0033) ---------------------------------------------
+  // passAnswer is real, substantive content confirmed to pass real Modal
+  // grading (verified 2026-08-18 against the live deployed app) — an
+  // earlier version of this script used a hollow template
+  // (`Detailed, specific approach: ${prompt}...`) that just echoed the
+  // prompt back with no real content, which the real grader correctly
+  // failed every time (verified_actions came back 0). Keep passAnswer
+  // genuinely substantive, not a template, or this regresses silently.
   const ASSESSMENT_DEFS = [
-    { skill: "Go", prompt: "Explain how you'd design a rate limiter for a high-throughput Go service.", rubric: "Passes if the answer covers a token-bucket or sliding-window approach and concurrency safety." },
-    { skill: "Python", prompt: "Describe how you'd profile and optimize a slow Python data pipeline.", rubric: "Passes if the answer mentions profiling tools (cProfile/py-spy) and at least one concrete optimization." },
-    { skill: "Financial Modeling", prompt: "Walk through building a 3-statement financial model from scratch.", rubric: "Passes if the answer links income statement, balance sheet, and cash flow with correct causality." },
+    {
+      skill: "Go",
+      prompt: "Explain how you'd design a rate limiter for a high-throughput Go service.",
+      rubric: "Passes if the answer covers a token-bucket or sliding-window approach and concurrency safety.",
+      passAnswer:
+        "I'd use a token-bucket algorithm: each client gets a bucket with a fixed capacity that refills at a steady rate, and each request consumes one token, rejecting the request when the bucket is empty. For concurrency safety in Go, I'd back the bucket with either a mutex-protected counter or, for higher throughput, an atomic int64 refilled by a single background goroutine on a time.Ticker, avoiding lock contention across many concurrent requests. For a distributed service across multiple instances, I'd move the bucket state into Redis using an atomic Lua script (INCR + TTL) so all instances share one consistent rate limit rather than each enforcing its own local limit.",
+    },
+    {
+      skill: "Python",
+      prompt: "Describe how you'd profile and optimize a slow Python data pipeline.",
+      rubric: "Passes if the answer mentions profiling tools (cProfile/py-spy) and at least one concrete optimization.",
+      passAnswer:
+        "First I'd profile with cProfile to get function-level call counts and cumulative time, then use py-spy to sample a live production process without stopping it, since py-spy shows real wall-clock hotspots including time spent in C extensions. Once I find the bottleneck, common concrete optimizations: replace row-by-row pandas .apply() calls with vectorized numpy operations, batch database reads/writes instead of one-row-at-a-time round-trips, and switch hot inner loops to use built-in C-implemented functions instead of pure-Python loops. If the pipeline is I/O bound (waiting on network/disk), I'd move to asyncio or a process pool instead of a single-threaded sequential pipeline.",
+    },
+    {
+      skill: "Financial Modeling",
+      prompt: "Walk through building a 3-statement financial model from scratch.",
+      rubric: "Passes if the answer links income statement, balance sheet, and cash flow with correct causality.",
+      passAnswer:
+        "Start with the income statement: revenue down through operating expenses to net income. Net income flows into the cash flow statement as the starting line of the operating activities section, then gets adjusted for non-cash items like depreciation (add back) and changes in working capital (accounts receivable, inventory, payables) pulled from the balance sheet. Depreciation from the income statement also reduces PP&E on the balance sheet. The cash flow statement's ending cash balance then becomes the cash line on the balance sheet, and retained earnings on the balance sheet rolls forward by adding net income and subtracting any dividends paid — that's the full closed loop linking all three statements with correct causality.",
+    },
   ];
   const assessmentBySkill = new Map<string, string>();
   for (const def of ASSESSMENT_DEFS) {
@@ -579,7 +604,7 @@ async function main() {
   for (const [skill, assessmentId] of assessmentBySkill) {
     const def = ASSESSMENT_DEFS.find((d) => d.skill === skill)!;
     const attemptSeekers: Array<{ profileIdx: number; answerText: string }> = [
-      { profileIdx: 20 + assessmentIdx * 2, answerText: `Detailed, specific approach: ${def.prompt} — I've done this in production, including edge cases and trade-offs.` },
+      { profileIdx: 20 + assessmentIdx * 2, answerText: def.passAnswer },
       { profileIdx: 21 + assessmentIdx * 2, answerText: "I don't really know." },
     ];
     for (const { profileIdx, answerText } of attemptSeekers) {
@@ -745,21 +770,28 @@ async function main() {
 
 // --- --verify: count rows in every newly-seeded table, fail loud on zero ---
 // REQUIRED tables are populated unconditionally by this script (no
-// dependency on match_candidates returning rows for a specific job, or on
-// real AI grading landing on a particular pass/fail outcome) — a zero here
-// means an insert silently no-opped (missing grant, RLS, wrong FK order).
+// dependency on match_candidates returning rows for a specific job). This
+// now includes verified_actions: ASSESSMENT_DEFS' passAnswer content is
+// confirmed real substantive content that passes real Modal grading (not a
+// hollow prompt-echo template — see the comment there), so all 3 seeded
+// "should pass" attempts are expected to actually pass and award a
+// verified_actions row every run, not just probabilistically. A zero here
+// means either an insert silently no-opped (missing grant, RLS, wrong FK
+// order) or a passAnswer regressed back to non-substantive filler — check
+// the assessment_attempts.rationale text either way, don't just re-run.
 // BEST_EFFORT tables genuinely can end up empty on a legitimate run (e.g.
 // job #4/#5 happen to get zero real-embedding matches at the 0.55
-// threshold, or Modal's real grading marks every "strong" answer a fail) —
-// logged, not fatal, so --verify doesn't cry wolf on real variance.
+// threshold) — logged, not fatal, so --verify doesn't cry wolf on real
+// match-outcome variance.
 const REQUIRED_VERIFY_TABLES = [
   "seeker_experience", "referrals", "agent_tokens", "agent_access_log", "connected_accounts",
   "user_data_keys", "user_data_key_recovery", "skill_assessments", "assessment_attempts",
   "company_research_cache", "training_completions", "enterprise_training_assignments",
+  "verified_actions",
 ] as const;
 const BEST_EFFORT_VERIFY_TABLES = [
   "candidate_screening_answers", "company_research_requests", "reveal_requests",
-  "message_threads", "pii_access_log", "verified_actions",
+  "message_threads", "pii_access_log",
 ] as const;
 
 async function countTable(table: string): Promise<number> {
