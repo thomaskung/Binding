@@ -93,15 +93,15 @@ jobs:
 
       # `modal deploy` imports the target file locally (on THIS runner) to
       # introspect the app before shipping it — it doesn't just parse the
-      # source. All three modal_app/*.py files do `from fastapi import
+      # source. The modal_app/*.py files do `from fastapi import
       # Header, HTTPException` at module level, so the runner's own Python
       # env needs fastapi too, not just the image baked into the deployed
       # container (that image already installs `fastapi[standard]` via its
       # own `pip_install(...)` call — a separate, already-correct
       # installation). Omitting this failed every deploy across two
       # consecutive merges with `ModuleNotFoundError: No module named
-      # 'fastapi'` on the `llm-small.py` import, which — because all three
-      # `modal deploy` calls below run in one `set -euo pipefail` step —
+      # 'fastapi'` on the (now-retired) `llm-small.py` import, which — because
+      # the `modal deploy` calls below run in one `set -euo pipefail` step —
       # silently blocked `llm.py`'s and `embeddings.py`'s deploys too.
       - run: pip install modal "fastapi[standard]"
         if: steps.changed.outputs.changed == 'true'
@@ -117,7 +117,6 @@ jobs:
         run: |
           set -euo pipefail
           modal token set --token-id "${{ secrets.MODAL_TOKEN_ID }}" --token-secret "${{ secrets.MODAL_TOKEN_SECRET }}"
-          modal deploy modal_app/llm-small.py
           modal deploy modal_app/llm.py
           modal deploy modal_app/embeddings.py
 
@@ -201,8 +200,9 @@ jobs:
           # smoke.spec.ts hits Modal (a real publish/reveal round trip) —
           # warm the endpoints first, same reasoning as the nightly's
           # globalSetup pass in e2e-staging.yml. globalSetup is the ONLY warm
-          # path here (the E2E apps' 3600s window covers the whole run), so
-          # MODAL_API_TOKEN + the fetched E2E URLs are required.
+          # path here (it runs right before the single test, so the 120s
+          # scaledown window covers the whole run), so MODAL_API_TOKEN + the
+          # fetched E2E URLs are required.
           MODAL_API_TOKEN: ${{ secrets.MODAL_API_TOKEN }}
           MODAL_REDACT_URL: ${{ env.MODAL_REDACT_URL }}
           MODAL_CREDENTIALS_URL: ${{ env.MODAL_CREDENTIALS_URL }}

@@ -1,5 +1,10 @@
 """Qwen3-Embedding-0.6B on Modal — 1024-dim embeddings for matching.
-Small enough to serve cheaply (T4 or even CPU); scale-to-zero.
+
+CPU-only since 2026-08-18: a 0.6B embedder never needed a T4 — the GPU cost
+was ~$20/mo for ~1KB encodes (see modal_app/README.md cost review), and a CPU
+cold start (~seconds) beats a T4 boot (~20-100s). Output is identical to the
+old GPU path (same weights, truncate_dim=1024); stored vectors may drift
+cosine by ~1e-4, far below match thresholds.
 
 Endpoint (POST, JSON, Bearer auth):
   /embed  {"text": ...} -> {"embedding": [1024 floats]}
@@ -24,8 +29,11 @@ image = (
 
 @app.cls(
     image=image,
-    gpu="T4",
-    scaledown_window=300,  # warm-up now parallel; 300s is sufficient (see llm.py note)
+    # CPU-only (was T4): a 0.6B embedding model doesn't need a GPU — the T4
+    # was ~$20/mo for a ~1KB encode (README.md cost review, 2026-08-18). CPU
+    # cold start is also much faster than a T4 boot (~seconds vs 20-100s).
+    memory=4096,
+    scaledown_window=120,
     # APAC region pin — same rationale as llm.py's Qwen class (embedding
     # input is redacted-but-candidate-derived text; keep it in-region).
     region="ap",

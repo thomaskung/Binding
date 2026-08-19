@@ -60,7 +60,7 @@
 **Modal**
 - Auth: `modal token set --token-id <ID> --token-secret <SECRET>` (values from `.env.local` comment; profile `thomaskung`)
 - API secret: `modal secret create binding-api-token MODAL_API_TOKEN=<value>`
-- Deploy (3 apps, all scaledown 120s): `modal deploy modal_app/llm-small.py` + `modal deploy modal_app/llm.py` + `modal deploy modal_app/embeddings.py`
+- Deploy (2 apps, all scaledown 120s; `binding-llm-small` merged into `binding-llm` 2026-08-18): `modal deploy modal_app/llm.py` + `modal deploy modal_app/embeddings.py` (embeddings is CPU-only)
 - Endpoint URLs printed on deploy; set as Vercel env vars for `AI_PROVIDER=modal` (`MODAL_*_URL`, plain so CI can warm them — see `modal_app/README.md`)
 - vLLM pins: `vllm==0.10.2` + `transformers<5` (V0 engine only — looser pins crash on T4)
 

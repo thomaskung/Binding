@@ -171,7 +171,7 @@ test.describe("Staging functional — matching pipeline", () => {
     countAiCall(); // ai.embed on publish
     await page.getByTestId("publish-job").click();
     await expect(page.getByText("Published — matches refreshed.")).toBeVisible({
-      timeout: 120_000,
+      timeout: 180_000,
     });
 
     await ctx.close();
@@ -328,6 +328,11 @@ test.describe("Staging functional — privacy & Layer-0", () => {
   });
 
   test("11. PII patterns stripped from paste-text path", async ({ browser }) => {
+    // The extract click is a real Modal call (ai.extractProfileFields) that can
+    // cold-start (~100s) under the 120s scaledown — give this test its own
+    // budget and the click the same generous action timeout seeker-onboarding
+    // gives its Modal-boundary clicks, instead of the 30s Playwright default.
+    test.setTimeout(180_000);
     const ctx = await stagingContext(browser);
     const page = await ctx.newPage();
     const user = await ensureStagingUser("seeker");
@@ -346,7 +351,7 @@ test.describe("Staging functional — privacy & Layer-0", () => {
     const raw = "reach me at priya.p@example.com or +65 8123 4567 — senior backend engineer";
     await page.getByTestId("onboarding-resume-paste").fill(raw);
     countAiCall(); // ai.extractProfileFields runs on extracted fields
-    await page.getByTestId("onboarding-extract").click();
+    await page.getByTestId("onboarding-extract").click({ timeout: 180_000 });
     await expect(page.getByTestId("pii-preview-note")).toBeVisible({ timeout: 15_000 });
     // The note enumerates the detected categories ("email addresses", "phone
     // numbers") — the Layer-0 proof identifiers were stripped before leaving
