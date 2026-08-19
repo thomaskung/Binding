@@ -32,55 +32,42 @@ describe("getOrCreateInviteCode", () => {
   });
 
   it("generates and persists a new code when none exists", async () => {
-    let selectCalls = 0;
+    // The write and its confirmation are ONE round trip now
+    // (.update().eq().is().select().maybeSingle()) — not a separate re-SELECT
+    // (see the doc comment on getOrCreateInviteCode for why: a second,
+    // identical SELECT is vulnerable to Next.js Request Memoization silently
+    // replaying the pre-write response inside a Server Component render).
+    const initialMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const updateMaybeSingle = vi.fn().mockResolvedValue({ data: { invite_code: "new-code" }, error: null });
     const from = vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          maybeSingle: vi.fn().mockImplementation(() => {
-            selectCalls++;
-            // 1st select: initial check (no code yet). 2nd select: confirm
-            // after the update — the newly-generated code stuck.
-            return Promise.resolve(
-              selectCalls === 1
-                ? { data: null, error: null }
-                : { data: { invite_code: "new-code" }, error: null },
-            );
-          }),
-        }),
-      }),
+      select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle: initialMaybeSingle }) }),
       update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({ is: vi.fn().mockResolvedValue({ error: null }) }),
+        eq: vi.fn().mockReturnValue({
+          is: vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ maybeSingle: updateMaybeSingle }) }),
+        }),
       }),
     });
     const mock = { from } as any;
     const code = await getOrCreateInviteCode(mock, "p-1");
     expect(code).toBe("new-code");
-    expect(selectCalls).toBe(2);
+    expect(updateMaybeSingle).toHaveBeenCalledTimes(1);
   });
 
   it("retries after a unique-violation on the update, then succeeds", async () => {
-    let selectCalls = 0;
     let updateCalls = 0;
     const from = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          maybeSingle: vi.fn().mockImplementation(() => {
-            selectCalls++;
-            if (selectCalls === 1) return Promise.resolve({ data: null, error: null });
-            // Confirm-read after attempt 1's failed update: still no code.
-            if (selectCalls === 2) return Promise.resolve({ data: null, error: null });
-            // Confirm-read after attempt 2's successful update: code stuck.
-            return Promise.resolve({ data: { invite_code: "second-try" }, error: null });
-          }),
-        }),
+        eq: vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) }),
       }),
       update: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
           is: vi.fn().mockImplementation(() => {
             updateCalls++;
-            return Promise.resolve(
-              updateCalls === 1 ? { error: { code: "23505", message: "duplicate" } } : { error: null },
-            );
+            const result =
+              updateCalls === 1
+                ? { data: null, error: { code: "23505", message: "duplicate" } }
+                : { data: { invite_code: "second-try" }, error: null };
+            return { select: vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue(result) }) };
           }),
         }),
       }),
@@ -98,7 +85,11 @@ describe("getOrCreateInviteCode", () => {
       }),
       update: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          is: vi.fn().mockResolvedValue({ error: { code: "23505", message: "duplicate" } }),
+          is: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { code: "23505", message: "duplicate" } }),
+            }),
+          }),
         }),
       }),
     });
@@ -113,7 +104,11 @@ describe("getOrCreateInviteCode", () => {
       }),
       update: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          is: vi.fn().mockResolvedValue({ error: { code: "42501", message: "no permission" } }),
+          is: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { code: "42501", message: "no permission" } }),
+            }),
+          }),
         }),
       }),
     });

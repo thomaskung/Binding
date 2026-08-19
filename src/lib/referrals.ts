@@ -30,7 +30,19 @@ export function generateInviteCode(): string {
  * absent (lazy generation — most profiles never look at /invite, so most
  * profiles never get a code). Retries on a unique-violation or a lost race
  * against a concurrent generator; at 48 bits of entropy this is a belt-and-
- * suspenders guarantee, not a load-bearing one. */
+ * suspenders guarantee, not a load-bearing one.
+ *
+ * The write and its confirmation are ONE round trip (`.update().select()`,
+ * PostgREST's `Prefer: return=representation`), not an update followed by a
+ * separate re-SELECT. That separate re-SELECT used to be issued here, and it
+ * is functionally identical (same table/columns/filter) to the plain lookup
+ * above it — inside a Server Component render, Next.js's automatic fetch
+ * Request Memoization dedupes those as the SAME call and replays the first
+ * (pre-write) response, so every retry "confirmed" the write never happened
+ * even though it had. Getting the row back from the mutation itself sidesteps
+ * memoization entirely (it doesn't apply to non-GET requests) and is also
+ * strictly more correct: it reflects exactly what this call's own UPDATE
+ * touched, not a second query that could race with someone else's write. */
 export async function getOrCreateInviteCode(
   admin: SupabaseClient,
   profileId: string,
@@ -47,22 +59,23 @@ export async function getOrCreateInviteCode(
     const code = generateInviteCode();
     // `.is("invite_code", null)` guards against clobbering a code a
     // concurrent request already set for this same profile.
-    const { error: updateError } = await admin
+    const { data: updated, error: updateError } = await admin
       .from("profiles")
       .update({ invite_code: code })
       .eq("id", profileId)
-      .is("invite_code", null);
+      .is("invite_code", null)
+      .select("invite_code")
+      .maybeSingle();
     if (updateError && updateError.code !== "23505") {
       throw new Error(`invite code generation failed: ${updateError.message}`);
     }
-    const { data: confirmed, error: confirmError } = await admin
-      .from("profiles")
-      .select("invite_code")
-      .eq("id", profileId)
-      .maybeSingle();
-    if (confirmError) throw new Error(`invite code confirm failed: ${confirmError.message}`);
-    if (confirmed?.invite_code) return confirmed.invite_code;
-    // Neither this attempt's code nor a concurrent one stuck — retry.
+    if (updated?.invite_code) return updated.invite_code;
+    // This attempt's code didn't stick — either a genuine collision (retry
+    // with a fresh code) or a concurrent request already won and set its own
+    // code, in which case `.is("invite_code", null)` correctly matched 0 rows
+    // here forever. Distinguish the two with one plain read before retrying.
+    const { data: current } = await admin.from("profiles").select("invite_code").eq("id", profileId).maybeSingle();
+    if (current?.invite_code) return current.invite_code;
   }
   throw new Error(`invite code generation failed for profile ${profileId} after 5 attempts`);
 }
