@@ -1,8 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { completeSeekerOnboarding } from "./seeker-onboarding";
 import { completeRecruiterOnboarding } from "./recruiter-onboarding";
 import { createAndPublishJob, widenMatchFilter } from "./match-helpers";
-import { countAiCall, ensureStagingUser, signIn, stagingContext, uniqueLabel } from "./staging-helpers";
+import { countAiCall, ensureStagingUser, signIn, stagingAdminClient, stagingContext, uniqueLabel } from "./staging-helpers";
 
 /**
  * Pre-reveal candidate cards never show identity (privacy invariant —
@@ -15,29 +16,62 @@ import { countAiCall, ensureStagingUser, signIn, stagingContext, uniqueLabel } f
  * smoke.spec.ts's `.filter({ hasText: "interested" })`, which works because
  * "interested" is unique to that spec's own flow).
  *
- * Fix: embed a run-unique, non-PII token in the résumé/job text (survives
- * redaction — it's not email/phone/year-shaped) and open cards one at a time
- * until the panel's (always-rendered, pre-reveal) "Profile summary" section
- * contains it. Leaves the matching card's panel open for the caller.
+ * An EARLIER version of this fix embedded a run-unique token in the résumé/
+ * job text and scanned each opened panel's "Profile summary" for it. That
+ * broke for real (confirmed by reproducing against real staging + a direct
+ * DB check, `gh run view 32202579477`): the panel's text is `redacted_text`
+ * from the match_candidates RPC — the REAL `ai.redact` Modal call's output,
+ * not the raw published_text. A real LLM redaction/paraphrase pass has no
+ * obligation to preserve an arbitrary trailing "Ref: <token>" verbatim (the
+ * deterministic `stub` provider used everywhere else effectively does, which
+ * is why this never failed outside real-Modal nightly runs) — the DB proved
+ * the correct match existed with the right token in `published_text` and a
+ * valid 89.5% score, but its rendered redacted summary just didn't contain
+ * the literal string anymore.
+ *
+ * Fix: look up the real `matches.id` for (jobId, profileId) directly from
+ * the DB (source of truth, immune to how the AI chooses to phrase the
+ * summary), then find the card by the `data-match-id` attribute
+ * (match-list.tsx) instead of scanning AI-generated text for a token.
  */
-async function openCandidatePanelByToken(
+async function openCandidatePanelByProfile(
   page: Page,
-  token: string,
+  admin: SupabaseClient,
+  jobId: string,
+  profileId: string,
   timeoutMs = 60_000,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    await widenMatchFilter(page);
-    const cards = page.getByTestId("recruiter-match-card");
-    const count = await cards.count();
-    for (let i = 0; i < count; i++) {
-      await cards.nth(i).click();
-      const panel = page.getByTestId("candidate-panel");
-      await expect(panel).toBeVisible({ timeout: 15_000 });
-      if ((await panel.innerText()).includes(token)) return;
+  let matchId: string | null = null;
+  while (!matchId) {
+    const { data, error } = await admin
+      .from("matches")
+      .select("id")
+      .eq("job_posting_id", jobId)
+      .eq("profile_id", profileId)
+      .maybeSingle();
+    if (error) throw new Error(`matches lookup failed: ${error.message}`);
+    if (data?.id) {
+      matchId = data.id;
+      break;
     }
     if (Date.now() > deadline) {
-      throw new Error(`no candidate card matched token "${token}" within ${timeoutMs}ms`);
+      throw new Error(`no matches row for job ${jobId} / profile ${profileId} within ${timeoutMs}ms`);
+    }
+    await new Promise((r) => setTimeout(r, 2_000));
+  }
+
+  const cardDeadline = Date.now() + timeoutMs;
+  for (;;) {
+    await widenMatchFilter(page);
+    const card = page.locator(`[data-match-id="${matchId}"]`);
+    if ((await card.count()) > 0) {
+      await card.click();
+      await expect(page.getByTestId("candidate-panel")).toBeVisible({ timeout: 15_000 });
+      return;
+    }
+    if (Date.now() > cardDeadline) {
+      throw new Error(`card for match ${matchId} never rendered within ${timeoutMs}ms`);
     }
     await page.waitForTimeout(3_000);
     await page.reload();
@@ -86,6 +120,7 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   const seekerCtx = await stagingContext(browser);
   const recruiter = await recruiterCtx.newPage();
   const seeker = await seekerCtx.newPage();
+  const admin = stagingAdminClient();
 
   const recruiterUser = await ensureStagingUser("recruiter");
   const seekerUser = await ensureStagingUser("seeker");
@@ -93,20 +128,11 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   const company = uniqueLabel("Nimbus Search Group");
   const seekerName = uniqueLabel("Sam Seeker");
 
-  // Run-unique, non-PII token (not email/phone/year-shaped, so it survives
-  // both the client-side paste-path PII strip and the server-side ai.redact
-  // pass untouched) baked into the résumé/job text so this run's candidate
-  // can be picked out of a shared, never-reset DB — see
-  // `openCandidatePanelByToken` above. `uniqueLabel` (not a bare TEST_RUN_ID)
-  // so a Playwright retry of this same test within one worker process still
-  // gets a fresh token.
-  const TOKEN = uniqueLabel("binding-e2e-token");
-
   // Identical job description / résumé text (as before conversion): near-
   // perfect similarity all but guarantees a surfaced match on any embedding
   // provider, real or stub, regardless of which pricing tier it lands in.
   const RUST_TEXT =
-    `Rust systems engineer: async runtimes, tokio, low-latency networking, observability tooling, performance profiling. Ref: ${TOKEN}.`;
+    "Rust systems engineer: async runtimes, tokio, low-latency networking, observability tooling, performance profiling.";
 
   // --- Recruiter registration + job posting ---
   await signIn(recruiter, recruiterUser.email);
@@ -172,7 +198,7 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
   // panel that opens when the candidate's card is clicked.
   await recruiter.goto(`/recruiter/jobs/${jobId}`);
   await recruiter.getByTestId("view-matches").click();
-  await openCandidatePanelByToken(recruiter, TOKEN);
+  await openCandidatePanelByProfile(recruiter, admin, jobId, seekerUser.id);
   const pausedPanel = recruiter.getByTestId("candidate-panel");
   await expect(pausedPanel.getByText(/Override unavailable: candidate currently unavailable/)).toBeVisible();
   await expect(pausedPanel.getByTestId("override-candidate")).toHaveCount(0);
@@ -196,7 +222,7 @@ test("registration wizard + override reveal + decline refund", async ({ browser 
 
   // --- Recruiter override-reveals the non-opted-in candidate ---
   await recruiter.reload();
-  await openCandidatePanelByToken(recruiter, TOKEN);
+  await openCandidatePanelByProfile(recruiter, admin, jobId, seekerUser.id);
 
   // Read the ACTUAL price the app is about to charge (match-quality pricing,
   // DESIGN.md §4a, scales both the cost and the refund by the real match

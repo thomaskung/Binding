@@ -178,6 +178,7 @@ export function MatchList({
               <Card
                 key={card.id}
                 data-testid="recruiter-match-card"
+                data-match-id={card.id}
                 role="button"
                 tabIndex={0}
                 onClick={() => onSelect(card.id)}

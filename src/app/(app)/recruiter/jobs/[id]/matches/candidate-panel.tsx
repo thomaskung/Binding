@@ -117,6 +117,23 @@ export function CandidatePanel({ card, onClose }: { card: RecruiterMatchCard; on
             Contact details are stripped from the résumé; salary expectations are withheld until you
             share the role&apos;s budget.
           </p>
+          {/* Override reveal flips card.status to "revealed" (identity disclosed)
+              immediately, before the candidate has accepted/declined messaging —
+              so overridePending/overrideDeclined must be checked here too, not
+              only in the pre-reveal branch below, or they're unreachable for
+              every override reveal (found via e2e/override.spec.ts). */}
+          {card.overridePending && (
+            <p className="text-xs text-muted-foreground" data-testid="override-pending-note">
+              Identity disclosed. Messaging stays locked until the candidate accepts — they have 7
+              days; if they decline or it expires, 15 pts refund automatically.
+            </p>
+          )}
+          {card.overrideDeclined && (
+            <p className="text-xs text-muted-foreground" data-testid="override-declined-note">
+              Candidate declined the conversation. Your 15-pt premium was refunded; this candidate
+              can&apos;t be override-revealed again for 30 days.
+            </p>
+          )}
           {card.threadOpen && card.threadId && (
             <Button
               size="sm"
@@ -148,18 +165,6 @@ export function CandidatePanel({ card, onClose }: { card: RecruiterMatchCard; on
                 {card.overrideReason ? ` Override unavailable: ${card.overrideReason}.` : ""}
               </p>
             ))}
-          {card.overridePending && (
-            <p className="text-xs text-muted-foreground" data-testid="override-pending-note">
-              Identity disclosed. Messaging stays locked until the candidate accepts — they have 7
-              days; if they decline or it expires, 15 pts refund automatically.
-            </p>
-          )}
-          {card.overrideDeclined && (
-            <p className="text-xs text-muted-foreground" data-testid="override-declined-note">
-              Candidate declined the conversation. Your 15-pt premium was refunded; this candidate
-              can&apos;t be override-revealed again for 30 days.
-            </p>
-          )}
         </div>
       )}
     </div>
