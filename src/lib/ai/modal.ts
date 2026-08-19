@@ -16,10 +16,11 @@ import type {
  * Modal (see modal_app/). All candidate-derived data stays on this path —
  * never a frontier API (DESIGN.md privacy rule).
  *
- * Three production apps, all scaledown_window=120s:
- *   - binding-llm-small  (0.6B) — credentials generalization only
- *   - binding-llm        (1.7B) — redact / extract / fit-summary / refine
- *   - binding-embeddings — 1024-dim embeddings
+ * Two production apps, all scaledown_window=120s:
+ *   - binding-llm        (1.7B) — redact / extract / fit-summary / refine,
+ *                         including credentials generalization (the former
+ *                         binding-llm-small 0.6B was merged in 2026-08-18)
+ *   - binding-embeddings — 1024-dim embeddings (CPU-only since 2026-08-18)
  * No separate E2E apps: the E2E suite runs in parallel (~10 min), so the
  * production apps' 120s scaledown keeps containers warm naturally across the
  * run. Endpoint URLs come from the MODAL_*_URL env vars (Vercel).
@@ -182,7 +183,8 @@ export const modalProvider: AiProvider = {
   async generalizeCredentials(rawCredentials: string): Promise<string> {
     const floor = credentialsFloorSummary(rawCredentials);
     if (!rawCredentials.trim()) return "";
-    // Ask the self-hosted small model (0.6B) to generalize; but the
+    // Ask the self-hosted model (Qwen3-1.7B since the 0.6B binding-llm-small
+    // app was merged into binding-llm on 2026-08-18) to generalize; but the
     // deterministic floor is the guarantee — if the model output still carries
     // a specific identifier (or the call fails), fall back to the floor. The
     // model can only ever REMOVE specifics, never smuggle one through.

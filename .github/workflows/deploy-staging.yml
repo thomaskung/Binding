@@ -117,7 +117,6 @@ jobs:
         run: |
           set -euo pipefail
           modal token set --token-id "${{ secrets.MODAL_TOKEN_ID }}" --token-secret "${{ secrets.MODAL_TOKEN_SECRET }}"
-          modal deploy modal_app/llm-small.py
           modal deploy modal_app/llm.py
           modal deploy modal_app/embeddings.py
 
@@ -201,8 +200,9 @@ jobs:
           # smoke.spec.ts hits Modal (a real publish/reveal round trip) —
           # warm the endpoints first, same reasoning as the nightly's
           # globalSetup pass in e2e-staging.yml. globalSetup is the ONLY warm
-          # path here (the E2E apps' 3600s window covers the whole run), so
-          # MODAL_API_TOKEN + the fetched E2E URLs are required.
+          # path here (it runs right before the single test, so the 120s
+          # scaledown window covers the whole run), so MODAL_API_TOKEN + the
+          # fetched E2E URLs are required.
           MODAL_API_TOKEN: ${{ secrets.MODAL_API_TOKEN }}
           MODAL_REDACT_URL: ${{ env.MODAL_REDACT_URL }}
           MODAL_CREDENTIALS_URL: ${{ env.MODAL_CREDENTIALS_URL }}

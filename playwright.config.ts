@@ -31,9 +31,14 @@ if (missing.length > 0 && !process.env.PW_SKIP_ENV_CHECK) {
 export default defineConfig({
   testDir: "./e2e",
   globalSetup: "./e2e/global-setup.ts",
-  // Generous: staging is a cold-startable Vercel deployment and the journey
-  // specs legitimately run 50s+ when healthy (plus Modal cold starts).
-  timeout: 120_000,
+  // Generous: staging is a cold-startable Vercel deployment, journey specs run
+  // 50s+ when healthy, and Modal scaledown is now 120s — a mid-test cold start
+  // (~100s T4 boot) can eat most of a test's budget, so the default is 180s to
+  // absorb one without every Modal test needing its own test.setTimeout().
+  // Modal-touching specs override higher (180-480s) where they need two cold
+  // starts; Modal-free specs override lower (60-90s) where they never hit a
+  // cold Modal endpoint.
+  timeout: 180_000,
   // One shared staging database — each spec owns its own users/labels (unique
   // per worker via TEST_RUN_ID's pid suffix), so spec files can run in
   // parallel without cross-spec state interference. Parallel also keeps the

@@ -126,10 +126,10 @@ export async function createAndPublishJob(
 
   countAiCall(); // ai.embed on publish
   await page.getByTestId("publish-job").click();
-  // Modal embed can be slow under keep-warm contention — 120s headroom like
+  // Modal embed can be slow under cold-start contention — 180s headroom like
   // the seeker publish path (this helper's callers often use 480s budgets).
   await expect(page.getByText("Published — matches refreshed.")).toBeVisible({
-    timeout: 120_000,
+    timeout: 180_000,
   });
 
   return { jobId, jobTitle };

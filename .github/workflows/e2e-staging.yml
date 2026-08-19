@@ -64,11 +64,12 @@ jobs:
           done
       - name: Modal warm-up
         # Warm one endpoint per app CONCURRENTLY, RETRYING until each returns
-        # 200. redact/refine/extract/fit-summary all live on binding-llm (same
-        # container + model load), so warming redact warms all four — firing all
-        # 6 at once would hit one cold app with 4 concurrent requests and risk
-        # Modal scale-out. Background each curl and `wait` so the 3 cold starts
-        # run in parallel (~3 min instead of ~7 serial).
+        # 200. redact/refine/extract/fit-summary AND credentials all live on
+        # binding-llm (same container + model load — binding-llm-small was
+        # merged into it on 2026-08-18), so warming redact warms all of them;
+        # firing all 6 at once would hit one cold app with concurrent requests
+        # and risk Modal scale-out. Background each curl and `wait` so the 2
+        # cold starts run in parallel.
         run: |
           warm() {
             local url="$1" body="$2" label="$3" attempts="$4"
@@ -86,7 +87,6 @@ jobs:
           }
           warm "$MODAL_EMBED_URL" '{"text":"warmup"}' embed 5
           warm "$MODAL_REDACT_URL" '{"text":"warmup"}' redact 5
-          warm "$MODAL_CREDENTIALS_URL" '{"text":"warmup","kind":"credentials"}' credentials 5
           wait
       - name: App warm-up
         # Spin up the Next.js serverless functions for the routes the tests hit
@@ -124,7 +124,6 @@ jobs:
           }
           warm "$MODAL_EMBED_URL" '{"text":"warmup"}' embed 3
           warm "$MODAL_REDACT_URL" '{"text":"warmup"}' redact 3
-          warm "$MODAL_CREDENTIALS_URL" '{"text":"warmup","kind":"credentials"}' credentials 3
           wait
       - name: Run functional tests
         id: tests

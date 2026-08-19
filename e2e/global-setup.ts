@@ -9,8 +9,8 @@ import { aiCounterFile } from "./staging-helpers";
 // every run starts at zero, regardless of what a previous run left behind.
 //
 // (b) Optionally warm the Modal endpoints. Endpoint URLs come from env vars
-// (MODAL_*_URL), set by the CI workflow to the E2E Modal apps
-// (binding-*-e2e) it just fetched from Vercel. No hardcoded URLs.
+// (MODAL_*_URL), set by the CI workflow to the production Modal apps it just
+// fetched from Vercel. No hardcoded URLs.
 //
 // Opt-in via E2E_WARM_MODAL=1: the PR gate (unlike the nightly workflow)
 // does not want to touch Modal at all — it leaves this unset so plain
@@ -22,17 +22,14 @@ import { aiCounterFile } from "./staging-helpers";
 // `fit_summary` reads `body["candidate"]`/`body["job"]` with no fallback —
 // sending it the generic shape throws an unhandled KeyError server-side
 // (HTTP 500) on every single warm-up attempt (see e2e-staging.yml).
-// One endpoint per app: redact/refine/extract/fit-summary all live on
-// binding-llm (same container + model load), so warming redact warms all four.
-// Warming all 6 would fire 4 concurrent requests at one cold app and risk
-// Modal scale-out. Credentials stays because it's the only place that endpoint
-// is exercised in CI (no test profile sets credentials).
+// One endpoint per app: redact/refine/extract/fit-summary AND credentials
+// generalization all live on binding-llm (same container + model load — the
+// former binding-llm-small was merged into it on 2026-08-18), so warming
+// redact warms everything except the embedder. Warming all 6 would fire
+// concurrent requests at one cold app and risk Modal scale-out.
 const WARM_ENDPOINTS: Array<{ varName: string; body: Record<string, string> }> = [
   { varName: "MODAL_EMBED_URL", body: { text: "warmup" } },
   { varName: "MODAL_REDACT_URL", body: { text: "warmup" } },
-  // credentials endpoint requires kind:"credentials" — anything else is a 400
-  // (its fail-loud guard). Include the kind so the warm-up is a clean 200.
-  { varName: "MODAL_CREDENTIALS_URL", body: { text: "warmup", kind: "credentials" } },
 ];
 
 function endpointFor(varName: string, body: Record<string, string>): { url: string; body: Record<string, string> } {
