@@ -8,11 +8,14 @@ name: Deploy Modal (on-demand)
 # talks to the fresh endpoints. See src/lib/ai/modal.ts for the env-var
 # contract.
 #
-# Three production apps (all scaledown_window=120s). No separate E2E apps: the
-# E2E suite runs in parallel (~10 min), so the production apps' 120s scaledown
-# keeps containers warm naturally across the run. The MODAL_*_URL vars are
-# stored as PLAIN Vercel vars so CI workflows can READ them back and warm the
-# endpoints before a test run (the URLs are bearer-token-gated, not secret).
+# Two production apps (all scaledown_window=120s). binding-llm-small was
+# merged into binding-llm on 2026-08-18 (a second T4 container cost more than
+# the 0.6B token savings) — credentials generalization now rides binding-llm's
+# /refine endpoint. No separate E2E apps: the E2E suite runs in parallel
+# (~10 min), so the production apps' 120s scaledown keeps containers warm
+# naturally across the run. The MODAL_*_URL vars are stored as PLAIN Vercel
+# vars so CI workflows can READ them back and warm the endpoints before a test
+# run (the URLs are bearer-token-gated, not secret).
 
 on:
   workflow_dispatch:
@@ -45,10 +48,8 @@ jobs:
           # job loudly — a broken app never gets silently promoted to staging.
           modal app stop binding-embeddings -e main 2>/dev/null || true
           modal app stop binding-llm -e main 2>/dev/null || true
-          modal app stop binding-llm-small -e main 2>/dev/null || true
           sleep 5
 
-          modal deploy modal_app/llm-small.py -e main 2>&1 | tee llm-small.log
           modal deploy modal_app/llm.py -e main 2>&1 | tee llm.log
           modal deploy modal_app/embeddings.py -e main 2>&1 | tee embed.log
 
@@ -67,10 +68,11 @@ jobs:
           done
 
           # Map each endpoint to the env var name src/lib/ai/modal.ts expects.
-          # Each deploy log contains URLs from ONE app only, so `grep -i`
-          # disambiguates the two /refine endpoints (llm-small.log -> the
-          # credentials refine; llm.log -> the profile/jd/career refine).
-          # Writes to GITHUB_ENV so the Vercel-wiring step below can read them.
+          # Since binding-llm-small was merged into binding-llm (2026-08-18),
+          # MODAL_CREDENTIALS_URL and MODAL_REFINE_URL both resolve to
+          # binding-llm's /refine URL — that is intentional, not a bug; the
+          # endpoint dispatches on `kind`. Writes to GITHUB_ENV so the
+          # Vercel-wiring step below can read them.
           echo "## Modal endpoints" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           map_url() {
@@ -86,7 +88,7 @@ jobs:
             export "$2=$url"
           }
           map_url "redact"      MODAL_REDACT_URL       llm.log
-          map_url "refine"      MODAL_CREDENTIALS_URL  llm-small.log
+          map_url "refine"      MODAL_CREDENTIALS_URL  llm.log
           map_url "extract"     MODAL_EXTRACT_URL      llm.log
           map_url "fit-summary" MODAL_SUMMARY_URL      llm.log
           map_url "refine"      MODAL_REFINE_URL       llm.log

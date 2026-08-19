@@ -1,16 +1,19 @@
 """Qwen3 1.7B on Modal serverless GPU — the MEDIUM generation app for
 recruiter-facing and structured-output operations (redact / fit-summary /
-extract / non-credentials refine). Redaction lives here on the 1.7B because
-the 0.6B small app returned resumes near-verbatim (weak date/school/scale
-generalization) — the founder-resume test needs better redaction quality.
-Only credentials generalization stays on the 0.6B small app (llm-small.py,
-deterministic-floor fallback). All candidate-derived text stays on this private
-path (DESIGN.md privacy rule: this data never reaches a frontier API).
+extract / refine, including credentials generalization since 2026-08-18).
+Redaction lives here on the 1.7B because the 0.6B small app returned resumes
+near-verbatim (weak date/school/scale generalization) — the founder-resume
+test needs better redaction quality. Credentials generalization was merged
+back onto the 1.7B from the retired binding-llm-small app: a second T4
+container (with its own cold-start tail) cost more than the 0.6B token
+savings, and the deterministic floor (src/lib/credentials.ts) remains the
+leak guarantee. All candidate-derived text stays on this private path
+(DESIGN.md privacy rule: this data never reaches a frontier API).
 
 Endpoints (POST, JSON, Bearer auth via MODAL_API_TOKEN secret):
   /redact       {"text": ...}                          -> {"redactedText": ...}
   /fit-summary  {"candidate": ..., "job": ...}         -> {"summary": ...}
-  /refine       {"text": ..., "kind": "profile"|"job_description"|"career_assist"} -> {"refined": ...}
+  /refine       {"text": ..., "kind": "profile"|"job_description"|"career_assist"|"credentials"|"company_research"} -> {"refined": ...}
   /extract      {"text": ...}                          -> {"skills":[], "roles":[], "industries":[], "experience":[]}
                 {"text": ..., "kind": "job_extract"}   -> {"title","department","skills":[],"responsibilities":[],"requirements":[],"description"}
                 {"text": ..., "kind": "job_generate"}  -> same shape as job_extract, drafted from a short prompt
@@ -82,6 +85,20 @@ REFINE_PROFILE_SYSTEM = """You improve a candidate's pseudonymized profile text
 for semantic matching against job descriptions: clearer skill statements,
 concrete achievements, standard terminology. Do NOT add facts. Do NOT add
 identifying details. Output only the improved text. /no_think"""
+
+CREDENTIALS_SYSTEM = """You generalize a candidate's credentials (awards,
+certifications, patents, publications) into a SHORT, de-identified summary for
+a recruiter — enough to signal strength, never enough to identify the person.
+RULES:
+- Keep the category and rough count/scale: "patent-holder", "2 patents",
+  "cloud-certified", "industry award winner", "published author".
+- REMOVE every specific: patent numbers, exact award names/titles, years,
+  issuing body names, URLs, employer names, any proper noun that fingerprints.
+- Never invent credentials the input doesn't state.
+- Output ONE line, categories separated by " · ", no commentary.
+Example: "Patent US10,123,456 for a fraud-detection graph algorithm; AWS SA
+Pro; won FinTech HK 2023 Innovator award" -> "patent-holder (fraud detection) ·
+cloud-certified · industry award winner" /no_think"""
 
 EXTRACT_SYSTEM = """You extract structured fields from a resume. Return ONLY
 valid JSON matching this schema, no commentary, no markdown:
@@ -181,18 +198,15 @@ plainly instead of padding with generic filler. /no_think"""
 @app.cls(
     image=image,
     gpu="T4",
-    # scaledown_window=300: keep a container alive 5 min after its last request
-    # so it survives the E2E warm-up -> first-real-call gap without paying a long
-    # production tail. History: 120s let the container cool during a test's
-    # onboarding-UI lead-in and the ~100s T4 cold start blew the 90s waits
-    # (2026-08-12); 300s fixed that. Then 600s was added (2026-08-13) as a
-    # stopgap for a warm-up SKEW — the 3 containers were cold-started serially,
-    # so the first-warmed one cooled while the rest were still warming. That skew
-    # is fixed at the source by parallel warm-up (e2e/global-setup.ts Promise.all
-    # + the CI curl `wait`), so 600s is unnecessary and 300s is restored as the
-    # tight, correct value. The parallel suite (~12 min) keeps containers warm
+    # scaledown_window=120: keep a container alive 2 min after its last request.
+    # History: 300s (2026-08-12) existed only to cover an E2E warm-up ->
+    # first-real-call gap; that gap is now absorbed by generous test timeouts
+    # (global 180s + per-test 180-480s budgets, see e2e/), so the shorter tail
+    # is safe and halves idle spend. 600s was already dropped (2026-08-13) once
+    # the warm-up skew was fixed at source (e2e/global-setup.ts Promise.all +
+    # CI curl `wait`). The parallel suite (~12 min) keeps the container warm
     # between specs; sparse demo traffic scales to zero regardless.
-    scaledown_window=300,
+    scaledown_window=120,
     # APAC region pin (DESIGN.md §5/§12, 2026-07-28): raw resume text is
     # redacted here, so processing runs in-region rather than Modal's
     # implicit US default (~1.5x broad-region price multiplier accepted).
@@ -242,12 +256,13 @@ class Qwen:
     def refine(self, body: dict, authorization: str = Header(default="")):
         _auth(authorization)
         kind = body.get("kind")
-        # Credentials generalization moved to llm-small.py (0.6B). Rejecting it
-        # here makes a config-swap fail loudly instead of silently paying for
-        # the 1.7B on a task the small model should handle.
+        # Credentials generalization was merged here from the retired
+        # binding-llm-small app (2026-08-18): the 0.6B's second T4 container
+        # cost more than its token savings. The deterministic floor in
+        # src/lib/credentials.ts is still the leak guarantee.
         if kind == "credentials":
-            raise HTTPException(status_code=400, detail="credentials handled by binding-llm-small")
-        if kind == "job_description":
+            system = CREDENTIALS_SYSTEM
+        elif kind == "job_description":
             system = REFINE_JD_SYSTEM
         elif kind == "career_assist":
             system = CAREER_ASSIST_SYSTEM
