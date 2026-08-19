@@ -28,15 +28,24 @@ import { countAiCall, ensureStagingProfile, ensureStagingUser, signIn, stagingAd
 
 test("Seeker: research a company, then a second view hits the cache with zero additional calls", async ({ browser }) => {
   test.setTimeout(480_000);
-  const ctx = await stagingContext(browser);
-  const page = await ctx.newPage();
+  // Separate contexts per role (like e2e/referral-loop.spec.ts's ctxA/ctxB) —
+  // NOT the same page for both signIn calls. `/login`'s own page.tsx redirects
+  // an already-authenticated session away immediately
+  // (`if (session) redirect(...)`), so a second signIn() on a page that's
+  // still authenticated as the recruiter never even reaches the login form:
+  // fillEmailAndEnableContinue spins reloading the recruiter's redirect
+  // target for its full 150s retry budget and throws "email fill did not
+  // stick" — confirmed by reproducing this exact test locally against real
+  // staging before this fix.
+  const recruiterCtx = await stagingContext(browser);
+  const recruiterPage = await recruiterCtx.newPage();
   const recruiter = await ensureStagingUser("recruiter");
   const seeker = await ensureStagingUser("seeker");
   const admin = stagingAdminClient();
 
   const companyName = uniqueLabel("Research Co");
-  await signIn(page, recruiter.email);
-  await completeRecruiterOnboarding(page, { name: uniqueLabel("Rec Research"), company: companyName });
+  await signIn(recruiterPage, recruiter.email);
+  await completeRecruiterOnboarding(recruiterPage, { name: uniqueLabel("Rec Research"), company: companyName });
   // seeker is seeded into matches below BEFORE it onboards — create its
   // profiles row so the FK insert doesn't violate matches_profile_id_fkey.
   await ensureStagingProfile(seeker.id);
@@ -62,7 +71,10 @@ test("Seeker: research a company, then a second view hits the cache with zero ad
     .select("id")
     .single();
   if (matchError || !match) throw new Error(`seed match failed: ${matchError?.message}`);
+  await recruiterCtx.close();
 
+  const ctx = await stagingContext(browser);
+  const page = await ctx.newPage();
   await signIn(page, seeker.email);
   await completeSeekerOnboarding(page, { name: uniqueLabel("Seeker Research") });
 
@@ -111,9 +123,20 @@ test("Seeker: research a company, then a second view hits the cache with zero ad
 
 // Smoke job variant: card renders with zero AI or search calls (skips click, skips countAiCall()).
 test("Seeker: company research card renders with zero AI or search calls", async ({ browser }) => {
-  test.setTimeout(60_000);
-  const ctx = await stagingContext(browser);
-  const page = await ctx.newPage();
+  // "Zero-cost" means zero AI/search spend, not a tight wall-clock budget —
+  // this does the same two-account (recruiter + seeker) onboarding + 2 DB
+  // inserts as every other test in this file/e2e/screening-questions.spec.ts/
+  // e2e/skill-assessment.spec.ts, all of which use 180_000-480_000. 60_000 was
+  // an outlier (real failure: `gh run view 32199857326`) — bumped to match,
+  // though the actual blocker was the shared-context /login redirect fixed
+  // below, not the budget alone (confirmed: 180_000 alone still failed).
+  test.setTimeout(180_000);
+  // Separate contexts per role — see the doc comment on this file's other
+  // test for why reusing one page/context across a recruiter->seeker signIn
+  // hangs for real (/login redirects an already-authenticated session away,
+  // so the seeker's login form never renders).
+  const recruiterCtx = await stagingContext(browser);
+  const recruiterPage = await recruiterCtx.newPage();
   const recruiter = await ensureStagingUser("recruiter");
   const seeker = await ensureStagingUser("seeker");
   const admin = stagingAdminClient();
@@ -123,8 +146,8 @@ test("Seeker: company research card renders with zero AI or search calls", async
   // specs (e.g. skill-assessment.spec.ts's candidate_score_bonus test) use a
   // bare ensureStagingUser() id as an FK target with no onboarding at all, so
   // it isn't proven strictly required.
-  await signIn(page, recruiter.email);
-  await completeRecruiterOnboarding(page, { name: uniqueLabel("Rec Smoke"), company: uniqueLabel("Smoke Co") });
+  await signIn(recruiterPage, recruiter.email);
+  await completeRecruiterOnboarding(recruiterPage, { name: uniqueLabel("Rec Smoke"), company: uniqueLabel("Smoke Co") });
   // seeker is seeded into matches before it onboards — create its profiles
   // row so the FK insert doesn't violate matches_profile_id_fkey.
   await ensureStagingProfile(seeker.id);
@@ -150,7 +173,10 @@ test("Seeker: company research card renders with zero AI or search calls", async
     .select("id")
     .single();
   if (matchError || !match) throw new Error(`seed match failed: ${matchError?.message}`);
+  await recruiterCtx.close();
 
+  const ctx = await stagingContext(browser);
+  const page = await ctx.newPage();
   await signIn(page, seeker.email);
   await completeSeekerOnboarding(page, { name: uniqueLabel("Seeker Smoke") });
 
