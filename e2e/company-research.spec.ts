@@ -114,7 +114,10 @@ test("Seeker: research a company, then a second view hits the cache with zero ad
 
   const { data: cacheRowsAfter } = await admin
     .from("company_research_cache")
-    .select("id")
+    // No `id` column on this table — its PK is `job_posting_id` (migration
+    // 0035), so select that. (`.select("id")` errors -> data is null -> the
+    // old assertion "0 rows" failed deterministically, not a cache race.)
+    .select("job_posting_id")
     .eq("job_posting_id", job.id);
   expect(cacheRowsAfter ?? []).toHaveLength(1);
 

@@ -33,7 +33,7 @@
   E2E_STAGING_BASIC_PW="<basic-auth-pw>" \
   npx playwright test e2e/staging-functional.spec.ts
   ```
-- Nightly cron at 3am UTC runs full staging suite + UAT scoring via OpenCode GitHub action
+- Staging E2E is **on-demand** (`.github/workflows/e2e-staging.yml`, `workflow_dispatch`) — was a nightly cron, removed 2026-08-25 to stop the recurring full-suite Modal cost. Trigger it manually from the Actions tab, optionally scoped to one spec via the `spec` input for a cheap targeted pass. Full run = all specs except `staging-uat.spec.ts` + UAT evidence + OpenCode scoring.
 - Full verify: `pnpm lint && pnpm typecheck && pnpm test`
 
 ## PDF Reading
