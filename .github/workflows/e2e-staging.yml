@@ -1,8 +1,18 @@
 name: Staging E2E
 on:
-  schedule:
-    - cron: '0 0 * * *'
+  # On-demand only (was a nightly cron, '0 0 * * *'): the full suite is ~31-37
+  # real Modal AI calls per run, and nightly runs kept the apps' cost and the
+  # suite's failure-noise recurring indefinitely. Removed 2026-08-25 — run
+  # manually from the Actions tab (optionally scoped to one spec via the
+  # `spec` input for a cheap targeted pass) instead.
   workflow_dispatch:
+    inputs:
+      spec:
+        description: >-
+          Optional Playwright path/pattern to run (e.g. e2e/skill-assessment.spec.ts).
+          Empty = the full suite (all specs except staging-uat.spec.ts).
+        required: false
+        default: ''
 
 jobs:
   wait-deploy:
@@ -87,6 +97,7 @@ jobs:
           }
           warm "$MODAL_EMBED_URL" '{"text":"warmup"}' embed 5
           warm "$MODAL_REDACT_URL" '{"text":"warmup"}' redact 5
+          warm "$MODAL_EXTRACT_URL" '{"text":"warmup"}' extract 5
           wait
       - name: App warm-up
         # Spin up the Next.js serverless functions for the routes the tests hit
@@ -124,13 +135,14 @@ jobs:
           }
           warm "$MODAL_EMBED_URL" '{"text":"warmup"}' embed 3
           warm "$MODAL_REDACT_URL" '{"text":"warmup"}' redact 3
+          warm "$MODAL_EXTRACT_URL" '{"text":"warmup"}' extract 3
           wait
       - name: Run functional tests
         id: tests
         # Now runs the WHOLE suite (all 13 spec files, no path argument — the
         # config's testDir is ./e2e), not just staging-functional.spec.ts —
         # the PR gate (ci.yml, job `e2e`) only covers 5 Modal-free specs, so
-        # this nightly run is now the only place the Modal-touching journeys
+        # this (on-demand) run is now the only place the Modal-touching journeys
         # (publish/reveal/extract/refine) get exercised end to end.
         #
         # Deliberately `npx playwright test`, not `pnpm e2e --`: pnpm forwards
@@ -142,9 +154,18 @@ jobs:
         # Excludes staging-uat.spec.ts (every scenario lives in a `UAT: ...`
         # describe block, so --grep-invert "UAT:" is a safe file-level filter):
         # the uat-evidence job below is the single owner of that spec now, so
-        # its evidence screenshots are produced exactly once per night instead
+        # its evidence screenshots are produced exactly once per run instead
         # of twice (~15 fewer Modal calls).
-        run: npx playwright test --retries=1 --grep-invert "UAT:"
+        #
+        # The `spec` dispatch input overrides to a single-file targeted run
+        # (the on-demand/cheap path that replaced the nightly cron); an empty
+        # input falls through to the full suite.
+        run: |
+          if [ -n "${{ github.event.inputs.spec }}" ]; then
+            npx playwright test "${{ github.event.inputs.spec }}" --retries=1
+          else
+            npx playwright test --retries=1 --grep-invert "UAT:"
+          fi
         env:
           E2E_BASE_URL: https://binding-staging.vercel.app
           E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
@@ -237,7 +258,7 @@ jobs:
           TESTS_OUTCOME: ${{ steps.tests.outcome }}
         with:
           script: |
-            const LABEL = 'nightly-e2e';
+            const LABEL = 'staging-e2e';
             const { owner, repo } = context.repo;
             const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
 
@@ -252,7 +273,7 @@ jobs:
               : `**Failed BEFORE the suite ran** (setup / Modal warm-up / \`playwright install\`; test step outcome: \`${process.env.TESTS_OUTCOME}\`). Usually infrastructure — cold Modal containers, a Vercel deploy that never went READY, or a transient install failure — not a product regression.`;
 
             const body = [
-              `Nightly staging functional tests failed.`,
+              `Staging E2E functional tests failed.`,
               ``,
               phase,
               ``,
@@ -268,7 +289,7 @@ jobs:
                 repo,
                 name: LABEL,
                 color: 'b60205',
-                description: 'Rolling tracker for nightly staging E2E failures',
+                description: 'Rolling tracker for staging E2E failures',
               });
             } catch (err) {
               if (err.status !== 422) throw err;
@@ -288,7 +309,7 @@ jobs:
               await github.rest.issues.create({
                 owner,
                 repo,
-                title: 'Staging E2E — nightly failures (rolling tracker)',
+                title: 'Staging E2E — failures (rolling tracker)',
                 labels: [LABEL],
                 body,
               });
@@ -316,7 +337,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const LABEL = 'nightly-e2e';
+            const LABEL = 'staging-e2e';
             const { owner, repo } = context.repo;
 
             const { data: openTrackers } = await github.rest.issues.listForRepo({
