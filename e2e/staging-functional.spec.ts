@@ -396,14 +396,27 @@ test.describe("Staging functional — routing & UIUX", () => {
     await page.waitForURL(/\/seeker$/);
 
     // The rail starts collapsed by default; the full role-switch tabs only
-    // render when it's expanded (collapsed shows an icon-only switcher). Expand
-    // it once (cookie-persisted) so the "Seeker"/"Recruiter" tabs are present.
+    // render when it's expanded (collapsed shows an icon-only switcher). Try to
+    // expand it (cookie-persisted) so the "Seeker"/"Recruiter" tabs are used,
+    // but don't hard-fail if the click races the post-navigation hydration
+    // paint — switchRole below falls back to the collapsed switcher either way.
     const expandRail = page.getByLabel("Expand navigation");
     if (await expandRail.isVisible().catch(() => false)) await expandRail.click();
 
+    // The switcher renders as tabs when the rail is expanded, or as icon-only
+    // buttons when collapsed — both call the same switchMode. Click whichever
+    // control the current rail state exposes so this isn't coupled to the rail
+    // expansion succeeding.
+    async function switchRole(name: "Seeker" | "Recruiter") {
+      const tab = page.getByRole("tab", { name }).first();
+      const button = page.getByRole("button", { name: `Switch to ${name}` }).first();
+      if (await tab.isVisible().catch(() => false)) await tab.click();
+      else await button.click();
+    }
+
     // Switch to the missing recruiter role — routes to /onboarding/recruiter.
     await page.getByTestId("account-menu-toggle").click();
-    await page.getByRole("tab", { name: "Recruiter" }).click();
+    await switchRole("Recruiter");
     await page.waitForURL(/onboarding\/recruiter/);
     await completeRecruiterOnboarding(page, { name: "Switchy Recruiter", company: "Dual Mode Ltd" });
 
@@ -411,11 +424,11 @@ test.describe("Staging functional — routing & UIUX", () => {
     // panel stays open across tab switches (AppShell persists in the layout),
     // so we only open it once and then flip tabs directly.
     await page.getByTestId("account-menu-toggle").click();
-    await page.getByRole("tab", { name: "Seeker" }).click();
+    await switchRole("Seeker");
     await page.waitForURL(/\/seeker$/);
-    await page.getByRole("tab", { name: "Recruiter" }).click();
+    await switchRole("Recruiter");
     await page.waitForURL(/\/recruiter$/);
-    await page.getByRole("tab", { name: "Seeker" }).click();
+    await switchRole("Seeker");
     await page.waitForURL(/\/seeker$/);
 
     await ctx.close();
