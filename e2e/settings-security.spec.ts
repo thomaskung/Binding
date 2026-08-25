@@ -88,10 +88,12 @@ test("Privacy settings page cross-links to Security settings and vice versa", as
   );
 
   await page.goto("/seeker/settings/security");
-  await expect(page.getByRole("link", { name: "Privacy settings" })).toHaveAttribute(
-    "href",
-    "/seeker/settings/privacy",
-  );
+  // The AgentTokenCard (Phase 11) also links out to "Privacy settings" when
+  // consent isn't granted, so the header cross-link must be scoped to the
+  // page header to avoid a strict-mode violation.
+  await expect(
+    page.locator("header").getByRole("link", { name: "Privacy settings" }),
+  ).toHaveAttribute("href", "/seeker/settings/privacy");
 
   // The profile page itself now only links out to the Privacy settings page
   // — the "Privacy" card there is a link card, not the full inline controls

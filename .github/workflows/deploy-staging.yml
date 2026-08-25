@@ -121,11 +121,11 @@ jobs:
           modal deploy modal_app/embeddings.py
 
   # Post-merge smoke: nothing previously ran against staging between a merge
-  # landing and the 3am nightly (e2e-staging.yml), so a broken merge could sit
-  # undetected for up to a day. This catches it within minutes, and is also
-  # the only job that actually proves the deploy works end to end — `vercel`
-  # above only confirms the CLI deploy command exited 0, not that the app
-  # loads or that a real journey (publish → reveal) still functions.
+  # landing and the (now on-demand) staging E2E (e2e-staging.yml), so a broken
+  # merge could sit undetected for up to a day. This catches it within minutes,
+  # and is also the only job that actually proves the deploy works end to end
+  # — `vercel` above only confirms the CLI deploy command exited 0, not that
+  # the app loads or that a real journey (publish → reveal) still functions.
   smoke:
     runs-on: ubuntu-latest
     needs: vercel
@@ -198,7 +198,7 @@ jobs:
           E2E_STAGING_BASIC_PW: ${{ secrets.E2E_STAGING_BASIC_PW }}
           E2E_STAGING_SECRET: ${{ secrets.E2E_STAGING_SECRET }}
           # smoke.spec.ts hits Modal (a real publish/reveal round trip) —
-          # warm the endpoints first, same reasoning as the nightly's
+          # warm the endpoints first, same reasoning as the staging E2E's
           # globalSetup pass in e2e-staging.yml. globalSetup is the ONLY warm
           # path here (it runs right before the single test, so the 120s
           # scaledown window covers the whole run), so MODAL_API_TOKEN + the
@@ -224,9 +224,9 @@ jobs:
       # not here, a real drift caught while rebasing Phase 3 on top.
       #
       # agent-mcp/referral-loop/resume-encryption/route-smoke joined this list
-      # 2026-08-17 to close the up-to-24h gap between a merge and the 3am
-      # nightly for 4 recent features + basic route coverage — all four are
-      # confirmed zero-Modal-cost (each spec's own doc comment, or, for
+      # 2026-08-17 to close the up-to-24h gap between a merge and the then-
+      # nightly staging E2E for 4 recent features + basic route coverage — all
+      # four are confirmed zero-Modal-cost (each spec's own doc comment, or, for
       # route-smoke, by construction) and confirmed to read no MODAL_*/
       # E2E_WARM_MODAL/MATCH_TOP_N env var (grepped `process.env` across the
       # files plus staging-helpers.ts), so this job's smaller env block below

@@ -113,7 +113,11 @@ test("Seeker: real graded attempt, then a near-duplicate resubmission is auto-fa
 
   const passLocator = row.getByTestId("assessment-result-pass");
   const failLocator = row.getByTestId("assessment-result-fail");
-  await expect(passLocator.or(failLocator)).toBeVisible({ timeout: 60_000 });
+  // The assessment_grade Modal call shares the single binding-llm container
+  // with every other /extract + /refine kind, so under the suite's parallel
+  // load it can sit queued well past the default 60s. Give the grade its full
+  // budget headroom (the test already allows 480s total).
+  await expect(passLocator.or(failLocator)).toBeVisible({ timeout: 180_000 });
 
   const { data: firstAttempts } = await admin
     .from("assessment_attempts")
@@ -124,13 +128,35 @@ test("Seeker: real graded attempt, then a near-duplicate resubmission is auto-fa
   const firstAttempt = requireFixture(firstAttempts?.[0]?.id, "first attempt id");
 
   // Resubmit the SAME answer — must be auto-failed as a near-duplicate,
-  // without a second grading call (only the embed call runs).
-  await row.getByTestId("start-assessment-attempt").click();
+  // without a second grading call (only the embed call runs). The taker form
+  // stays OPEN after the first submission (assessment-taker.tsx keeps
+  // `openId` set and just shows the result), so there is no "Try again"
+  // button to click — the answer input is still on the page; re-fill it and
+  // resubmit directly.
   await row.getByTestId("assessment-answer-input").fill(answer);
   await row.getByTestId("submit-assessment-attempt").click();
   countAiCall(); // ai.embed (duplicate check) — no grade call for a detected duplicate
 
-  await expect(row.getByTestId("assessment-result-fail")).toBeVisible({ timeout: 60_000 });
+  // The result element above is the same DOM node as the FIRST attempt's
+  // fail result (the taker keeps the form + result open on the same row), so
+  // a toBeVisible on it is already satisfied before the second submission
+  // even lands. Poll the DB instead for the second attempt row to appear AND
+  // for its rationale to be set (the duplicate-check/grade update lands a
+  // beat after the insert, which is what the rationale assertions below need).
+  await expect
+    .poll(
+      async () => {
+        const { data } = await admin
+          .from("assessment_attempts")
+          .select("id, passed, rationale")
+          .eq("assessment_id", assessment.id)
+          .eq("profile_id", seeker.id)
+          .neq("id", firstAttempt);
+        return (data ?? []).filter((r) => typeof r.rationale === "string" && r.rationale.length > 0);
+      },
+      { timeout: 120_000, message: "second (near-duplicate) attempt should be graded/settled" },
+    )
+    .toHaveLength(1);
 
   const { data: secondAttempts } = await admin
     .from("assessment_attempts")
