@@ -99,6 +99,38 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
     }
   }
 
+  // Verified-skill chips for every matched candidate (not just surfaced —
+  // separate gate from overrideInfo above). Deliberately a standalone query,
+  // not an extension of match_candidates: that RPC excludes candidates by
+  // threshold/top-N, which would silently break "Verified skills only" for
+  // any matched-but-RPC-excluded candidate. profiles.visibility = 'active'
+  // scoping mirrors match_candidates' own pseudonymization boundary — a
+  // paused candidate's card already renders blank via the strength-row
+  // fallback below, and chips must not route around that via this new path.
+  const matchedProfileIds = (matches ?? []).map((m) => m.profile_id);
+  const verifiedByProfile = new Map<string, string[]>();
+  if (matchedProfileIds.length > 0) {
+    const { data: verifiedRows } = await admin
+      .from("assessment_attempts")
+      .select("profile_id, skill_assessments!inner(skill), profiles!inner(visibility)")
+      .eq("passed", true)
+      .eq("skill_assessments.status", "published")
+      .eq("profiles.visibility", "active")
+      .in("profile_id", matchedProfileIds);
+    const skillSetByProfile = new Map<string, Set<string>>();
+    for (const row of (verifiedRows ?? []) as unknown as {
+      profile_id: string;
+      skill_assessments: { skill: string } | { skill: string }[];
+    }[]) {
+      const sa = Array.isArray(row.skill_assessments) ? row.skill_assessments[0] : row.skill_assessments;
+      if (!sa?.skill) continue;
+      const set = skillSetByProfile.get(row.profile_id) ?? new Set<string>();
+      set.add(sa.skill);
+      skillSetByProfile.set(row.profile_id, set);
+    }
+    for (const [pid, set] of skillSetByProfile) verifiedByProfile.set(pid, Array.from(set));
+  }
+
   interface StrengthRow {
     profile_id: string;
     redacted_text: string;
@@ -162,6 +194,7 @@ export default async function JobMatchesPage({ params }: { params: Promise<{ id:
       overrideReason: override?.reason ?? null,
       threadOpen: reveal?.status === "accepted",
       threadId: thread?.id ?? null,
+      verifiedSkills: verifiedByProfile.get(match.profile_id) ?? [],
     };
   });
 

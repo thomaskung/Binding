@@ -1,11 +1,23 @@
 "use client";
 
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import { Badge, Button, Separator } from "@binding/ui";
 import { candidateLabel, seniorityChip } from "@/lib/candidate-card";
 import { relativeTime } from "@/lib/time";
 import type { RecruiterMatchCard } from "./match-list";
 import { OverrideButton, RevealButton } from "./reveal-button";
+
+// Matches the mockup's exact custom pill (Binding.dc.html "verified skills",
+// 18e) — not the shared Badge component's variant set, so implemented inline.
+const VERIFIED_PILL_STYLE: CSSProperties = {
+  color: "var(--primary)",
+  background: "var(--accent)",
+  borderRadius: 999,
+  padding: "3px 9px",
+  fontSize: 11,
+  fontWeight: 600,
+};
 
 /** The detail pane that pops out to the right (desktop) / as a drawer
  * (mobile). Pre-reveal: full strength detail + reveal actions. Post-reveal:
@@ -73,6 +85,11 @@ export function CandidatePanel({ card, onClose }: { card: RecruiterMatchCard; on
             ★ {card.credentialsSummary}
           </Badge>
         )}
+        {card.verifiedSkills.map((s) => (
+          <span key={s} style={VERIFIED_PILL_STYLE} data-testid="panel-verified-skill-chip">
+            ✓ {s}
+          </span>
+        ))}
       </div>
 
       <Separator className="my-4" />

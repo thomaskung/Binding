@@ -3,12 +3,13 @@ import type { FieldVisibilityMap } from "@/lib/field-visibility";
 import { getBalance } from "@/lib/points";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ProfileFields } from "./profile-fields";
+import { listAvailableAssessments } from "../skill-assessment-actions";
 
 export default async function SeekerProfilePage() {
   const session = await requireRole("seeker");
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: profile }, { data: experience }, balance, { data: ledger }, { data: auth }] =
+  const [{ data: profile }, { data: experience }, balance, { data: ledger }, { data: auth }, assessments] =
     await Promise.all([
       supabase
         .from("profiles")
@@ -30,6 +31,7 @@ export default async function SeekerProfilePage() {
         .order("created_at", { ascending: false })
         .limit(3),
       supabase.auth.getUser(),
+      listAvailableAssessments().catch(() => []),
     ]);
 
   const dealbreakers = (profile?.dealbreaker_matrix ?? {}) as {
@@ -73,6 +75,7 @@ export default async function SeekerProfilePage() {
         label: l.note ?? l.event,
         delta: l.amount > 0 ? `+${l.amount}` : `${l.amount}`,
       }))}
+      assessments={assessments}
     />
   );
 }

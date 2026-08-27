@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import {
   Badge,
   Button,
@@ -28,6 +28,7 @@ export interface RecruiterMatchCard {
   seniorityBand: string | null;
   yearsExperience: number | null;
   skills: string[];
+  verifiedSkills: string[];
   industries: string[];
   desiredRoles: string[];
   region: string | null;
@@ -58,6 +59,17 @@ const SORT_LABEL: Record<SortKey, string> = { match: "Best match", recent: "Most
 
 const MIN_PCT_FLOOR = 55;
 
+// Matches the mockup's exact custom pill (Binding.dc.html "verified skills",
+// 18e) — not the shared Badge component's variant set, so implemented inline.
+const VERIFIED_PILL_STYLE: CSSProperties = {
+  color: "var(--primary)",
+  background: "var(--accent)",
+  borderRadius: 999,
+  padding: "3px 9px",
+  fontSize: 11,
+  fontWeight: 600,
+};
+
 function statusBadge(card: RecruiterMatchCard) {
   if (card.overridePending) return "revealed — awaiting response";
   if (card.overrideDeclined) return "revealed — declined";
@@ -77,11 +89,13 @@ export function MatchList({
   const [sortBy, setSortBy] = useState<SortKey>("match");
   const [minPct, setMinPct] = useState<number>(70); // opens on stronger fits; drag down to widen
   const [interestedOnly, setInterestedOnly] = useState(false);
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
 
   const visible = useMemo(() => {
     const filtered = cards.filter((c) => {
       if (statusFilter !== "all" && c.status !== statusFilter) return false;
       if (interestedOnly && !c.interestedAt) return false;
+      if (verifiedOnly && c.verifiedSkills.length === 0) return false;
       if (Math.round(c.score * 100) < minPct) return false;
       return true;
     });
@@ -92,7 +106,7 @@ export function MatchList({
       const tb = b.interestedAt ? Date.parse(b.interestedAt) : -Infinity;
       return tb - ta;
     });
-  }, [cards, statusFilter, sortBy, minPct, interestedOnly]);
+  }, [cards, statusFilter, sortBy, minPct, interestedOnly, verifiedOnly]);
 
   if (cards.length === 0) {
     return (
@@ -144,6 +158,16 @@ export function MatchList({
           data-testid="filter-interested"
         >
           Interested only
+        </Button>
+
+        <Button
+          size="sm"
+          variant={verifiedOnly ? "default" : "outline"}
+          aria-pressed={verifiedOnly}
+          onClick={() => setVerifiedOnly((v) => !v)}
+          data-testid="filter-verified"
+        >
+          Verified skills only
         </Button>
 
         <div className="ml-auto">
@@ -261,6 +285,11 @@ export function MatchList({
                           ★ {card.credentialsSummary}
                         </Badge>
                       )}
+                      {card.verifiedSkills.map((s) => (
+                        <span key={s} style={VERIFIED_PILL_STYLE} data-testid="verified-skill-chip">
+                          ✓ {s}
+                        </span>
+                      ))}
                     </div>
 
                     <span className="text-xs font-medium text-primary underline-offset-2 hover:underline">

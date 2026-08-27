@@ -231,8 +231,11 @@ jobs:
       # E2E_WARM_MODAL/MATCH_TOP_N env var (grepped `process.env` across the
       # files plus staging-helpers.ts), so this job's smaller env block below
       # is sufficient — no MODAL_* fetch needed for this step.
+      #
+      # verified-skill-chips.spec.ts joined alongside its PR-gate addition
+      # (Learn & Verify, Binding.dc.html 18e) — zero-Modal-cost, same shape.
       - name: Run Modal-free specs against staging
-        run: npx playwright test e2e/app-shell.spec.ts e2e/signup.spec.ts e2e/recruiter-onboarding-wizard.spec.ts e2e/training-benefits.spec.ts e2e/market-intel-dimensions.spec.ts e2e/recruiter-pipeline-dashboard.spec.ts e2e/login-oauth.spec.ts e2e/agent-mcp.spec.ts e2e/referral-loop.spec.ts e2e/resume-encryption.spec.ts e2e/route-smoke.spec.ts
+        run: npx playwright test e2e/app-shell.spec.ts e2e/signup.spec.ts e2e/recruiter-onboarding-wizard.spec.ts e2e/training-benefits.spec.ts e2e/market-intel-dimensions.spec.ts e2e/recruiter-pipeline-dashboard.spec.ts e2e/login-oauth.spec.ts e2e/agent-mcp.spec.ts e2e/referral-loop.spec.ts e2e/resume-encryption.spec.ts e2e/route-smoke.spec.ts e2e/verified-skill-chips.spec.ts
         env:
           E2E_BASE_URL: https://binding-staging.vercel.app
           E2E_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
