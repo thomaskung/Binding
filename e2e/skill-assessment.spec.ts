@@ -168,6 +168,13 @@ test("Seeker: real graded attempt, then a near-duplicate resubmission is auto-fa
   expect(secondAttempts?.[0]?.passed).toBe(false);
   expect(secondAttempts?.[0]?.rationale).toMatch(/similar/i);
 
+  // The first (real, passed) attempt above should surface as a "Verified"
+  // badge on the seeker's profile — Binding.dc.html "verified skills", 18a.
+  await page.goto("/seeker/profile");
+  const verifiedCard = page.getByTestId("verified-skills-card");
+  await expect(verifiedCard.getByText(skill)).toBeVisible();
+  await expect(verifiedCard.getByTestId("verified-skill-badge")).toBeVisible();
+
   await ctx.close();
 });
 

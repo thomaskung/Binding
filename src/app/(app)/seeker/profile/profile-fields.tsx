@@ -19,6 +19,8 @@ import { fieldMode, filterFieldsForSurface, type FieldVisibilityMap } from "@/li
 import { advancedFields } from "@/lib/profile-field-disclosure";
 import { regionFromLocation } from "@/lib/profile";
 import { saveDraft, saveExperience } from "../actions";
+import type { AvailableAssessment } from "../skill-assessment-actions";
+import { VerifiedSkillsCard } from "./verified-skills-card";
 
 const WORK_SETUPS = ["onsite", "hybrid", "remote"] as const;
 
@@ -63,6 +65,7 @@ export interface ProfileFieldsProps {
   experience: ExperienceRow[];
   pointsBalance: number;
   pointsHistory: { label: string; delta: string }[];
+  assessments: AvailableAssessment[];
 }
 
 function initialsOf(name: string): string {
@@ -568,6 +571,8 @@ export function ProfileFields(props: ProfileFieldsProps) {
               )}
             </CardContent>
           </Card>
+
+          <VerifiedSkillsCard assessments={props.assessments} />
 
           <Card className="jb-lift">
             <CardHeader>
