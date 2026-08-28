@@ -18,6 +18,7 @@ import { JobPostingsCard } from "./job-postings-card";
 import { RevealCreditsCard } from "./reveal-credits-card";
 import { MarketIntelCard } from "./market-intel-card";
 import { InviteTeaserCard } from "@/components/invite-teaser-card";
+import { EnterprisePreviewTeaserCard } from "./enterprise-preview-teaser-card";
 
 interface JobPostingWithStatus {
   id: string;
@@ -303,6 +304,8 @@ export default async function RecruiterPipelineCommandCenter() {
           <InviteTeaserCard />
         </div>
       </section>
+
+      <EnterprisePreviewTeaserCard />
     </main>
   );
 }

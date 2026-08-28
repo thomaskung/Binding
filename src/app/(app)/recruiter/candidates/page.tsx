@@ -3,7 +3,8 @@ import { REVEAL_COST, revealCostForScore } from "@/lib/points";
 import { coerceRecruiterTier, recruiterTierLabel } from "@/lib/recruiter-tier";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { Badge } from "@binding/ui";
-import { PipelineList, type PipelineCard } from "./pipeline-list";
+import { CandidatesView } from "./candidates-view";
+import { type PipelineCard } from "./pipeline-list";
 
 interface StrengthRow {
   profile_id: string;
@@ -115,7 +116,7 @@ export default async function CandidatesPipeline() {
   });
 
   return (
-    <main className="jb-fade mx-auto max-w-2xl space-y-6 px-6 py-14">
+    <main className="jb-fade mx-auto max-w-5xl space-y-6 px-6 py-14">
       <header className="flex flex-col gap-1.5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
           Candidate pipeline
@@ -132,7 +133,7 @@ export default async function CandidatesPipeline() {
           {cards.length} candidate{cards.length === 1 ? "" : "s"} match your open roles
         </p>
       </header>
-      <PipelineList cards={cards} />
+      <CandidatesView cards={cards} />
     </main>
   );
 }
