@@ -29,20 +29,20 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@firecrawl/pdf-inspector": "^1.15.0",
-    "@playwright/test": "^1.62.1",
+    "@firecrawl/pdf-inspector": "^1.19.0",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.3",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.5.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^6.1.0",
+    "@vitejs/plugin-react": "^6.1.1",
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^9.39.5",
-    "eslint-config-next": "^16.3.1",
-    "marked": "^18.0.10",
-    "supabase": "^2.115.0",
+    "eslint-config-next": "^16.3.4",
+    "marked": "^18.0.12",
+    "supabase": "^2.117.0",
     "tailwindcss": "^4.3.3",
-    "tsx": "^4.23.12",
+    "tsx": "^4.23.13",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"
   }
