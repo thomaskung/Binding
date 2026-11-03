@@ -26,7 +26,7 @@
     "react-dom": "^19.2.8",
     "sonner": "^2.0.8",
     "unpdf": "^1.8.1",
-    "zod": "^4.4.3"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@firecrawl/pdf-inspector": "^1.15.0",
